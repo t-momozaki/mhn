@@ -137,6 +137,9 @@ rmhn(1000, 2, 1, 1, method = "sun")    # always Sun (errors for α < 1, γ > 0)
 
 ## Documentation
 
+Full documentation, with a searchable function reference and rendered
+vignettes, is published at <https://t-momozaki.github.io/mhn/>.
+
 - [`vignette("introduction", package = "mhn")`](https://t-momozaki.github.io/mhn/articles/introduction.md)
   — a 5-minute tour of every exported function with worked examples.
 - [`?dmhn`](https://t-momozaki.github.io/mhn/reference/dmhn.md),
