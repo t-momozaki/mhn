@@ -1,0 +1,98 @@
+# Random generation for the Modified Half-Normal distribution.
+# Thin wrapper around .rmhn_cpp (src/mhn_rmhn.cpp).
+
+#' Random Generation from the Modified Half-Normal Distribution
+#'
+#' Draws random variates from the Modified Half-Normal (MHN) distribution
+#' with parameters \code{alpha}, \code{beta}, and \code{gamma}.
+#'
+#' The MHN density is
+#' \deqn{f(x \mid \alpha, \beta, \gamma) =
+#'   \frac{2 \beta^{\alpha/2} x^{\alpha-1}
+#'   \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}
+#'   \quad (x > 0)}
+#' where \eqn{\Psi[a, z]} is the Fox-Wright Psi function. \code{rmhn} does
+#' not evaluate \eqn{\Psi}; the rejection-sampling kernels cancel it out.
+#'
+#' @param n Non-negative integer giving the number of variates to draw.
+#'   \code{n = 0} returns \code{numeric(0)}.
+#' @param alpha Shape parameter (\eqn{\alpha > 0}). Scalar or numeric vector.
+#'   Default: 1.
+#' @param beta Scale parameter (\eqn{\beta > 0}). Scalar or numeric vector.
+#'   Default: 1.
+#' @param gamma Location parameter (\eqn{\gamma \in R}). Scalar or numeric
+#'   vector. Default: 0.
+#' @param method Sampling algorithm. One of \code{"auto"} (default),
+#'   \code{"rtdr"}, or \code{"sun"}. See Details.
+#'
+#' @return A numeric vector of length \code{n}. If any of \code{alpha},
+#'   \code{beta}, \code{gamma} (after recycling to length \code{n}) is
+#'   \code{NA} or non-finite (\code{Inf}, \code{-Inf}, \code{NaN}), the
+#'   corresponding output element is \code{NA}.
+#'
+#' @details
+#' The default parameters \code{alpha = 1, beta = 1, gamma = 0} correspond
+#' to the half-normal distribution \eqn{\mathrm{HN}(1/\sqrt{2})}.
+#'
+#' The \code{method} argument selects the rejection sampler:
+#' \itemize{
+#'   \item \code{"auto"}: Special-case shortcuts when applicable
+#'     (\eqn{\gamma \approx 0} -> sqrt-Gamma, \eqn{\alpha \approx 1} ->
+#'     truncated normal). Otherwise dispatches to RTDR (Gao & Wang, 2025).
+#'   \item \code{"rtdr"}: Force the Relaxed Transformed Density Rejection
+#'     method of Gao & Wang (2025). The acceptance probability is bounded
+#'     below by \eqn{1/e \approx 0.368} uniformly over the parameter space.
+#'     Note: Gao & Wang (2025) use the parameterization
+#'     \eqn{(\lambda, \alpha, \beta)} with density proportional to
+#'     \eqn{x^{\lambda - 1} \exp(-\alpha x^2 - \beta x)}; the mapping to
+#'     the Sun et al. parameterization used here is
+#'     \eqn{\lambda \leftrightarrow \alpha},
+#'     \eqn{\alpha \leftrightarrow \beta},
+#'     \eqn{\beta \leftrightarrow -\gamma} (sign flip on the linear term).
+#'   \item \code{"sun"}: Force the Sun et al. (2023) algorithms.
+#'     Algorithm 1 is used when \eqn{\gamma > 0} and \eqn{\alpha > 1};
+#'     Algorithm 3 is used when \eqn{\gamma \le 0}. The combination
+#'     \eqn{\alpha < 1} with \eqn{\gamma > 0} is unsupported and triggers
+#'     an error.
+#' }
+#'
+#' Vector parameters are recycled to length \code{n} following standard R
+#' rules. Trailing parameter elements beyond index \code{n - 1} are
+#' silently ignored, matching the convention of \code{rnorm}.
+#'
+#' Internally the setup state of the chosen sampler is reused as long as
+#' consecutive \eqn{(\alpha, \beta, \gamma)} triples are equal, so passing
+#' parameters grouped by triple is faster than calling \code{rmhn} inside
+#' an R loop.
+#'
+#' @references
+#' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
+#' distribution: Properties and an efficient sampling scheme.
+#' \emph{Communications in Statistics - Theory and Methods}, 52(5),
+#' 1507--1536.
+#'
+#' Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
+#' variates by a relaxed transformed density rejection method.
+#' \emph{Communications in Statistics - Simulation and Computation}.
+#'
+#' Robert, C. P. (1995). Simulation of truncated normal variables.
+#' \emph{Statistics and Computing}, 5(2), 121--125.
+#'
+#' @seealso \code{\link{dmhn}}, \code{\link{mhn_mean}}, \code{\link{mhn_var}}
+#'
+#' @examples
+#' set.seed(1)
+#' rmhn(10, alpha = 2, beta = 1, gamma = 0.5)
+#'
+#' # Vector parameters are recycled to length n.
+#' set.seed(1)
+#' rmhn(5, alpha = c(1, 2, 3, 4, 5))
+#'
+#' @export
+rmhn <- function(n, alpha = 1, beta = 1, gamma = 0,
+                 method = c("auto", "rtdr", "sun")) {
+  method <- match.arg(method)
+  .rmhn_cpp(as.integer(n)[1L],
+            as.numeric(alpha), as.numeric(beta), as.numeric(gamma),
+            method)
+}

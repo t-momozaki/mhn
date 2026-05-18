@@ -1,0 +1,43 @@
+## Citation for the mhn R package and the underlying papers.
+## Show all three with `citation("mhn")`.
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "mhn: The Modified Half-Normal Distribution",
+  author   = person("Tomotaka", "Momozaki",
+                    email = "momozaki.stat@gmail.com",
+                    role  = c("aut", "cre")),
+  year     = "2026",
+  note     = "R package version 0.1.0",
+  url      = "https://github.com/t-momozaki/mhn",
+  header   = "To cite the mhn package itself:"
+)
+
+bibentry(
+  bibtype  = "Article",
+  title    = paste("The Modified-Half-Normal distribution:",
+                   "Properties and an efficient sampling scheme"),
+  author   = c(person("Jingchao", "Sun"),
+               person("Maiying",  "Kong"),
+               person("Subhadip", "Pal")),
+  journal  = "Communications in Statistics - Theory and Methods",
+  year     = "2023",
+  volume   = "52",
+  number   = "5",
+  pages    = "1507--1536",
+  doi      = "10.1080/03610926.2021.1934700",
+  header   = paste("To cite the parametric family",
+                   "and Algorithms 1 / 3 used by rmhn:")
+)
+
+bibentry(
+  bibtype  = "Article",
+  title    = paste("Generating modified-half-normal random variates",
+                   "by a relaxed transformed density rejection method"),
+  author   = c(person("Fang",     "Gao"),
+               person("Hong-Bin", "Wang")),
+  journal  = "Communications in Statistics - Simulation and Computation",
+  year     = "2025",
+  doi      = "10.1080/03610918.2025.2524551",
+  header   = "To cite the RTDR sampler used by rmhn(method = \"rtdr\"):"
+)

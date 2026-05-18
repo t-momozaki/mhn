@@ -1,0 +1,23 @@
+^\.git$
+^\.gitignore$
+^\..*\.user$
+^\.Rproj\.user$
+^.*\.Rproj$
+# Exclude every benchmark / audit result CSV EXCEPT the
+# `cdf_series_accuracy_<date>.csv` one, which the testthat regression
+# in tests/testthat/test-pmhn.R loads at test time.
+^inst/benchmarks/results/auto_dispatch_.*$
+^inst/benchmarks/results/replicate_gw_tables_.*$
+^inst/audits/results/series_breakdown_audit_.*$
+^inst/audits/results/cdf_series_accuracy_diagnostics_.*$
+^\.DS_Store$
+^.*\.tar\.gz$
+^.*\.Rcheck$
+^\.claude$
+^LICENSE\.md$
+^doc$
+^Meta$
+# Empty-directory placeholders for git; not needed in the tarball.
+^.*\.gitkeep$
+# GitHub-hosted CI configuration; not part of the CRAN tarball.
+^\.github$
