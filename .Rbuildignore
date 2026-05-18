@@ -21,3 +21,5 @@
 ^.*\.gitkeep$
 # GitHub-hosted CI configuration; not part of the CRAN tarball.
 ^\.github$
+# Notes addressed to the CRAN reviewer; not part of the installed package.
+^cran-comments\.md$
