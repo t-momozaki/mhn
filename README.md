@@ -4,6 +4,7 @@
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![R-CMD-check](https://github.com/t-momozaki/mhn/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/t-momozaki/mhn/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/t-momozaki/mhn/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/t-momozaki/mhn/actions/workflows/pkgdown.yaml)
 <!-- badges: end -->
 
 An R package providing density, distribution, quantile, and random
@@ -136,6 +137,9 @@ rmhn(1000, 2, 1, 1, method = "sun")    # always Sun (errors for α < 1, γ > 0)
 ```
 
 ## Documentation
+
+Full documentation, with a searchable function reference and rendered
+vignettes, is published at <https://t-momozaki.github.io/mhn/>.
 
 * `vignette("introduction", package = "mhn")` — a 5-minute tour of
   every exported function with worked examples.
