@@ -27,9 +27,19 @@ This is a new submission.
 
 Local `R CMD check --as-cran` on R 4.5.1 (macOS) reports
 
-  0 errors | 0 warnings | 2 notes
+  0 errors | 0 warnings | 1 note
 
-The two notes are:
+This is the second pretest submission for v0.1.0. The first attempt
+(2026-05-18) returned 2 notes; Uwe Ligges responded that the
+`Versioned 'LinkingTo' value for 'BH' is only usable in R >= 3.0.2`
+note should be addressed by declaring the corresponding (or stricter)
+`Depends: R (>= ...)` field. We have added `Depends: R (>= 4.0.0)`,
+which is the floor required by `SystemRequirements: C++17` (the
+binding constraint among Rcpp >= 1.0.7, BH >= 1.78, testthat
+edition 3, and the C++17 `Makevars` standard). This resolves the
+LinkingTo note.
+
+The one remaining note is:
 
 ### NOTE 1 — `checking CRAN incoming feasibility ... NOTE`
 
@@ -57,19 +67,8 @@ flagged words are not misspellings:
   Rejection sampling method (Gao & Wang, 2025), introduced inline in
   the `Description`.
 
-### NOTE 2 — `checking DESCRIPTION meta-information ... NOTE`
-
-```
-Versioned 'LinkingTo' value for 'BH' is only usable in R >= 3.0.2
-```
-
-`DESCRIPTION` declares `LinkingTo: BH (>= 1.78.0-0)` because the C++
-code uses `boost::math::quadrature::gauss_kronrod` (and `tanh_sinh`
-for `alpha < 1`) together with `digamma`/`trigamma`, which require a
-recent-enough Boost. The version constraint is informational;
-`Imports: Rcpp (>= 1.0.7)` already requires an R version far above
-the 3.0.2 threshold cited by the note, so the requirement is
-satisfied with ample margin.
+(The previous `Versioned 'LinkingTo' value for 'BH' ...` NOTE is
+resolved by the added `Depends: R (>= 4.0.0)`.)
 
 A third note, `checking for future file timestamps ... NOTE` with
 "unable to verify current time", is sometimes seen on the local
