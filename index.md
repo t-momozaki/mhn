@@ -1,0 +1,175 @@
+# mhn: The Modified Half-Normal Distribution
+
+An R package providing density, distribution, quantile, and random
+generation functions for the Modified Half-Normal (MHN) distribution,
+together with closed-form / recurrence-based helpers for its moments and
+mode.
+
+## Overview
+
+The MHN($`\alpha`$, $`\beta`$, $`\gamma`$) distribution has support on
+$`(0, \infty)`$ and density
+
+``` math
+f(x \mid \alpha, \beta, \gamma) \;\propto\;
+  x^{\alpha - 1} \exp(-\beta x^2 + \gamma x), \qquad x > 0,
+```
+
+where $`\alpha, \beta > 0`$ and $`\gamma \in \mathbb{R}`$. It arises as
+a conditional posterior in Bayesian MCMC for several common models
+(skew-elliptical regression, $`t`$-shrinkage priors, log-concave
+likelihoods with a quadratic Bayesian penalty) and generalises a number
+of familiar one-sided distributions:
+
+| Constraint | Reduction |
+|----|----|
+| $`\gamma = 0`$ | $`\sqrt{\mathrm{Gamma}}`$: $`X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)`$ |
+| $`\alpha = 1`$ | Truncated normal on $`(0, \infty)`$, mean $`\gamma / (2\beta)`$ |
+| $`\alpha = 1,\; \gamma = 0`$ | Half-normal with scale $`1/\sqrt{2\beta}`$ |
+| $`\beta \to 0^+,\; \gamma < 0`$ | $`\mathrm{Gamma}(\alpha, -\gamma)`$ (limit) |
+
+The package implements the efficient samplers of **Sun, Kong & Pal
+(2023)** (Algorithms 1 / 3) and the **Gao & Wang (2025)** Relaxed
+Transformed Density Rejection (RTDR) method with a uniform 1/*e*
+acceptance bound, and dispatches between them automatically.
+
+## Installation
+
+``` r
+
+# Development version from GitHub:
+# install.packages("remotes")
+remotes::install_github("t-momozaki/mhn")
+```
+
+Once the package is on CRAN it will also be installable with the usual
+
+``` r
+
+install.packages("mhn")
+```
+
+## Quick start
+
+``` r
+
+library(mhn)
+
+# Density, CDF, quantile, random generation
+dmhn(c(0.5, 1, 2), alpha = 2, beta = 1, gamma = 1)
+pmhn(1.5,           alpha = 2, beta = 1, gamma = 1)
+qmhn(0.95,          alpha = 2, beta = 1, gamma = 1)
+rmhn(10,            alpha = 2, beta = 1, gamma = 1)
+
+# Summary statistics
+mhn_mean(2, 1, 1); mhn_var(2, 1, 1); mhn_mode(2, 1, 1)
+```
+
+## Function reference
+
+### Distribution functions
+
+| Function | Description |
+|----|----|
+| [`dmhn()`](https://t-momozaki.github.io/mhn/reference/dmhn.md) | Density (vectorised over `x` and parameters; supports `log = TRUE`) |
+| [`pmhn()`](https://t-momozaki.github.io/mhn/reference/pmhn.md) | Cumulative distribution function (`lower.tail` and `log.p` à la `pgamma`) |
+| [`qmhn()`](https://t-momozaki.github.io/mhn/reference/qmhn.md) | Quantile function via TOMS 748 root-finder |
+| [`rmhn()`](https://t-momozaki.github.io/mhn/reference/rmhn.md) | Random generation; method dispatch via `method = c("auto", "rtdr", "sun")` |
+
+``` r
+
+dmhn(1.5, alpha = 2, beta = 1, gamma = 1, log = TRUE)
+pmhn(1.5, alpha = 2, beta = 1, gamma = 1, lower.tail = FALSE)
+qmhn(log(0.05), alpha = 2, beta = 1, gamma = 1, log.p = TRUE)
+rmhn(5, alpha = c(1, 2, 3), beta = 1, gamma = c(0, 1, -1))  # recycled
+```
+
+### Summary statistics
+
+| Function | Description |
+|----|----|
+| [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md) | $`E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])`$, with $`z = \gamma/\sqrt{\beta}`$ |
+| [`mhn_var()`](https://t-momozaki.github.io/mhn/reference/mhn_var.md) | Variance from Sun et al. (2023, Lemma 2c) |
+| [`mhn_skewness()`](https://t-momozaki.github.io/mhn/reference/mhn_skewness.md) | Skewness $`\gamma_1`$ |
+| [`mhn_kurtosis()`](https://t-momozaki.github.io/mhn/reference/mhn_kurtosis.md) | Excess kurtosis $`\gamma_2`$ |
+| [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md) | Mode (returns `NA` when no interior mode exists) |
+
+``` r
+
+mhn_mean(2, 1, 1)       # 1.16...
+mhn_skewness(2, 1, 1)   # positive (density right-skewed)
+mhn_mode(0.5, 1, -1)    # NA: monotone-decreasing density
+```
+
+## Algorithm dispatch for `rmhn(method = "auto")`
+
+The default method routes each parameter triple to the cheapest sampler
+that is provably correct in that region. The decision rules are
+benchmarked in `inst/benchmarks/auto_dispatch.R`:
+
+    Closed-form shortcuts:
+      α = 1, γ = 0    -> half-normal via |rnorm|
+      γ = 0           -> sqrt(rgamma(...))
+      α = 1           -> truncated normal
+
+    Region α < 1, γ > 0:
+      Gao & Wang (2025) RTDR  (Sun et al. (2023) Algorithm 2 is
+                               intentionally not implemented; RTDR is
+                               uniformly faster here)
+
+    Region γ > 0, α > 1:
+      Sun et al. (2023, Algorithm 1) (Normal or sqrt-Gamma proposal,
+                                     closed-form optimal parameters)
+
+    Region γ ≤ 0:
+      n-dependent (the crossover at 25 is benchmarked, not theoretical;
+      see vignette("theory") §7 for the cost-decomposition derivation):
+        samples per setup ≥ 25  -> RTDR (lighter per-proposal cost)
+        samples per setup <  25 -> Sun Algorithm 3 (lighter setup cost)
+
+Forcing a specific sampler:
+
+``` r
+
+rmhn(1000, 2, 1, 1, method = "rtdr")   # always RTDR
+rmhn(1000, 2, 1, 1, method = "sun")    # always Sun (errors for α < 1, γ > 0)
+```
+
+## Documentation
+
+- [`vignette("introduction", package = "mhn")`](https://t-momozaki.github.io/mhn/articles/introduction.md)
+  — a 5-minute tour of every exported function with worked examples.
+- [`?dmhn`](https://t-momozaki.github.io/mhn/reference/dmhn.md),
+  [`?pmhn`](https://t-momozaki.github.io/mhn/reference/pmhn.md),
+  [`?qmhn`](https://t-momozaki.github.io/mhn/reference/qmhn.md),
+  [`?rmhn`](https://t-momozaki.github.io/mhn/reference/rmhn.md) — full
+  argument documentation including the recycling rules and the `method`
+  argument.
+- `citation("mhn")` — package + underlying papers.
+
+## Citation
+
+If you use this package in academic work, please cite both the package
+and the methodology papers (`citation("mhn")` prints all three):
+
+- Momozaki, T. (2026). *mhn: The Modified Half-Normal Distribution.* R
+  package version 0.1.0.
+- Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
+  distribution: Properties and an efficient sampling scheme.
+  *Communications in Statistics — Theory and Methods*, 52(5), 1507–1536.
+  <https://doi.org/10.1080/03610926.2021.1934700>
+- Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
+  variates by a relaxed transformed density rejection method.
+  *Communications in Statistics — Simulation and Computation*.
+  <https://doi.org/10.1080/03610918.2025.2524551>
+
+## References
+
+- Robert, C. P. (1995). Simulation of truncated normal variables.
+  *Statistics and Computing*, 5(2), 121–125. (Used by the *α* = 1
+  truncated-normal special case of `rmhn`.)
+
+## License
+
+MIT © 2026 Tomotaka Momozaki. See
+[`LICENSE`](https://t-momozaki.github.io/mhn/LICENSE).
