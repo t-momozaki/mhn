@@ -10,9 +10,15 @@ This is a new submission.
   `devtools::check_win_release()`; result emails archived with the
   maintainer)
 * R-hub v2 via the package's GitHub Actions workflow, on:
-  `linux`, `windows`, `macos-arm64`, `clang-asan`, `valgrind`, `rchk`
-  (run name: `some-birdofparadise`; results on the Actions tab of
-  <https://github.com/t-momozaki/mhn>)
+  `linux`, `windows`, `macos-arm64`, `clang-asan`, `valgrind`, `rchk`.
+  Five of six platforms green (linux / windows / macos-arm64 /
+  clang-asan / valgrind); `rchk` reports
+  `[PB]` / `[UP]` against `Rcpp::Rcpp_protect` and
+  `Rcpp::Rcpp_unprotect` in
+  `Rcpp/include/Rcpp/protection/Shield.h:25` / `:31`, the long-known
+  Rcpp `Shield<T>` RAII false positive — no mhn-side function is
+  flagged. Run name: `some-birdofparadise`; results on the Actions
+  tab of <https://github.com/t-momozaki/mhn>.
 * GitHub Actions R-CMD-check matrix:
   ubuntu-latest (R-devel, R-release, R-oldrel-1),
   macos-latest (R-release), windows-latest (R-release)
