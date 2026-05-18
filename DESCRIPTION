@@ -32,5 +32,5 @@ Suggests:
     Rmpfr
 Config/testthat/edition: 3
 VignetteBuilder: knitr
-URL: https://github.com/t-momozaki/mhn
+URL: https://github.com/t-momozaki/mhn, https://t-momozaki.github.io/mhn/
 BugReports: https://github.com/t-momozaki/mhn/issues

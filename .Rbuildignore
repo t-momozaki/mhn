@@ -23,3 +23,6 @@
 ^\.github$
 # Notes addressed to the CRAN reviewer; not part of the installed package.
 ^cran-comments\.md$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

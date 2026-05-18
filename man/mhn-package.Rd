@@ -64,6 +64,7 @@ variates by a relaxed transformed density rejection method.
 Useful links:
 \itemize{
   \item \url{https://github.com/t-momozaki/mhn}
+  \item \url{https://t-momozaki.github.io/mhn/}
   \item Report bugs at \url{https://github.com/t-momozaki/mhn/issues}
 }
 
