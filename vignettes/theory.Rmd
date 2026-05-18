@@ -250,7 +250,7 @@ and the package follows the corrected form.
   (Supplementary §2.2.1, §2.2.2) carries $z^{2}$ throughout, in
   agreement with the rederivation. The corrected $x^{2}$ form is
   what the package uses in
-  [src/mhn_psi_series.cpp](https://github.com/t-momozaki/mhn/blob/main/mhn/src/mhn_psi_series.cpp)
+  [src/mhn_psi_series.cpp](https://github.com/t-momozaki/mhn/blob/main/src/mhn_psi_series.cpp)
   (marked with an `// ERRATA` comment); evaluating $\Psi$ at the
   published $x$ form would give a too-small truncation point and
   silently lose precision.
@@ -520,7 +520,7 @@ Algorithm 3 wins. The crossover at 25 is
 the round value chosen inside the empirical break-even window
 $n \in [10,\, 25]$ observed at every one of the 20 surveyed
 $(\alpha, \gamma)$ cells in
-[inst/benchmarks/auto_dispatch.R](https://github.com/t-momozaki/mhn/blob/main/mhn/inst/benchmarks/auto_dispatch.R).
+[inst/benchmarks/auto_dispatch.R](https://github.com/t-momozaki/mhn/blob/main/inst/benchmarks/auto_dispatch.R).
 
 A small concrete demonstration: with `set.seed` aligned,
 `method = "auto"` and the *expected* forced method produce
