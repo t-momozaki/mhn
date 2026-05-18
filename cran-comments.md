@@ -31,9 +31,25 @@ The two notes are:
 Maintainer: 'Tomotaka Momozaki <momozaki.stat@gmail.com>'
 
 New submission
+
+Possibly misspelled words in DESCRIPTION:
+  Gao (...)
+  MHN (...)
+  RTDR (...)
 ```
 
-Expected for an initial submission.
+The "New submission" line is expected for an initial submission. The
+flagged words are not misspellings:
+
+* "Gao" is the surname of one of the cited authors
+  (Gao & Wang, 2025; the `Description` field carries the DOI
+  `<doi:10.1080/03610918.2025.2524551>`).
+* "MHN" is the standard acronym for the Modified Half-Normal
+  distribution that the package provides; it is defined inline in the
+  `Description` ("Modified Half-Normal (MHN)").
+* "RTDR" is the standard acronym for the Relaxed Transformed Density
+  Rejection sampling method (Gao & Wang, 2025), introduced inline in
+  the `Description`.
 
 ### NOTE 2 — `checking DESCRIPTION meta-information ... NOTE`
 
