@@ -21,7 +21,7 @@
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #' distribution: Properties and an efficient sampling scheme.
 #' \emph{Communications in Statistics - Theory and Methods}, 52(5),
-#' 1507--1536. (Lemma 2a)
+#' 1591--1613. (Lemma 2a)
 #'
 #' @seealso \code{\link{mhn_var}}, \code{\link{dmhn}}
 #'
@@ -57,7 +57,7 @@ mhn_mean <- function(alpha, beta, gamma) {
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #' distribution: Properties and an efficient sampling scheme.
 #' \emph{Communications in Statistics - Theory and Methods}, 52(5),
-#' 1507--1536. (Lemma 2c)
+#' 1591--1613. (Lemma 2c)
 #'
 #' @seealso \code{\link{mhn_mean}}, \code{\link{dmhn}}
 #'
@@ -89,7 +89,7 @@ mhn_var <- function(alpha, beta, gamma) {
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #' distribution: Properties and an efficient sampling scheme.
 #' \emph{Communications in Statistics - Theory and Methods}, 52(5),
-#' 1507--1536. (Lemma 2b)
+#' 1591--1613. (Lemma 2b)
 #'
 #' @seealso \code{\link{mhn_kurtosis}}, \code{\link{mhn_mean}}
 #'
@@ -122,7 +122,7 @@ mhn_skewness <- function(alpha, beta, gamma) {
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #' distribution: Properties and an efficient sampling scheme.
 #' \emph{Communications in Statistics - Theory and Methods}, 52(5),
-#' 1507--1536. (Lemma 2b)
+#' 1591--1613. (Lemma 2b)
 #'
 #' @seealso \code{\link{mhn_skewness}}, \code{\link{mhn_mean}}
 #'

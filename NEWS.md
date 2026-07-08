@@ -1,3 +1,26 @@
+# mhn 0.1.1
+
+Maintenance and documentation release.
+
+## DESCRIPTION
+
+* Spelled out "Markov chain Monte Carlo" and "relaxed transformed
+  density rejection method" in the `Description` field, following CRAN
+  reviewer feedback on unexpanded acronyms.
+
+## Benchmarks
+
+* Fixed a unit double-conversion in `inst/benchmarks/auto_dispatch.R`
+  that inflated the reported `median_us` / `iqr_us` times by a factor of
+  about 1e6. The `method = "auto"` dispatch *decisions* are ratio-based
+  and were unaffected, as is `rmhn(method = "auto")` itself.
+* Added a goodness-of-fit benchmark, `inst/benchmarks/rmhn_gof.R`, that
+  writes Kolmogorov-Smirnov statistics and sample-vs-theory moment
+  summaries across the parameter grid to a CSV.
+* The two timing benchmarks now emit a `_diagnostics_<date>.csv` with
+  `sessionInfo()`, hardware, and `mhn` version provenance, matching the
+  audit scripts.
+
 # mhn 0.1.0
 
 Initial release.

@@ -71,6 +71,9 @@ dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("auto_dispatch_%s.csv", TODAY))
 DIAG_CSV   <- file.path(OUTDIR, sprintf("auto_dispatch_diagnostics_%s.csv", TODAY))
+# Single-row environment / provenance record.  A separate file because
+# DIAG_CSV above already holds the per-point acceptance diagnostics.
+PROV_CSV   <- file.path(OUTDIR, sprintf("auto_dispatch_provenance_%s.csv", TODAY))
 
 cat(sprintf("[auto_dispatch] mode=%s iterations=%d alpha=%d gamma=%d patterns=%d points=%d\n",
             if (QUICK) "QUICK" else "FULL", BENCH_ITER,
@@ -110,8 +113,13 @@ bench_one <- function(alpha, gamma, method, pattern_name, pattern, seed = 1L) {
   set.seed(seed)
   thunk <- make_thunk(alpha, 1.0, gamma, method, pattern$n_per_call, pattern$n_calls)
   res <- tryCatch(
+    # NB: do not pass time_unit = "us" here. That option makes
+    # as.numeric(res$median) return microseconds (and collapses
+    # as.numeric(res$time) to 0); combined with the `* 1e6` below it
+    # inflated median_us/iqr_us by 1e6. Left as seconds, so the
+    # `* 1e6` conversion yields correct microseconds.
     bench::mark(thunk(), iterations = BENCH_ITER, check = FALSE,
-                filter_gc = FALSE, time_unit = "us"),
+                filter_gc = FALSE),
     error = function(e) structure(list(error_msg = conditionMessage(e)),
                                   class = "bench_failure")
   )
@@ -331,7 +339,28 @@ cat(sprintf("  Algo3 used_inflex (alpha>1.1)   : TRUE=%d FALSE=%d (of %d)\n",
             sum(!diag_df$sun_algo3_used_inflex[inflex_idx], na.rm = TRUE),
             sum(inflex_idx)))
 
-cat(sprintf("\nResults written to:\n  %s\n  %s\n", RESULT_CSV, DIAG_CSV))
+# -----------------------------------------------------------------------
+# Provenance CSV (single-row environment record)
+# -----------------------------------------------------------------------
+`%||%` <- function(a, b) if (is.null(a)) b else a
+si <- sessionInfo()
+prov <- data.frame(
+  timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+  r_version = paste(R.version$major, R.version$minor, sep = "."),
+  platform = R.version$platform,
+  os = si$running %||% R.version$os,
+  mhn_version = as.character(utils::packageVersion("mhn")),
+  bench_version = as.character(utils::packageVersion("bench")),
+  mode = if (QUICK) "QUICK" else "FULL",
+  iterations = BENCH_ITER,
+  grid_points = nrow(diag_df),
+  elapsed_min = round(elapsed_min, 2),
+  stringsAsFactors = FALSE
+)
+write.csv(prov, PROV_CSV, row.names = FALSE)
+
+cat(sprintf("\nResults written to:\n  %s\n  %s\n  %s\n",
+            RESULT_CSV, DIAG_CSV, PROV_CSV))
 cat("\nNext step: inspect the decision matrix above and update the auto path\n")
 cat("in mhn/src/mhn_rmhn.cpp / R/rmhn.R.  The auto-vs-forced equivalence\n")
 cat("regression block in tests/testthat/test-rmhn.R guards the dispatch rule.\n")

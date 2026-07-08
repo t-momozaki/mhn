@@ -34,7 +34,7 @@
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #' distribution: Properties and an efficient sampling scheme.
 #' \emph{Communications in Statistics - Theory and Methods}, 52(5),
-#' 1507--1536. (Lemma 3b--d, Lemma 6b)
+#' 1591--1613. (Lemma 3b--d, Lemma 6b)
 #'
 #' @seealso \code{\link{dmhn}}, \code{\link{mhn_mean}}
 #'

@@ -88,7 +88,7 @@ rmhn(5, alpha = c(1, 2, 3, 4, 5))
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
 \emph{Communications in Statistics - Theory and Methods}, 52(5),
-1507--1536.
+1591--1613.
 
 Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.

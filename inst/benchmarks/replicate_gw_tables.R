@@ -84,6 +84,8 @@ if (!nzchar(OUTDIR)) OUTDIR <- file.path("mhn", "inst", "benchmarks", "results")
 dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("replicate_gw_tables_%s.csv", TODAY))
+DIAG_CSV   <- file.path(OUTDIR,
+                        sprintf("replicate_gw_tables_diagnostics_%s.csv", TODAY))
 
 cat(sprintf("[replicate_gw] mode=%s iterations=%d lambda=%d beta=%d patterns=%d points=%d\n",
             if (QUICK) "QUICK" else "FULL", BENCH_ITER,
@@ -288,4 +290,25 @@ print_table(df, "T1", "sun")
 print_table(df, "T2", "rtdr")
 print_table(df, "T2", "sun")
 
+# -----------------------------------------------------------------------
+# Diagnostics CSV (single-row environment / provenance record)
+# -----------------------------------------------------------------------
+`%||%` <- function(a, b) if (is.null(a)) b else a
+si <- sessionInfo()
+diag <- data.frame(
+  timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+  r_version = paste(R.version$major, R.version$minor, sep = "."),
+  platform = R.version$platform,
+  os = si$running %||% R.version$os,
+  mhn_version = as.character(utils::packageVersion("mhn")),
+  bench_version = as.character(utils::packageVersion("bench")),
+  mode = if (QUICK) "QUICK" else "FULL",
+  iterations = BENCH_ITER,
+  grid_points = nrow(df),
+  elapsed_min = round(elapsed_min, 2),
+  stringsAsFactors = FALSE
+)
+write.csv(diag, DIAG_CSV, row.names = FALSE)
+
 cat(sprintf("\nResults written to: %s\n", RESULT_CSV))
+cat(sprintf("Diagnostics written to: %s\n", DIAG_CSV))
