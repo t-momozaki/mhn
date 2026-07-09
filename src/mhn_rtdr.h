@@ -15,34 +15,50 @@ namespace mhn {
 // Region classification for the Gao & Wang (2025) RTDR algorithm.
 // The (alpha, gamma) cases follow Section 4 of that paper.
 enum RtdrRegion {
-  REGION_A   = 0,   // alpha >= 1, log-concave on f(x)
-  REGION_BC  = 1,   // alpha < 1, T_{-1/2}-concave on g(y)
+  REGION_A   = 0,   // alpha >= 1, log-concave on f(x); T_0 tangent hat
+  REGION_BC  = 1,   // alpha < 1, on g(y): T_0 tangent hat if gamma <= 0
+                    //   (log-concave), else T_{-1/2} tangent hat (Thm 3.2)
   REGION_D   = 2    // alpha < 1/2 and gamma > 2(1 - sqrt(1 - 2*alpha)),
                     //   inflection-point envelope
 };
 
-// Piece type for the piecewise envelope.  Sign convention on `slope`:
+// Piece type for the piecewise envelope.
+//
+// Log-linear (T_0 / exponential) pieces, h(x) = exp(base_log_dens + slope*(x - a)):
 //   PIECE_EXP_RIGHT (slope < 0):    semi-infinite tail [a, +inf)
 //   PIECE_EXP_LEFT  (slope > 0):    semi-infinite tail (-inf, a]
 //   PIECE_EXP_BOUNDED (any slope):  bounded interval [a, b], h(a) = base_log_dens
 //   PIECE_PLATEAU   (slope unused): bounded interval [a, b], h(x) = base_log_dens
 //   PIECE_SECANT (any slope):       bounded interval [a, b], same form as EXP_BOUNDED
 //                                   (kept distinct for clarity in region D code)
+//
+// Inverse-square (T_{-1/2}) tangent pieces used by the alpha < 1, gamma > 0
+// envelope (Gao & Wang 2025, Section 3.2).  Here `a` is the contact point t,
+// `slope` is the half log-derivative L'(t)/2, and the hat is
+//   h(x) = exp(base_log_dens) / (slope*(x - a) - 1)^2,
+// so log h(x) = base_log_dens - 2*log|slope*(x - a) - 1|.  `b` holds the
+// sampling anchor (ppl / ppr) and `aux` the sampling scale (om1 / om3); the
+// left piece covers (-inf, pl] and the right piece [pr, +inf).
+//   PIECE_TNEGHALF_LEFT  (slope > 0): (-inf, pl],  x = b - aux/u
+//   PIECE_TNEGHALF_RIGHT (slope < 0): [pr, +inf),  x = b + aux/u
 enum PieceType {
   PIECE_PLATEAU,
   PIECE_EXP_RIGHT,
   PIECE_EXP_LEFT,
   PIECE_EXP_BOUNDED,
-  PIECE_SECANT
+  PIECE_SECANT,
+  PIECE_TNEGHALF_LEFT,
+  PIECE_TNEGHALF_RIGHT
 };
 
 // One envelope piece.  See PieceType for the geometry encoded by `type`.
 struct EnvelopePiece {
   PieceType type;
-  double a, b;             // bounds; b is unused for semi-infinite tails
-  double slope;            // exponential rate, signed per PieceType
+  double a, b;             // bounds/anchors; b unused for exp tails, = ppl/ppr for T_{-1/2}
+  double slope;            // exp rate (log-linear) or half log-derivative (T_{-1/2})
   double base_log_dens;    // log h at the anchor point a
   double log_area;         // log of the piece's contribution to the total area
+  double aux = 0.0;        // T_{-1/2} sampling scale (om1/om3); unused otherwise
 };
 
 // Piecewise envelope for RTDR sampling.  Built once per (alpha, beta, gamma)

@@ -27,6 +27,8 @@ using mhn::PIECE_EXP_RIGHT;
 using mhn::PIECE_EXP_LEFT;
 using mhn::PIECE_EXP_BOUNDED;
 using mhn::PIECE_SECANT;
+using mhn::PIECE_TNEGHALF_LEFT;
+using mhn::PIECE_TNEGHALF_RIGHT;
 
 // ====================================================================
 // Section 2: contact_point_newton — Eq. (8) iteration.
@@ -127,6 +129,14 @@ double sample_within_piece(const EnvelopePiece& piece) {
       const double z = std::expm1(piece.slope * width);
       return piece.a + std::log1p(u * z) / piece.slope;
     }
+    case PIECE_TNEGHALF_LEFT:
+      // Inverse-square hat on (-inf, pl].  With b = ppl, aux = om1,
+      // F^-1: x = ppl - om1 / u  (Gao & Wang 2025, Appendix B).
+      return piece.b - piece.aux / u;
+    case PIECE_TNEGHALF_RIGHT:
+      // Inverse-square hat on [pr, +inf).  With b = ppr, aux = om3,
+      // F^-1: x = ppr + om3 / u.
+      return piece.b + piece.aux / u;
     default:
       Rcpp::stop("piecewise_envelope_sample: unknown PieceType.");
   }
@@ -151,6 +161,11 @@ double log_piece_at(const EnvelopePiece& piece, double x) {
     case PIECE_SECANT:
       // h(x) = exp(base_log_dens) * exp(slope * (x - a))
       return piece.base_log_dens + piece.slope * (x - piece.a);
+    case PIECE_TNEGHALF_LEFT:
+    case PIECE_TNEGHALF_RIGHT:
+      // h(x) = exp(base_log_dens) / (slope*(x - a) - 1)^2,  slope = L'(t)/2
+      return piece.base_log_dens
+             - 2.0 * std::log(std::abs(piece.slope * (x - piece.a) - 1.0));
   }
   return -std::numeric_limits<double>::infinity();
 }
@@ -226,6 +241,32 @@ EnvelopePiece make_secant(double a, double b, double slope, double base_log_dens
   p.type = PIECE_SECANT; p.a = a; p.b = b; p.slope = slope;
   p.base_log_dens = base_log_dens;
   p.log_area = log_area_exp_bounded(base_log_dens, slope, b - a);
+  return p;
+}
+// T_{-1/2} tangent pieces (Gao & Wang 2025, Section 3.2 / Appendix B).  The hat
+// is h(y) = exp(logf_t) / (half_slope*(y - t) - 1)^2 with half_slope = L'(t)/2.
+// gap = L(m) - L(t) is the mode-to-contact log-drop; the piece area om equals
+// exp(-gap/2) / |half_slope|.  The (unnormalised) area shared with the plateau
+// carries the common factor exp(logf_m), giving log_area = (logf_m + logf_t)/2
+// - log|half_slope|.  b stores the sampling anchor (ppl/ppr), aux the scale om.
+EnvelopePiece make_tneghalf_left(double t, double half_slope,
+                                 double logf_t, double logf_m) {
+  const double om1 = std::exp(-(logf_m - logf_t) / 2.0) / half_slope;  // >0
+  const double pl = t + 1.0 / half_slope - om1;
+  EnvelopePiece p;
+  p.type = PIECE_TNEGHALF_LEFT; p.a = t; p.b = pl + om1;  // b = ppl
+  p.slope = half_slope; p.base_log_dens = logf_t; p.aux = om1;
+  p.log_area = 0.5 * (logf_m + logf_t) - std::log(half_slope);
+  return p;
+}
+EnvelopePiece make_tneghalf_right(double t, double half_slope,
+                                  double logf_t, double logf_m) {
+  const double om3 = -std::exp(-(logf_m - logf_t) / 2.0) / half_slope;  // half_slope<0 -> >0
+  const double pr = t + 1.0 / half_slope + om3;
+  EnvelopePiece p;
+  p.type = PIECE_TNEGHALF_RIGHT; p.a = t; p.b = pr - om3;  // b = ppr
+  p.slope = half_slope; p.base_log_dens = logf_t; p.aux = om3;
+  p.log_area = 0.5 * (logf_m + logf_t) - std::log(-half_slope);
   return p;
 }
 
@@ -342,10 +383,25 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
   env.log_dens_mode = log_g_mode;
   env.simplified = false;  // BC envelope is always 3-piece
 
-  // Left contact point: y_l < m_g, slope_l > 0.
-  const double t_l_init = m_g - 1.0;
-  env.t_l = ::contact_point_newton(t_l_init, log_g_mode, std::log(4.0),
-                                   log_g, dlog_g, 0.93, 1.99,
+  // g(y) is log-concave iff gamma_norm <= 0 (Gao & Wang 2025, Theorem 3.2).
+  // For gamma_norm <= 0 use the T_0 (log-tangent) hat with acceptance band
+  // [0.46, 2.49] and delta = 1.  For gamma_norm > 0 the density is only
+  // T_{-1/2}-concave -- log g is convex on (-inf, log(gamma_norm/4)) -- so a
+  // log-tangent hat would fail to dominate there; use the T_{-1/2}
+  // (inverse-square) hat with band [0.93, 1.99] and delta = log 4.
+  const bool tneghalf = (gn > 0.0);
+  const double delta = tneghalf ? std::log(4.0) : 1.0;
+  const double band_lo = tneghalf ? 0.93 : 0.46;
+  const double band_hi = tneghalf ? 1.99 : 2.49;
+
+  // Recommended contact-point start (Gao & Wang 2025, Eq. 8):
+  // inc = sqrt(-2*delta / L''(m_g)), with L''(m_g) = -u_mode*(4 u_mode - gn) < 0.
+  const double ddlog_g_mode = -u_mode * (4.0 * u_mode - gn);
+  const double inc = std::sqrt(-2.0 * delta / ddlog_g_mode);
+
+  // Left contact point: t_l < m_g, slope_l > 0.
+  env.t_l = ::contact_point_newton(m_g - inc, log_g_mode, delta,
+                                   log_g, dlog_g, band_lo, band_hi,
                                    /*max_iter=*/30, /*tol=*/1e-10,
                                    /*t_min=*/-std::numeric_limits<double>::infinity(),
                                    /*t_max=*/m_g);
@@ -353,12 +409,11 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
   if (env.slope_l <= 0.0) {
     Rcpp::stop("setup_region_bc: left contact has non-positive slope (Newton failure).");
   }
-  env.p_l = env.t_l + (log_g_mode - log_g(env.t_l)) / env.slope_l;
+  const double log_g_tl = log_g(env.t_l);
 
-  // Right contact point: y_r > m_g, slope_r < 0.
-  const double t_r_init = m_g + 1.0;
-  env.t_r = ::contact_point_newton(t_r_init, log_g_mode, std::log(4.0),
-                                   log_g, dlog_g, 0.93, 1.99,
+  // Right contact point: t_r > m_g, slope_r < 0.
+  env.t_r = ::contact_point_newton(m_g + inc, log_g_mode, delta,
+                                   log_g, dlog_g, band_lo, band_hi,
                                    /*max_iter=*/30, /*tol=*/1e-10,
                                    /*t_min=*/m_g,
                                    /*t_max=*/std::numeric_limits<double>::infinity());
@@ -366,16 +421,35 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
   if (env.slope_r >= 0.0) {
     Rcpp::stop("setup_region_bc: right contact has non-negative slope (Newton failure).");
   }
-  env.p_r = env.t_r + (log_g_mode - log_g(env.t_r)) / env.slope_r;
-
-  if (env.p_l >= env.p_r) {
-    Rcpp::stop("setup_region_bc: invalid intersection points (p_l >= p_r).");
-  }
+  const double log_g_tr = log_g(env.t_r);
 
   std::vector<EnvelopePiece> pieces;
-  pieces.push_back(make_exp_left(env.p_l, env.slope_l, log_g_mode));
-  pieces.push_back(make_plateau(env.p_l, env.p_r, log_g_mode));
-  pieces.push_back(make_exp_right(env.p_r, env.slope_r, log_g_mode));
+  if (tneghalf) {
+    // T_{-1/2} inverse-square tangents; the tangent/plateau intersection
+    // p_l = ppl - om1 (and p_r = ppr + om3) come from the built pieces.
+    const EnvelopePiece left =
+        make_tneghalf_left(env.t_l, env.slope_l / 2.0, log_g_tl, log_g_mode);
+    const EnvelopePiece right =
+        make_tneghalf_right(env.t_r, env.slope_r / 2.0, log_g_tr, log_g_mode);
+    env.p_l = left.b - left.aux;    // ppl - om1
+    env.p_r = right.b + right.aux;  // ppr + om3
+    if (env.p_l >= env.p_r) {
+      Rcpp::stop("setup_region_bc: invalid intersection points (p_l >= p_r).");
+    }
+    pieces.push_back(left);
+    pieces.push_back(make_plateau(env.p_l, env.p_r, log_g_mode));
+    pieces.push_back(right);
+  } else {
+    // T_0 log-tangents (g log-concave for gamma_norm <= 0).
+    env.p_l = env.t_l + (log_g_mode - log_g_tl) / env.slope_l;
+    env.p_r = env.t_r + (log_g_mode - log_g_tr) / env.slope_r;
+    if (env.p_l >= env.p_r) {
+      Rcpp::stop("setup_region_bc: invalid intersection points (p_l >= p_r).");
+    }
+    pieces.push_back(make_exp_left(env.p_l, env.slope_l, log_g_mode));
+    pieces.push_back(make_plateau(env.p_l, env.p_r, log_g_mode));
+    pieces.push_back(make_exp_right(env.p_r, env.slope_r, log_g_mode));
+  }
   finalize_pieces(env, pieces);
 }
 
@@ -718,7 +792,8 @@ Rcpp::List dump_rtdr_envelope_cpp(double alpha, double beta, double gamma) {
       Rcpp::Named("b")             = p.b,
       Rcpp::Named("slope")         = p.slope,
       Rcpp::Named("base_log_dens") = p.base_log_dens,
-      Rcpp::Named("log_area")      = p.log_area
+      Rcpp::Named("log_area")      = p.log_area,
+      Rcpp::Named("aux")           = p.aux
     );
   }
   return Rcpp::List::create(

@@ -55,13 +55,17 @@ test_that("region A: KS, mean/var, acceptance for representative points", {
   }
 })
 
-# Region BC: alpha < 1, T_{-1/2}-concave on g(y).  Covers spec's "region (b)"
-# and "region (c)" (which collapse to the same envelope).
+# Region BC: alpha < 1 on g(y).  For gamma <= 0 the density is log-concave
+# and a T_0 (log-tangent) hat is used; for gamma > 0 it is only
+# T_{-1/2}-concave (Gao & Wang 2025, Theorem 3.2) and a T_{-1/2}
+# (inverse-square) hat is used.  gamma = 2 is included as a regression guard:
+# a log-tangent hat does not dominate g there and biases the sample upward.
 test_that("region BC: KS, mean/var, acceptance for representative points", {
   skip_on_cran()
   cases <- list(
-    c(0.7, 1, -2), c(0.7, 1,  0), c(0.7, 1,  5),     # spec region (b)
-    c(0.3, 1, -5), c(0.3, 1,  0), c(0.3, 1, 0.5)     # spec region (c), all below threshold
+    c(0.7, 1, -2), c(0.7, 1, 0),                     # region (b), gamma <= 0: T_0
+    c(0.7, 1,  2), c(0.7, 1, 5),                     # region (b), gamma > 0: T_{-1/2}
+    c(0.3, 1, -5), c(0.3, 1, 0), c(0.3, 1, 0.5)      # region (c), all below the BC/D threshold
   )
   for (params in cases) {
     r <- run_rtdr_region(params[1], params[2], params[3])

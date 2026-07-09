@@ -1,6 +1,20 @@
 # mhn 0.1.1
 
-Maintenance and documentation release.
+Bug-fix and maintenance release.
+
+## Bug fixes
+
+* `rmhn(method = "rtdr")`, and hence the default `method = "auto"` where it
+  routes there, drew biased samples for `alpha < 1` and `gamma > 0`: on the
+  log axis the density is only \eqn{T_{-1/2}}-concave in that region, not
+  log-concave, so the previous log-tangent envelope did not dominate it and
+  over-weighted large values. The envelope now follows Gao & Wang (2025,
+  Section 3.2 and Appendix B), using a \eqn{T_{-1/2}} (inverse-square)
+  tangent hat when `gamma > 0` and the log-tangent hat only when
+  `gamma <= 0`; drawn samples now match the target distribution across the
+  whole parameter space (verified by a Kolmogorov-Smirnov and moment
+  goodness-of-fit audit). The density, distribution, quantile, and moment
+  functions were not affected.
 
 ## DESCRIPTION
 
