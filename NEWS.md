@@ -35,6 +35,16 @@ Bug-fix and maintenance release.
   `sessionInfo()`, hardware, and `mhn` version provenance, matching the
   audit scripts.
 
+## Examples
+
+* Added `inst/examples/vmf_gibbs.R`, a self-contained Gibbs sampler for the
+  von Mises-Fisher concentration parameter whose full conditional is an MHN
+  law. It is run with
+  `source(system.file("examples", "vmf_gibbs.R", package = "mhn"))`, takes
+  its sample size, chain length and true concentration from `MHN_VMF_*`
+  environment variables, and reports interval coverage and effective
+  sample size.
+
 # mhn 0.1.0
 
 Initial release.
