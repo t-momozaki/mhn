@@ -5,24 +5,42 @@
 # vs Sun across a parameter grid and a range of (n_per_call, n_calls)
 # patterns.
 #
-# Grid:    alpha in {1, 1.5, 3, 5, 10, 100}
-#          gamma in {-100, -10, -2, -0.5, 0.5, 2, 10, 100}      => 48 points
-# Patterns:
-#   A : n_per_call=1     x n_calls=10000  (Gibbs-style setup accumulation)
-#   B : n_per_call=5     x n_calls=2000   (parameter variation)
-#   C : n_per_call=10000 x n_calls=1      (batched simulation)
+# Grid:    alpha in {0.3, 0.5, 0.7, 0.8, 1, 1.5, 3, 5, 10, 100}  (now spans
+#          the non-log-concave alpha < 1 region, the headline corner)
+#          gamma in {-100, -10, -2, -0.5, 0.5, 2, 10, 100}      => 80 points
+# Patterns (n_per_call m spans setup-dominated to per-proposal-dominated):
+#   A : n_per_call=1     x n_calls=10000  (Gibbs-style, setup dominates)
+#   B..B100 : m = 5,10,25,50,100          (the crossover sweep)
+#   C : n_per_call=10000 x n_calls=1      (batch, per-proposal dominates)
 #
-# Decision rule:
-#   For each (alpha, gamma):
-#     - Compare median wall-clock time of method="rtdr" vs method="sun" in
-#       Pattern A and Pattern B.
-#     - If both patterns show >= 10% advantage for the same method, pick it.
-#     - Otherwise default to RTDR (uniform 1/e guarantee from Gao & Wang
-#       2025, Theorems 3.1, 3.2, 4.4).
+# alpha < 1 needs NO new sampler: Sun's Algorithm 3 is valid for all alpha > 0
+# when gamma <= 0, so alpha<1, gamma<=0 is a fair rtdr-vs-A3 comparison; and
+# alpha<1, gamma>0 is the corner where Sun would need the deliberately-omitted
+# Algorithm 2, so sun is recorded as sun_incompatible and only rtdr's
+# acceptance (the 1/e floor that anchors the default) is measured there.
+#
+# This is a FAIR, within-C++ comparison: rtdr and sun are both this package's
+# own C++ kernels timed on one machine, so the confound that makes an absolute
+# comparison against Gao & Wang's published R timings meaningless does not
+# apply here.  All timings and acceptance rates below are comparable.
+#
+# What it now measures (beyond raw per-pattern times):
+#   - Acceptance rate for rtdr and sun (machine-independent efficiency).
+#   - A setup / per-proposal cost decomposition per kernel: with the thunk
+#     running k calls of m draws each, median_us = k*(T_setup + m*T_prop), so
+#     the per-call time median_us/k = T_setup + m*T_prop.  T_setup is read at
+#     m=1 (pattern A) and T_prop at m=10^4 (pattern C).
+#   - The EMPIRICAL Gibbs<->batch crossover: the smallest m at which the
+#     rtdr-vs-sun winner flips, read directly from the sweep (no assumed 25).
+#   - The SHIPPED rmhn(method="auto") pick (mirroring src/mhn_rmhn.cpp) at the
+#     Gibbs (m=1) and batch (m=10^4) shapes, and whether it matches the
+#     measured winner -- flagging cells where the dispatch rule is suboptimal.
 #
 # Outputs:
-#   mhn/inst/benchmarks/results/auto_dispatch_<YYYYMMDD>.csv
-#   mhn/inst/benchmarks/results/auto_dispatch_diagnostics_<YYYYMMDD>.csv
+#   auto_dispatch_<YYYYMMDD>.csv                (per pattern x method raw times)
+#   auto_dispatch_diagnostics_<YYYYMMDD>.csv    (per point acceptance + kernel diag)
+#   auto_dispatch_recommendation_<YYYYMMDD>.csv (per point: decomposition,
+#       crossover, measured winner, shipped auto pick, and mismatch flags)
 #
 # Invocation (from repository root):
 #   Rscript mhn/inst/benchmarks/auto_dispatch.R
@@ -50,8 +68,8 @@ BENCH_ITER <- {
   if (is.na(v) || v < 1L) (if (QUICK) 2L else 50L) else v
 }
 
-ALPHAS <- if (QUICK) c(1, 3, 10) else c(1, 1.5, 3, 5, 10, 100)
-GAMMAS <- if (QUICK) c(-10, -0.5, 2, 100) else c(-100, -10, -2, -0.5, 0.5, 2, 10, 100)
+ALPHAS <- if (QUICK) c(0.5, 1, 3) else c(0.3, 0.5, 0.7, 0.8, 1, 1.5, 3, 5, 10, 100)
+GAMMAS <- if (QUICK) c(-10, -0.5, 2) else c(-100, -10, -2, -0.5, 0.5, 2, 10, 100)
 
 PATTERNS <- list(
   A    = list(n_per_call = 1L,     n_calls = if (QUICK) 1000L else 10000L),
@@ -74,6 +92,9 @@ DIAG_CSV   <- file.path(OUTDIR, sprintf("auto_dispatch_diagnostics_%s.csv", TODA
 # Single-row environment / provenance record.  A separate file because
 # DIAG_CSV above already holds the per-point acceptance diagnostics.
 PROV_CSV   <- file.path(OUTDIR, sprintf("auto_dispatch_provenance_%s.csv", TODAY))
+# Per-point recommendation: cost decomposition, empirical crossover, measured
+# winner per call shape, and the shipped auto pick with mismatch flags.
+REC_CSV    <- file.path(OUTDIR, sprintf("auto_dispatch_recommendation_%s.csv", TODAY))
 
 cat(sprintf("[auto_dispatch] mode=%s iterations=%d alpha=%d gamma=%d patterns=%d points=%d\n",
             if (QUICK) "QUICK" else "FULL", BENCH_ITER,
@@ -258,7 +279,74 @@ decide_method <- function(rows, alpha, gamma) {
   list(decision = "rtdr", reason = sprintf("inconsistent(A=%s,B=%s)_default_rtdr", pa, pb))
 }
 
-bench_rows <- list(); diag_rows <- list()
+# -----------------------------------------------------------------------
+# Cost decomposition, empirical crossover, and shipped-auto comparison
+# -----------------------------------------------------------------------
+# Per-call time for a pattern = median_us / n_calls = T_setup + m*T_prop.
+percall_us <- function(rows, patt, method) {
+  v <- rows$median_us[rows$pattern == patt & rows$method == method]
+  k <- PATTERNS[[patt]]$n_calls
+  if (length(v) == 1L && is.finite(v)) v / k else NA_real_
+}
+# T_setup from m=1 (pattern A), T_prop from m=10^4 (pattern C).
+decomp <- function(rows, method) {
+  yA <- percall_us(rows, "A", method); yC <- percall_us(rows, "C", method)
+  mA <- PATTERNS$A$n_per_call; mC <- PATTERNS$C$n_per_call
+  prop <- if (is.finite(yA) && is.finite(yC) && mC > mA) (yC - yA) / (mC - mA) else NA_real_
+  setup <- if (is.finite(yA) && is.finite(prop)) yA - prop * mA else yA
+  list(setup_us = setup, prop_us = prop)
+}
+# Patterns ordered by n_per_call, for scanning the crossover.
+PATT_ORDER <- names(PATTERNS)[order(vapply(PATTERNS, function(p) p$n_per_call, numeric(1)))]
+winner_at <- function(rows, patt) {
+  r <- percall_us(rows, patt, "rtdr"); s <- percall_us(rows, patt, "sun")
+  if (!is.finite(r) || !is.finite(s)) return(NA_character_)
+  if (r < s) "rtdr" else "sun"
+}
+# Smallest m at which the rtdr-vs-sun winner flips from its m=1 value; NA if
+# one kernel wins throughout (no crossover) or sun is unavailable.
+crossover_m <- function(rows) {
+  w  <- vapply(PATT_ORDER, function(p) winner_at(rows, p), character(1))
+  ms <- vapply(PATT_ORDER, function(p) as.numeric(PATTERNS[[p]]$n_per_call), numeric(1))
+  ok <- !is.na(w); w <- w[ok]; ms <- ms[ok]
+  if (length(w) < 2L) return(NA_real_)
+  flip <- which(w != w[1])
+  if (!length(flip)) return(NA_real_)
+  ms[flip[1]]
+}
+# The shipped rmhn(method="auto") pick, mirroring src/mhn_rmhn.cpp.  For a
+# scalar-parameter rmhn(m, ...) call, samples_per_setup == m.
+shipped_auto <- function(alpha, gamma, m) {
+  if (!is.na(is_special_case(alpha, gamma))) return("special")
+  if (gamma > 0.0) return(if (alpha > 1.0) "sun" else "rtdr")
+  if (m >= 25L) "rtdr" else "sun"   # gamma <= 0 (non-special): S>=25 -> RTDR
+}
+agree <- function(pick, measured) {
+  if (pick == "special" || is.na(measured)) return(NA)
+  pick == measured
+}
+
+recommend_one <- function(rows, diag_row, alpha, gamma) {
+  spec <- is_special_case(alpha, gamma)
+  region <- if (!is.na(spec)) "special"
+            else if (alpha < 1 && gamma > 0) "corner_alpha<1_gamma>0"
+            else "general"
+  rda <- decomp(rows, "rtdr"); sda <- decomp(rows, "sun")
+  wg <- winner_at(rows, "A"); wb <- winner_at(rows, "C")
+  ag <- shipped_auto(alpha, gamma, 1L)
+  ab <- shipped_auto(alpha, gamma, as.integer(PATTERNS$C$n_per_call))
+  data.frame(
+    alpha = alpha, gamma = gamma, region = region, sun_algo = diag_row$sun_algo,
+    rtdr_acc = diag_row$rtdr_acc, sun_acc = diag_row$sun_acc,
+    rtdr_setup_us = rda$setup_us, rtdr_prop_us = rda$prop_us,
+    sun_setup_us  = sda$setup_us, sun_prop_us  = sda$prop_us,
+    winner_gibbs = wg, winner_batch = wb, crossover_m = crossover_m(rows),
+    auto_pick_gibbs = ag, auto_pick_batch = ab,
+    agree_gibbs = agree(ag, wg), agree_batch = agree(ab, wb),
+    stringsAsFactors = FALSE)
+}
+
+bench_rows <- list(); diag_rows <- list(); rec_rows <- list()
 t_start <- Sys.time()
 total_points <- length(ALPHAS) * length(GAMMAS); point_idx <- 0L
 
@@ -295,6 +383,7 @@ for (alpha in ALPHAS) {
 
     bench_rows[[length(bench_rows) + 1L]] <- rows_df
     diag_rows[[length(diag_rows) + 1L]]   <- as.data.frame(diag_row, stringsAsFactors = FALSE)
+    rec_rows[[length(rec_rows) + 1L]]     <- recommend_one(rows_df, diag_row, alpha, gamma)
 
     cat(sprintf("decision=%s (%s) rtdr_acc=%s sun_acc=%s newton_fail=%s keff_fb=%s\n",
                 dec$decision, dec$reason,
@@ -306,8 +395,10 @@ for (alpha in ALPHAS) {
 
 bench_df <- do.call(rbind, bench_rows)
 diag_df  <- do.call(rbind, diag_rows)
+rec_df   <- do.call(rbind, rec_rows)
 write.csv(bench_df, RESULT_CSV, row.names = FALSE)
 write.csv(diag_df,  DIAG_CSV,   row.names = FALSE)
+write.csv(rec_df,   REC_CSV,    row.names = FALSE)
 
 t_end <- Sys.time()
 elapsed_min <- as.numeric(difftime(t_end, t_start, units = "mins"))
@@ -321,6 +412,29 @@ dec_table <- unique(bench_df[, c("alpha", "gamma", "decision", "decision_reason"
 dec_wide  <- reshape(dec_table[, c("alpha", "gamma", "decision")],
                      idvar = "alpha", timevar = "gamma", direction = "wide")
 print(dec_wide, row.names = FALSE)
+
+cat("\n[Shipped auto vs measured winner]  (general cells only)\n")
+gen <- rec_df[rec_df$region == "general", ]
+mm_g <- gen[!is.na(gen$agree_gibbs) & !gen$agree_gibbs, ]
+mm_b <- gen[!is.na(gen$agree_batch) & !gen$agree_batch, ]
+cat(sprintf("  Gibbs (m=1)  : shipped auto matches measured winner in %d / %d cells\n",
+            sum(gen$agree_gibbs, na.rm = TRUE), sum(!is.na(gen$agree_gibbs))))
+cat(sprintf("  Batch (m=1e4): shipped auto matches measured winner in %d / %d cells\n",
+            sum(gen$agree_batch, na.rm = TRUE), sum(!is.na(gen$agree_batch))))
+if (nrow(mm_g) || nrow(mm_b)) {
+  cat("  MISMATCH cells (dispatcher may be suboptimal):\n")
+  for (i in seq_len(nrow(mm_g)))
+    cat(sprintf("    a=%-5g g=%-6g Gibbs: auto=%s but measured winner=%s\n",
+                mm_g$alpha[i], mm_g$gamma[i], mm_g$auto_pick_gibbs[i], mm_g$winner_gibbs[i]))
+  for (i in seq_len(nrow(mm_b)))
+    cat(sprintf("    a=%-5g g=%-6g batch: auto=%s but measured winner=%s\n",
+                mm_b$alpha[i], mm_b$gamma[i], mm_b$auto_pick_batch[i], mm_b$winner_batch[i]))
+} else {
+  cat("  No mismatches: the shipped dispatch rule agrees with the measured optimum.\n")
+}
+cat("\n[Empirical crossover m (rtdr<->sun winner flips)]  (general, gamma<=0)\n")
+xo <- gen[gen$gamma <= 0 & !is.na(gen$crossover_m), c("alpha","gamma","winner_gibbs","crossover_m","winner_batch")]
+if (nrow(xo)) print(xo, row.names = FALSE) else cat("  (no crossover cells; one kernel wins throughout)\n")
 
 cat("\n[Carry-over verification]\n")
 cat(sprintf("  Newton failures              : %d / %d points\n",
@@ -359,8 +473,8 @@ prov <- data.frame(
 )
 write.csv(prov, PROV_CSV, row.names = FALSE)
 
-cat(sprintf("\nResults written to:\n  %s\n  %s\n  %s\n",
-            RESULT_CSV, DIAG_CSV, PROV_CSV))
+cat(sprintf("\nResults written to:\n  %s\n  %s\n  %s\n  %s\n",
+            RESULT_CSV, DIAG_CSV, REC_CSV, PROV_CSV))
 cat("\nNext step: inspect the decision matrix above and update the auto path\n")
 cat("in mhn/src/mhn_rmhn.cpp / R/rmhn.R.  The auto-vs-forced equivalence\n")
 cat("regression block in tests/testthat/test-rmhn.R guards the dispatch rule.\n")
