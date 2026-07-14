@@ -319,7 +319,10 @@ crossover_m <- function(rows) {
 shipped_auto <- function(alpha, gamma, m) {
   if (!is.na(is_special_case(alpha, gamma))) return("special")
   if (gamma > 0.0) return(if (alpha > 1.0) "sun" else "rtdr")
-  if (m >= 25L) "rtdr" else "sun"   # gamma <= 0 (non-special): S>=25 -> RTDR
+  # gamma <= 0 (non-special): large batch (S>=25) -> RTDR, except alpha>=10
+  # where Sun A3's per-proposal cost falls below RTDR's and wins in the
+  # batch regime too (see the shipped rule in src/mhn_rmhn.cpp).
+  if (m >= 25L && alpha < 10.0) "rtdr" else "sun"
 }
 agree <- function(pick, measured) {
   if (pick == "special" || is.na(measured)) return(NA)

@@ -118,14 +118,22 @@ void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
     //   gamma > 0 && alpha < 1 -> RTDR.  Sun A2 is not implemented in
     //                              this package; spec Sec 3.4 [2]
     //                              confirms this region for RTDR.
-    //   gamma < 0              -> n-dependent.  The per-cell winner
-    //                              flips from Sun A3 (small n) to RTDR
-    //                              (large n) at n_per_call ~ 10-25.
-    //                              Sun A3 has lighter setup but a
-    //                              heavier per-sample cost (rgamma +
-    //                              (X/m)^(1/r)) than RTDR's piecewise
-    //                              inverse CDF.  We use 25 as the
-    //                              cutoff.
+    //   gamma < 0              -> n-dependent.  For small n (Gibbs) Sun
+    //                              A3's lighter setup wins; for large n
+    //                              its heavier per-sample cost (rgamma +
+    //                              (X/m)^(1/r)) loses to RTDR's piecewise
+    //                              inverse CDF, so the winner flips at
+    //                              n ~ 10-25 and we use 25 as the cutoff.
+    //                              Exception: for alpha >= 10 Sun A3's
+    //                              per-proposal cost falls below RTDR's
+    //                              even for large n (RTDR builds a fuller
+    //                              envelope as the mode sharpens), so Sun
+    //                              A3 wins in both regimes there; the
+    //                              alpha >= 10 carve-out keeps large-n
+    //                              dispatch on the measured optimum
+    //                              (benchmarked in auto_dispatch.R across
+    //                              three independent runs: it cuts the
+    //                              worst-case regret from ~11% to ~4%).
     if (g > 0.0) {
       if (a > 1.0) {
         c.kind = Kind::GENERAL_SUN_A1;
@@ -135,7 +143,7 @@ void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
         c.rtdr = mhn::build_rtdr_envelope(a, b, g);
       }
     } else {  // g < 0.0
-      if (samples_per_setup >= 25) {
+      if (samples_per_setup >= 25 && a < 10.0) {
         c.kind = Kind::GENERAL_RTDR;
         c.rtdr = mhn::build_rtdr_envelope(a, b, g);
       } else {

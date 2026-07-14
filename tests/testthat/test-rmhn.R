@@ -331,12 +331,23 @@ test_that("auto -> Sun A3 for gamma<0 with small n (Gibbs)", {
   }
 })
 
-test_that("auto -> RTDR for gamma<0 with large n (batch)", {
-  # samples_per_setup >= 25 -> RTDR
+test_that("auto -> RTDR for gamma<0 with large n & alpha<10 (batch)", {
+  # samples_per_setup >= 25 with alpha < 10 -> RTDR
   for (n_val in c(25L, 100L, 1000L)) {
     set.seed(7L); a <- rmhn(n_val, alpha = 5, gamma = -10, method = "auto")
     set.seed(7L); r <- rmhn(n_val, alpha = 5, gamma = -10, method = "rtdr")
     expect_identical(a, r)
+  }
+})
+
+test_that("auto -> Sun A3 for gamma<0 with large n & alpha>=10 (batch)", {
+  # samples_per_setup >= 25 but alpha >= 10 -> Sun A3: its per-proposal cost
+  # drops below RTDR's for sharply peaked densities, so Sun A3 wins in both
+  # the small-n and large-n regimes there (benchmarked in auto_dispatch.R).
+  for (n_val in c(25L, 100L, 1000L)) {
+    set.seed(7L); a <- rmhn(n_val, alpha = 10, gamma = -10, method = "auto")
+    set.seed(7L); s <- rmhn(n_val, alpha = 10, gamma = -10, method = "sun")
+    expect_identical(a, s)
   }
 })
 

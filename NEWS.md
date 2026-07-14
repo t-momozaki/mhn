@@ -24,6 +24,16 @@ Bug-fix and maintenance release.
 
 ## Benchmarks
 
+* Refined the `method = "auto"` dispatch for `gamma < 0`. Previously any
+  batch of 25 or more variates per setup used RTDR; benchmarking across
+  three independent runs showed that for `alpha >= 10` the Sun et al.
+  (2023) Algorithm 3 has the lower per-proposal cost and wins in the batch
+  regime too, so `auto` now keeps RTDR for large batches only when
+  `alpha < 10`. This lowers the worst-case slowdown of `auto` relative to
+  the per-cell optimum from about 11% to about 4% while leaving the
+  common Gibbs (single-variate) path unchanged. `inst/benchmarks/auto_dispatch.R`
+  gained an `alpha < 1` grid, a setup/per-proposal cost decomposition, and
+  a comparison of the shipped rule against the measured optimum.
 * Fixed a unit double-conversion in `inst/benchmarks/auto_dispatch.R`
   that inflated the reported `median_us` / `iqr_us` times by a factor of
   about 1e6. The `method = "auto"` dispatch *decisions* are ratio-based

@@ -46,9 +46,17 @@ to the half-normal distribution \eqn{\mathrm{HN}(1/\sqrt{2})}.
 
 The \code{method} argument selects the rejection sampler:
 \itemize{
-\item \code{"auto"}: Special-case shortcuts when applicable
-(\eqn{\gamma \approx 0} -> sqrt-Gamma, \eqn{\alpha \approx 1} ->
-truncated normal). Otherwise dispatches to RTDR (Gao & Wang, 2025).
+\item \code{"auto"} (default): Uses closed-form special cases when
+applicable (\eqn{\gamma \approx 0} -> sqrt-Gamma,
+\eqn{\alpha \approx 1} -> truncated normal). Otherwise it selects the
+fastest provably correct sampler for the parameter region and the
+number of variates drawn per setup: for \eqn{\gamma > 0} it uses Sun
+et al. (2023) Algorithm 1 when \eqn{\alpha > 1} and RTDR (Gao & Wang,
+2025) when \eqn{\alpha < 1}; for \eqn{\gamma < 0} it uses Sun et al.
+Algorithm 3 for small batches (fewer than 25 variates per setup) and
+for \eqn{\alpha \ge 10}, and RTDR for larger batches with
+\eqn{\alpha < 10}. These thresholds were fixed by benchmarking (see
+\code{inst/benchmarks/auto_dispatch.R}).
 \item \code{"rtdr"}: Force the Relaxed Transformed Density Rejection
 method of Gao & Wang (2025). The acceptance probability is bounded
 below by \eqn{1/e \approx 0.368} uniformly over the parameter space.
