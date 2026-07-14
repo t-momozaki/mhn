@@ -1,0 +1,2 @@
+"n_runs","grid_points","iterations","platform","os","mhn_version","regret_mean_pct","regret_median_pct","regret_p90_pct","regret_max_pct","n_regret_gt10","gibbs_unanimous","batch_unanimous","gibbs_decisive_unanimous","batch_decisive_unanimous","worst_cell","worst_regret_pct"
+3,80,50,"aarch64-apple-darwin20","macOS Tahoe 26.5.1","0.1.1",0.107,0,0,4.189,0,"53/56","56/56","7/7","38/38","alpha=5 gamma=-100 batch run3",4.19

@@ -8,6 +8,8 @@
 # in tests/testthat/test-pmhn.R loads at test time.
 ^inst/benchmarks/results/auto_dispatch_.*$
 ^inst/benchmarks/results/replicate_gw_tables_.*$
+^inst/benchmarks/results/rmhn_gof_.*$
+^inst/benchmarks/results/dispatch_crossrun_.*$
 ^inst/audits/results/series_breakdown_audit_.*$
 ^inst/audits/results/cdf_series_accuracy_diagnostics_.*$
 ^\.DS_Store$
