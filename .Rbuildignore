@@ -10,6 +10,7 @@
 ^inst/benchmarks/results/replicate_gw_tables_.*$
 ^inst/benchmarks/results/rmhn_gof_.*$
 ^inst/benchmarks/results/dispatch_crossrun_.*$
+^inst/benchmarks/results/rtdr_sun_race_.*$
 ^inst/audits/results/series_breakdown_audit_.*$
 ^inst/audits/results/cdf_series_accuracy_diagnostics_.*$
 ^\.DS_Store$
