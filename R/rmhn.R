@@ -43,10 +43,11 @@
 #'     number of variates drawn per setup: for \eqn{\gamma > 0} it uses Sun
 #'     et al. (2023) Algorithm 1 when \eqn{\alpha > 1} and RTDR (Gao & Wang,
 #'     2025) when \eqn{\alpha < 1}; for \eqn{\gamma < 0} it uses Sun et al.
-#'     Algorithm 3 for small batches (fewer than 25 variates per setup) and
-#'     for \eqn{\alpha \ge 10}, and RTDR for larger batches with
-#'     \eqn{\alpha < 10}. These thresholds were fixed by benchmarking (see
-#'     \code{inst/benchmarks/auto_dispatch.R}).
+#'     Algorithm 3 for small batches and for \eqn{\alpha \ge 10}, and RTDR
+#'     for larger batches with \eqn{\alpha < 10}. A batch counts as large at
+#'     25 variates per setup, raised to 100 for \eqn{\alpha < 0.1} where the
+#'     crossover between the two samplers occurs later. These thresholds were
+#'     fixed by benchmarking (see \code{inst/benchmarks/auto_dispatch.R}).
 #'   \item \code{"rtdr"}: Force the Relaxed Transformed Density Rejection
 #'     method of Gao & Wang (2025). The acceptance probability is bounded
 #'     below by \eqn{1/e \approx 0.368} uniformly over the parameter space.

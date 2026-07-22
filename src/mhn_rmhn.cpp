@@ -143,7 +143,14 @@ void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
         c.rtdr = mhn::build_rtdr_envelope(a, b, g);
       }
     } else {  // g < 0.0
-      if (samples_per_setup >= 25 && a < 10.0) {
+      // The Algorithm 3 -> RTDR crossover moves right as the shape shrinks:
+      // it sits near n = 25 for alpha around 0.8 and above, but by
+      // alpha = 0.01 it has moved out to n ~ 100, because Algorithm 3's
+      // setup gets relatively cheaper as the density spikes at the origin
+      // (measured in rtdr_sun_race.R).  Switching at 25 there would cost
+      // up to 10% for 25 <= n < 100, so very small shapes wait longer.
+      const R_xlen_t n_switch = (a < 0.1) ? 100 : 25;
+      if (samples_per_setup >= n_switch && a < 10.0) {
         c.kind = Kind::GENERAL_RTDR;
         c.rtdr = mhn::build_rtdr_envelope(a, b, g);
       } else {

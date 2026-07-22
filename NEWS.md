@@ -34,6 +34,11 @@ Bug-fix and maintenance release.
   common Gibbs (single-variate) path unchanged. `inst/benchmarks/auto_dispatch.R`
   gained an `alpha < 1` grid, a setup/per-proposal cost decomposition, and
   a comparison of the shipped rule against the measured optimum.
+* Raised the `gamma < 0` batch cutoff from 25 to 100 variates per setup when
+  `alpha < 0.1`. The crossover between Algorithm 3 and RTDR moves to larger
+  batches as the shape shrinks --- it sits near 25 for `alpha` around 0.8 but
+  near 100 by `alpha = 0.01` --- so the old cutoff sent 25 to 99 variates per
+  setup to RTDR while Algorithm 3 was still up to 10% faster there.
 * Fixed a unit double-conversion in `inst/benchmarks/auto_dispatch.R`
   that inflated the reported `median_us` / `iqr_us` times by a factor of
   about 1e6. The `method = "auto"` dispatch *decisions* are ratio-based

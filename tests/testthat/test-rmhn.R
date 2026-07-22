@@ -340,6 +340,21 @@ test_that("auto -> RTDR for gamma<0 with large n & alpha<10 (batch)", {
   }
 })
 
+test_that("auto -> Sun A3 for gamma<0 with tiny alpha until n reaches 100", {
+  # For alpha < 0.1 the Algorithm 3 -> RTDR crossover moves out to n ~ 100,
+  # so the batch cutoff is raised there: 25 <= n < 100 still uses Sun A3.
+  for (n_val in c(25L, 50L, 99L)) {
+    set.seed(7L); a <- rmhn(n_val, alpha = 0.01, gamma = -10, method = "auto")
+    set.seed(7L); s <- rmhn(n_val, alpha = 0.01, gamma = -10, method = "sun")
+    expect_identical(a, s)
+  }
+  for (n_val in c(100L, 1000L)) {
+    set.seed(7L); a <- rmhn(n_val, alpha = 0.01, gamma = -10, method = "auto")
+    set.seed(7L); r <- rmhn(n_val, alpha = 0.01, gamma = -10, method = "rtdr")
+    expect_identical(a, r)
+  }
+})
+
 test_that("auto -> Sun A3 for gamma<0 with large n & alpha>=10 (batch)", {
   # samples_per_setup >= 25 but alpha >= 10 -> Sun A3: its per-proposal cost
   # drops below RTDR's for sharply peaked densities, so Sun A3 wins in both
