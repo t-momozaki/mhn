@@ -1,0 +1,2 @@
+"timestamp","r_version","platform","os","mhn_version","bench_version","mode","iterations","grid_points","elapsed_min"
+"2026-07-13T14:19:36+0900","4.5.2","aarch64-apple-darwin20","macOS Tahoe 26.5.1","0.1.1","1.1.4","FULL",50,80,10.39
