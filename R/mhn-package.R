@@ -46,9 +46,6 @@
 #' \emph{Communications in Statistics - Simulation and Computation}.
 #' \doi{10.1080/03610918.2025.2524551}
 #'
-#' @importFrom stats dgamma pgamma qgamma rgamma
-#' @importFrom stats dnorm pnorm qnorm rnorm
-#' @importFrom stats integrate uniroot
 #' @importFrom Rcpp sourceCpp
 #' @useDynLib mhn, .registration = TRUE
 #' @keywords internal
