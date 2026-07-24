@@ -13,7 +13,7 @@
 ^inst/benchmarks/results/rtdr_sun_race_.*$
 ^inst/audits/results/series_breakdown_audit_.*$
 ^inst/audits/results/cdf_series_accuracy_diagnostics_.*$
-^\.DS_Store$
+(^|/)\.DS_Store$
 ^.*\.tar\.gz$
 ^.*\.Rcheck$
 ^\.claude$
