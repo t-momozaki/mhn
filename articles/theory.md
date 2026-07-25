@@ -427,9 +427,9 @@ data.frame(cases,
            theoretical_mean = round(theoretical, 4))
 #>   region alpha gamma empirical_mean theoretical_mean
 #> 1    (a)   2.0   0.5         1.0126           1.0016
-#> 2    (b)   0.7   1.0         0.6442           0.6424
-#> 3    (c)   0.3   0.5         0.2972           0.2823
-#> 4    (d)   0.3   5.0         2.3321           2.3221
+#> 2    (b)   0.7   1.0         0.6468           0.6424
+#> 3    (c)   0.3   0.5         0.2931           0.2823
+#> 4    (d)   0.3   5.0         2.3300           2.3221
 ```
 
 The four rows hit the right means to two-to-three decimal places — about
@@ -542,7 +542,7 @@ The three `TRUE` outputs are the same invariant that
 
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics – Theory and Methods*, 52(5), 1507–1536.
+*Communications in Statistics – Theory and Methods*, 52(5), 1591–1613.
 
 Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.

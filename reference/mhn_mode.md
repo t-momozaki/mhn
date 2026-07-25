@@ -53,7 +53,7 @@ The mode depends on \\\alpha\\:
 
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics - Theory and Methods*, 52(5), 1507–1536.
+*Communications in Statistics - Theory and Methods*, 52(5), 1591–1613.
 (Lemma 3b–d, Lemma 6b)
 
 ## See also

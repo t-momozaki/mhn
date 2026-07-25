@@ -1,6 +1,72 @@
 # Changelog
 
+## mhn 0.1.1
+
+Bug-fix and maintenance release.
+
+### Bug fixes
+
+- `rmhn(method = "rtdr")`, and hence the default `method = "auto"` where
+  it routes there, drew biased samples for `alpha < 1` and `gamma > 0`:
+  on the log axis the density is only -concave in that region, not
+  log-concave, so the previous log-tangent envelope did not dominate it
+  and over-weighted large values. The envelope now follows Gao & Wang
+  (2025, Section 3.2 and Appendix B), using a (inverse-square) tangent
+  hat when `gamma > 0` and the log-tangent hat only when `gamma <= 0`;
+  drawn samples now match the target distribution across the whole
+  parameter space (verified by a Kolmogorov-Smirnov and moment
+  goodness-of-fit audit). The density, distribution, quantile, and
+  moment functions were not affected.
+
+### DESCRIPTION
+
+- Spelled out “Markov chain Monte Carlo” and “relaxed transformed
+  density rejection method” in the `Description` field, following CRAN
+  reviewer feedback on unexpanded acronyms.
+
+### Benchmarks
+
+- Refined the `method = "auto"` dispatch for `gamma < 0`. Previously any
+  batch of 25 or more variates per setup used RTDR; benchmarking across
+  three independent runs showed that for `alpha >= 10` the Sun et al.
+  2023. Algorithm 3 has the lower per-proposal cost and wins in the
+        batch regime too, so `auto` now keeps RTDR for large batches
+        only when `alpha < 10`. This lowers the worst-case slowdown of
+        `auto` relative to the per-cell optimum from about 11% to about
+        4% while leaving the common Gibbs (single-variate) path
+        unchanged. `inst/benchmarks/auto_dispatch.R` gained an
+        `alpha < 1` grid, a setup/per-proposal cost decomposition, and a
+        comparison of the shipped rule against the measured optimum.
+- Raised the `gamma < 0` batch cutoff from 25 to 100 variates per setup
+  when `alpha < 0.1`. The crossover between Algorithm 3 and RTDR moves
+  to larger batches as the shape shrinks — it sits near 25 for `alpha`
+  around 0.8 but near 100 by `alpha = 0.01` — so the old cutoff sent 25
+  to 99 variates per setup to RTDR while Algorithm 3 was still up to 10%
+  faster there.
+- Fixed a unit double-conversion in `inst/benchmarks/auto_dispatch.R`
+  that inflated the reported `median_us` / `iqr_us` times by a factor of
+  about 1e6. The `method = "auto"` dispatch *decisions* are ratio-based
+  and were unaffected, as is `rmhn(method = "auto")` itself.
+- Added a goodness-of-fit benchmark, `inst/benchmarks/rmhn_gof.R`, that
+  writes Kolmogorov-Smirnov statistics and sample-vs-theory moment
+  summaries across the parameter grid to a CSV.
+- The two timing benchmarks now emit a `_diagnostics_<date>.csv` with
+  [`sessionInfo()`](https://rdrr.io/r/utils/sessionInfo.html), hardware,
+  and `mhn` version provenance, matching the audit scripts.
+
+### Examples
+
+- Added `inst/examples/vmf_gibbs.R`, a self-contained Gibbs sampler for
+  the von Mises-Fisher concentration parameter whose full conditional is
+  an MHN law. It is run with
+  `source(system.file("examples", "vmf_gibbs.R", package = "mhn"))`,
+  takes its sample size, chain length and true concentration from
+  `MHN_VMF_*` environment variables, and reports interval coverage and
+  effective sample size.
+
 ## mhn 0.1.0
+
+CRAN release: 2026-05-27
 
 Initial release.
 

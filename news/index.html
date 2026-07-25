@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,7 +38,34 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.1.0" id="mhn-010">mhn 0.1.0<a class="anchor" aria-label="anchor" href="#mhn-010"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.1.1" id="mhn-011">mhn 0.1.1<a class="anchor" aria-label="anchor" href="#mhn-011"></a></h2>
+<p>Bug-fix and maintenance release.</p>
+<div class="section level3">
+<h3 id="bug-fixes-0-1-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-1-1"></a></h3>
+<ul><li>
+<code>rmhn(method = "rtdr")</code>, and hence the default <code>method = "auto"</code> where it routes there, drew biased samples for <code>alpha &lt; 1</code> and <code>gamma &gt; 0</code>: on the log axis the density is only -concave in that region, not log-concave, so the previous log-tangent envelope did not dominate it and over-weighted large values. The envelope now follows Gao &amp; Wang (2025, Section 3.2 and Appendix B), using a  (inverse-square) tangent hat when <code>gamma &gt; 0</code> and the log-tangent hat only when <code>gamma &lt;= 0</code>; drawn samples now match the target distribution across the whole parameter space (verified by a Kolmogorov-Smirnov and moment goodness-of-fit audit). The density, distribution, quantile, and moment functions were not affected.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="description-0-1-1">DESCRIPTION<a class="anchor" aria-label="anchor" href="#description-0-1-1"></a></h3>
+<ul><li>Spelled out “Markov chain Monte Carlo” and “relaxed transformed density rejection method” in the <code>Description</code> field, following CRAN reviewer feedback on unexpanded acronyms.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="benchmarks-0-1-1">Benchmarks<a class="anchor" aria-label="anchor" href="#benchmarks-0-1-1"></a></h3>
+<ul><li>Refined the <code>method = "auto"</code> dispatch for <code>gamma &lt; 0</code>. Previously any batch of 25 or more variates per setup used RTDR; benchmarking across three independent runs showed that for <code>alpha &gt;= 10</code> the Sun et al.
+<ol start="2023" style="list-style-type: decimal"><li>Algorithm 3 has the lower per-proposal cost and wins in the batch regime too, so <code>auto</code> now keeps RTDR for large batches only when <code>alpha &lt; 10</code>. This lowers the worst-case slowdown of <code>auto</code> relative to the per-cell optimum from about 11% to about 4% while leaving the common Gibbs (single-variate) path unchanged. <code>inst/benchmarks/auto_dispatch.R</code> gained an <code>alpha &lt; 1</code> grid, a setup/per-proposal cost decomposition, and a comparison of the shipped rule against the measured optimum.</li>
+</ol></li>
+<li>Raised the <code>gamma &lt; 0</code> batch cutoff from 25 to 100 variates per setup when <code>alpha &lt; 0.1</code>. The crossover between Algorithm 3 and RTDR moves to larger batches as the shape shrinks — it sits near 25 for <code>alpha</code> around 0.8 but near 100 by <code>alpha = 0.01</code> — so the old cutoff sent 25 to 99 variates per setup to RTDR while Algorithm 3 was still up to 10% faster there.</li>
+<li>Fixed a unit double-conversion in <code>inst/benchmarks/auto_dispatch.R</code> that inflated the reported <code>median_us</code> / <code>iqr_us</code> times by a factor of about 1e6. The <code>method = "auto"</code> dispatch <em>decisions</em> are ratio-based and were unaffected, as is <code>rmhn(method = "auto")</code> itself.</li>
+<li>Added a goodness-of-fit benchmark, <code>inst/benchmarks/rmhn_gof.R</code>, that writes Kolmogorov-Smirnov statistics and sample-vs-theory moment summaries across the parameter grid to a CSV.</li>
+<li>The two timing benchmarks now emit a <code>_diagnostics_&lt;date&gt;.csv</code> with <code><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo()</a></code>, hardware, and <code>mhn</code> version provenance, matching the audit scripts.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="examples-0-1-1">Examples<a class="anchor" aria-label="anchor" href="#examples-0-1-1"></a></h3>
+<ul><li>Added <code>inst/examples/vmf_gibbs.R</code>, a self-contained Gibbs sampler for the von Mises-Fisher concentration parameter whose full conditional is an MHN law. It is run with <code>source(system.file("examples", "vmf_gibbs.R", package = "mhn"))</code>, takes its sample size, chain length and true concentration from <code>MHN_VMF_*</code> environment variables, and reports interval coverage and effective sample size.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.1.0" id="mhn-010">mhn 0.1.0<a class="anchor" aria-label="anchor" href="#mhn-010"></a></h2><p class="text-muted">CRAN release: 2026-05-27</p>
 <p>Initial release.</p>
 <div class="section level3">
 <h3 id="distribution-functions-0-1-0">Distribution functions<a class="anchor" aria-label="anchor" href="#distribution-functions-0-1-0"></a></h3>
@@ -89,7 +116,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

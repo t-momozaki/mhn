@@ -11,8 +11,8 @@
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="The Modified Half-Normal Distribution">
-<meta name="description" content="Provides density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, along with moments, mode, and the Fox-Wright Psi function used as the normalizing constant. The MHN distribution arises as a conditional posterior in Bayesian MCMC and generalizes the half-normal, truncated normal, and square-root gamma distributions. Implements efficient sampling via the Sun, Kong &amp; Pal (2023) &lt;doi:10.1080/03610926.2021.1934700&gt; algorithms and the Gao &amp; Wang (2025) &lt;doi:10.1080/03610918.2025.2524551&gt; RTDR method.">
-<meta property="og:description" content="Provides density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, along with moments, mode, and the Fox-Wright Psi function used as the normalizing constant. The MHN distribution arises as a conditional posterior in Bayesian MCMC and generalizes the half-normal, truncated normal, and square-root gamma distributions. Implements efficient sampling via the Sun, Kong &amp; Pal (2023) &lt;doi:10.1080/03610926.2021.1934700&gt; algorithms and the Gao &amp; Wang (2025) &lt;doi:10.1080/03610918.2025.2524551&gt; RTDR method.">
+<meta name="description" content="Provides density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, along with moments, mode, and the Fox-Wright Psi function used as the normalizing constant. The MHN distribution arises as a conditional posterior in Bayesian Markov chain Monte Carlo and generalizes the half-normal, truncated normal, and square-root gamma distributions. Implements efficient sampling via the Sun, Kong &amp; Pal (2023) &lt;doi:10.1080/03610926.2021.1934700&gt; algorithms and the Gao &amp; Wang (2025) &lt;doi:10.1080/03610918.2025.2524551&gt; relaxed transformed density rejection method.">
+<meta property="og:description" content="Provides density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, along with moments, mode, and the Fox-Wright Psi function used as the normalizing constant. The MHN distribution arises as a conditional posterior in Bayesian Markov chain Monte Carlo and generalizes the half-normal, truncated normal, and square-root gamma distributions. Implements efficient sampling via the Sun, Kong &amp; Pal (2023) &lt;doi:10.1080/03610926.2021.1934700&gt; algorithms and the Gao &amp; Wang (2025) &lt;doi:10.1080/03610918.2025.2524551&gt; relaxed transformed density rejection method.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -261,7 +261,7 @@ Region γ ≤ 0:
 <p>If you use this package in academic work, please cite both the package and the methodology papers (<code>citation("mhn")</code> prints all three):</p>
 <ul>
 <li>Momozaki, T. (2026). <em>mhn: The Modified Half-Normal Distribution.</em> R package version 0.1.0.</li>
-<li>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution: Properties and an efficient sampling scheme. <em>Communications in Statistics — Theory and Methods</em>, 52(5), 1507–1536. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link uri">https://doi.org/10.1080/03610926.2021.1934700</a>
+<li>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution: Properties and an efficient sampling scheme. <em>Communications in Statistics — Theory and Methods</em>, 52(5), 1591–1613. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link uri">https://doi.org/10.1080/03610926.2021.1934700</a>
 </li>
 <li>Gao, F. &amp; Wang, H.-B. (2025). Generating modified-half-normal random variates by a relaxed transformed density rejection method. <em>Communications in Statistics — Simulation and Computation</em>. <a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link uri">https://doi.org/10.1080/03610918.2025.2524551</a>
 </li>
@@ -283,6 +283,7 @@ Region γ ≤ 0:
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
+<li><a href="https://cloud.r-project.org/package=mhn" class="external-link">View on CRAN</a></li>
 <li><a href="https://github.com/t-momozaki/mhn/" class="external-link">Browse source code</a></li>
 <li><a href="https://github.com/t-momozaki/mhn/issues" class="external-link">Report a bug</a></li>
 </ul>
@@ -330,7 +331,7 @@ Region γ ≤ 0:
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

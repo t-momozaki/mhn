@@ -73,7 +73,7 @@ different \\(\alpha, \beta, \gamma)\\ triple.
 
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics - Theory and Methods*, 52(5), 1507–1536.
+*Communications in Statistics - Theory and Methods*, 52(5), 1591–1613.
 
 ## See also
 

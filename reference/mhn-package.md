@@ -53,7 +53,7 @@ for \\x \> 0\\, where \\\Psi\[a, z\]\\ is the Fox-Wright Psi function.
 
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics - Theory and Methods*, 52(5), 1507-1536.
+*Communications in Statistics - Theory and Methods*, 52(5), 1591-1613.
 [doi:10.1080/03610926.2021.1934700](https://doi.org/10.1080/03610926.2021.1934700)
 
 Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random

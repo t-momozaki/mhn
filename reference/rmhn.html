@@ -9,7 +9,7 @@ with parameters alpha, beta, and gamma."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -97,9 +97,18 @@ where \(\Psi[a, z]\) is the Fox-Wright Psi function. <code>rmhn</code> does
 not evaluate \(\Psi\); the rejection-sampling kernels cancel it out.</p>
 <p>The default parameters <code>alpha = 1, beta = 1, gamma = 0</code> correspond
 to the half-normal distribution \(\mathrm{HN}(1/\sqrt{2})\).</p>
-<p>The <code>method</code> argument selects the rejection sampler:</p><ul><li><p><code>"auto"</code>: Special-case shortcuts when applicable
-(\(\gamma \approx 0\) -&gt; sqrt-Gamma, \(\alpha \approx 1\) -&gt;
-truncated normal). Otherwise dispatches to RTDR (Gao &amp; Wang, 2025).</p></li>
+<p>The <code>method</code> argument selects the rejection sampler:</p><ul><li><p><code>"auto"</code> (default): Uses closed-form special cases when
+applicable (\(\gamma \approx 0\) -&gt; sqrt-Gamma,
+\(\alpha \approx 1\) -&gt; truncated normal). Otherwise it selects the
+fastest provably correct sampler for the parameter region and the
+number of variates drawn per setup: for \(\gamma &gt; 0\) it uses Sun
+et al. (2023) Algorithm 1 when \(\alpha &gt; 1\) and RTDR (Gao &amp; Wang,
+2025) when \(\alpha &lt; 1\); for \(\gamma &lt; 0\) it uses Sun et al.
+Algorithm 3 for small batches and for \(\alpha \ge 10\), and RTDR
+for larger batches with \(\alpha &lt; 10\). A batch counts as large at
+25 variates per setup, raised to 100 for \(\alpha &lt; 0.1\) where the
+crossover between the two samplers occurs later. These thresholds were
+fixed by benchmarking (see <code>inst/benchmarks/auto_dispatch.R</code>).</p></li>
 <li><p><code>"rtdr"</code>: Force the Relaxed Transformed Density Rejection
 method of Gao &amp; Wang (2025). The acceptance probability is bounded
 below by \(1/e \approx 0.368\) uniformly over the parameter space.
@@ -128,7 +137,7 @@ an R loop.</p>
     <p>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
 <em>Communications in Statistics - Theory and Methods</em>, 52(5),
-1507–1536.</p>
+1591–1613.</p>
 <p>Gao, F. &amp; Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.
 <em>Communications in Statistics - Simulation and Computation</em>.</p>
@@ -163,7 +172,7 @@ variates by a relaxed transformed density rejection method.
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

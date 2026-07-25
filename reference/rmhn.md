@@ -55,9 +55,18 @@ the half-normal distribution \\\mathrm{HN}(1/\sqrt{2})\\.
 
 The `method` argument selects the rejection sampler:
 
-- `"auto"`: Special-case shortcuts when applicable (\\\gamma \approx 0\\
-  -\> sqrt-Gamma, \\\alpha \approx 1\\ -\> truncated normal). Otherwise
-  dispatches to RTDR (Gao & Wang, 2025).
+- `"auto"` (default): Uses closed-form special cases when applicable
+  (\\\gamma \approx 0\\ -\> sqrt-Gamma, \\\alpha \approx 1\\ -\>
+  truncated normal). Otherwise it selects the fastest provably correct
+  sampler for the parameter region and the number of variates drawn per
+  setup: for \\\gamma \> 0\\ it uses Sun et al. (2023) Algorithm 1 when
+  \\\alpha \> 1\\ and RTDR (Gao & Wang, 2025) when \\\alpha \< 1\\; for
+  \\\gamma \< 0\\ it uses Sun et al. Algorithm 3 for small batches and
+  for \\\alpha \ge 10\\, and RTDR for larger batches with \\\alpha \<
+  10\\. A batch counts as large at 25 variates per setup, raised to 100
+  for \\\alpha \< 0.1\\ where the crossover between the two samplers
+  occurs later. These thresholds were fixed by benchmarking (see
+  `inst/benchmarks/auto_dispatch.R`).
 
 - `"rtdr"`: Force the Relaxed Transformed Density Rejection method of
   Gao & Wang (2025). The acceptance probability is bounded below by
@@ -86,7 +95,7 @@ loop.
 
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics - Theory and Methods*, 52(5), 1507–1536.
+*Communications in Statistics - Theory and Methods*, 52(5), 1591–1613.
 
 Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.
