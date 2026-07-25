@@ -14,13 +14,17 @@ this version" below.
   — Apple clang 17.0.0. `R CMD check --as-cran` run this session on the
   built `mhn_0.1.1.tar.gz`. Result below.
 
-The following additional environments will be run on the 0.1.1 tarball
-before submission; they have **not** yet been run for 0.1.1 (the archived
-runs on record were for 0.1.0 and are being re-run), so no results are
-reported here:
+* win-builder, run on the 0.1.1 tarball via `devtools::check_win_devel()`,
+  `check_win_release()` and `check_win_oldrelease()` — **all three
+  Status: OK** (0 errors, 0 warnings, 0 notes):
+    * R-devel   — R Under development (unstable) (2026-07-23 r90295 ucrt)
+    * R-release — R 4.6.1 (2026-06-24 ucrt)
+    * R-oldrel  — R 4.5.3 (2026-03-11 ucrt)
 
-* **[TO RUN]** win-builder, R-devel and R-release (via
-  `devtools::check_win_devel()` and `devtools::check_win_release()`).
+The following additional checks have **not** yet been run for 0.1.1 (the
+archived runs on record were for 0.1.0); they will be re-run before
+submission:
+
 * **[TO RUN]** R-hub v2 via the package's GitHub Actions workflow, on
   `linux`, `windows`, `macos-arm64`, `clang-asan`, `valgrind`, `rchk`
   (results on the Actions tab of <https://github.com/t-momozaki/mhn>). The
@@ -33,13 +37,17 @@ reported here:
 
 ## R CMD check results
 
+On win-builder the package is fully clean — **0 errors | 0 warnings | 0
+notes** on R-devel, R-release and R-oldrelease (see Test environments above).
+
 Local `R CMD check --as-cran` on R 4.5.1 (macOS) reports
 
-  0 errors | 0 warnings | 2 notes
+  0 errors | 0 warnings | 1-2 notes
 
-`checking CRAN incoming feasibility` is OK locally, and the examples,
-tests, and vignette rebuild all pass. Both notes are environment/local-only
-and do not appear on CRAN's own check infrastructure:
+`checking CRAN incoming feasibility` is OK locally, and the examples, tests,
+and vignette rebuild all pass. The local notes are environment/local-only, do
+not appear on win-builder or on CRAN's own check infrastructure, and vary
+with the machine's network state:
 
 ### NOTE 1 — `checking for future file timestamps ... unable to verify current time`
 
