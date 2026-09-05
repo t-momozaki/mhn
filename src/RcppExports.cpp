@@ -15,7 +15,6 @@ SEXP check_mhn_params_R(SEXP alpha, SEXP beta, SEXP gamma);
 RcppExport SEXP _mhn_check_mhn_params_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< SEXP >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< SEXP >::type gamma(gammaSEXP);
@@ -28,7 +27,6 @@ Rcpp::List convert_to_gw_R(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_convert_to_gw_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -41,7 +39,6 @@ Rcpp::NumericVector dmhn_cpp(Rcpp::NumericVector x, Rcpp::NumericVector alpha, R
 RcppExport SEXP _mhn_dmhn_cpp(SEXP xSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP log_pSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
@@ -56,7 +53,6 @@ double mhn_mode_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_mhn_mode_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -69,7 +65,6 @@ double mhn_mean_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_mhn_mean_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -82,7 +77,6 @@ double mhn_var_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_mhn_var_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -95,7 +89,6 @@ double mhn_skewness_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_mhn_skewness_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -108,7 +101,6 @@ double mhn_kurtosis_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_mhn_kurtosis_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -121,7 +113,6 @@ Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q, Rcpp::NumericVector alpha, R
 RcppExport SEXP _mhn_pmhn_cpp(SEXP qSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP lower_tailSEXP, SEXP log_pSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type q(qSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
@@ -137,7 +128,6 @@ double pmhn_force_cpp(double q, double alpha, double beta, double gamma, std::st
 RcppExport SEXP _mhn_pmhn_force_cpp(SEXP qSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP methodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type q(qSEXP);
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
@@ -152,7 +142,6 @@ double mhn_log_normalizing_const_R(double alpha, double beta, double gamma, doub
 RcppExport SEXP _mhn_mhn_log_normalizing_const_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -166,7 +155,6 @@ double psi_series_R(double alpha, double beta, double gamma, double tol);
 RcppExport SEXP _mhn_psi_series_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -180,7 +168,6 @@ double psi_integrate_R(double alpha, double beta, double gamma, double tol);
 RcppExport SEXP _mhn_psi_integrate_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -194,7 +181,6 @@ Rcpp::NumericVector qmhn_cpp(Rcpp::NumericVector p, Rcpp::NumericVector alpha, R
 RcppExport SEXP _mhn_qmhn_cpp(SEXP pSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP lower_tailSEXP, SEXP log_pSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type p(pSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
@@ -239,7 +225,6 @@ Rcpp::List dump_rtdr_envelope_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_dump_rtdr_envelope_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -252,7 +237,6 @@ Rcpp::List rtdr_contact_point_newton_test_cpp(double t_init, double log_dens_mod
 RcppExport SEXP _mhn_rtdr_contact_point_newton_test_cpp(SEXP t_initSEXP, SEXP log_dens_mode_valSEXP, SEXP deltaSEXP, SEXP concavitySEXP, SEXP max_iterSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type t_init(t_initSEXP);
     Rcpp::traits::input_parameter< double >::type log_dens_mode_val(log_dens_mode_valSEXP);
     Rcpp::traits::input_parameter< double >::type delta(deltaSEXP);
@@ -263,13 +247,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // is_sqrt_gamma_R
-bool is_sqrt_gamma_R(double gamma);
-RcppExport SEXP _mhn_is_sqrt_gamma_R(SEXP gammaSEXP) {
+bool is_sqrt_gamma_R(double gamma, double beta);
+RcppExport SEXP _mhn_is_sqrt_gamma_R(SEXP gammaSEXP, SEXP betaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
-    rcpp_result_gen = Rcpp::wrap(is_sqrt_gamma_R(gamma));
+    Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
+    rcpp_result_gen = Rcpp::wrap(is_sqrt_gamma_R(gamma, beta));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -278,7 +262,6 @@ bool is_truncated_normal_R(double alpha);
 RcppExport SEXP _mhn_is_truncated_normal_R(SEXP alphaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     rcpp_result_gen = Rcpp::wrap(is_truncated_normal_R(alpha));
     return rcpp_result_gen;
@@ -303,7 +286,6 @@ Rcpp::List dump_sun_algo1_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_dump_sun_algo1_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -330,7 +312,6 @@ Rcpp::List dump_sun_algo3_cpp(double alpha, double beta, double gamma);
 RcppExport SEXP _mhn_dump_sun_algo3_cpp(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
@@ -371,7 +352,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mhn_rmhn_rtdr_cpp", (DL_FUNC) &_mhn_rmhn_rtdr_cpp, 4},
     {"_mhn_dump_rtdr_envelope_cpp", (DL_FUNC) &_mhn_dump_rtdr_envelope_cpp, 3},
     {"_mhn_rtdr_contact_point_newton_test_cpp", (DL_FUNC) &_mhn_rtdr_contact_point_newton_test_cpp, 5},
-    {"_mhn_is_sqrt_gamma_R", (DL_FUNC) &_mhn_is_sqrt_gamma_R, 1},
+    {"_mhn_is_sqrt_gamma_R", (DL_FUNC) &_mhn_is_sqrt_gamma_R, 2},
     {"_mhn_is_truncated_normal_R", (DL_FUNC) &_mhn_is_truncated_normal_R, 1},
     {"_mhn_rmhn_sun_algo1_cpp", (DL_FUNC) &_mhn_rmhn_sun_algo1_cpp, 4},
     {"_mhn_dump_sun_algo1_cpp", (DL_FUNC) &_mhn_dump_sun_algo1_cpp, 3},

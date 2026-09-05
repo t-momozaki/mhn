@@ -14,6 +14,11 @@
 ^inst/audits/results/series_breakdown_audit_.*$
 ^inst/audits/results/cdf_series_accuracy_diagnostics_.*$
 (^|/)\.DS_Store$
+# iCloud Drive duplicates a file as "name 2.ext" on a sync conflict, and this
+# project lives under a synced Desktop.  Belt and braces: even if one is
+# created and tracked, it must not reach the tarball.
+^.* [0-9]$
+^.* [0-9]\.
 ^.*\.tar\.gz$
 ^.*\.Rcheck$
 ^\.claude$

@@ -42,7 +42,7 @@
 #' quantile is evaluated element-wise.  The Fox-Wright \eqn{\Psi}
 #' normalizing constant and moments \eqn{E(X)}, \eqn{\mathrm{Var}(X)}
 #' (used to size the root-finder bracket) are recomputed only when
-#' consecutive elements present a different \eqn{(\alpha, \beta, \gamma)}
+#' the recycling cycle presents a distinct \eqn{(\alpha, \beta, \gamma)}
 #' triple.
 #'
 #' @references
@@ -72,5 +72,5 @@ qmhn <- function(p, alpha = 1, beta = 1, gamma = 0,
                  lower.tail = TRUE, log.p = FALSE) {
   .qmhn_cpp(as.numeric(p),
             as.numeric(alpha), as.numeric(beta), as.numeric(gamma),
-            isTRUE(lower.tail), isTRUE(log.p))
+            .as_flag(lower.tail, "lower.tail"), .as_flag(log.p, "log.p"))
 }

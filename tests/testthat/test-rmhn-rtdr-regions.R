@@ -43,7 +43,8 @@ run_rtdr_region <- function(alpha, beta, gamma, n = 10000, seed = 1L,
 # Expected: region = 0; acceptance >= 1/e theoretically.
 test_that("region A: KS, mean/var, acceptance for representative points", {
   skip_on_cran()
-  for (params in list(c(1.5, 1, -2), c(5, 1, 0.5), c(10, 1, 10))) {
+  for (params in list(c(1.5, 1, -2), c(5, 1, 0.5), c(10, 1, 10),
+                      c(1.5, 4, -4), c(5, 0.25, 0.25))) {
     r <- run_rtdr_region(params[1], params[2], params[3])
     expect_equal(r$region, 0L,
                  info = sprintf("alpha=%g, gamma=%g", params[1], params[3]))
@@ -65,7 +66,8 @@ test_that("region BC: KS, mean/var, acceptance for representative points", {
   cases <- list(
     c(0.7, 1, -2), c(0.7, 1, 0),                     # region (b), gamma <= 0: T_0
     c(0.7, 1,  2), c(0.7, 1, 5),                     # region (b), gamma > 0: T_{-1/2}
-    c(0.3, 1, -5), c(0.3, 1, 0), c(0.3, 1, 0.5)      # region (c), all below the BC/D threshold
+    c(0.3, 1, -5), c(0.3, 1, 0), c(0.3, 1, 0.5),     # region (c), all below the BC/D threshold
+    c(0.7, 4, -4), c(0.7, 0.25, 1), c(0.3, 9, 1.5)   # the same regions at beta != 1
   )
   for (params in cases) {
     r <- run_rtdr_region(params[1], params[2], params[3])

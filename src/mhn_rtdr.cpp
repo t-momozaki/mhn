@@ -6,8 +6,7 @@
 
 #include "mhn_rtdr.h"
 #include "mhn_check.h"
-#include "mhn_constants.h"
-#include "mhn_log_arith.h"
+#include "mhn_stable.h"
 
 #include <Rcpp.h>
 #include <algorithm>
@@ -30,10 +29,7 @@ using mhn::PIECE_SECANT;
 using mhn::PIECE_TNEGHALF_LEFT;
 using mhn::PIECE_TNEGHALF_RIGHT;
 
-// ====================================================================
-// Section 2: contact_point_newton — Eq. (8) iteration.
-// ====================================================================
-
+// Contact-point search: the iteration of Gao & Wang (2025), Eq. (8).
 // Iteratively solve for a contact point t such that
 //     log f(m) - log f(t) = delta
 // where delta = 1 (log-concave) or delta = log 4 (T_{-1/2}-concave).
@@ -59,7 +55,13 @@ double contact_point_newton(double t_init,
                             double tol = 1e-10,
                             double t_min = -std::numeric_limits<double>::infinity(),
                             double t_max =  std::numeric_limits<double>::infinity()) {
-  double t = t_init;
+  // Bring the start inside the bounds before the first evaluation.  The
+  // recommended start of Gao & Wang (2025), Eq. (8) is m +- sqrt(-2 delta /
+  // L''(m)), which is far outside for a flat mode: at alpha = 1e-5 the offset
+  // is 447, and the log-axis density carries exp(2y), so log g and its
+  // derivative both came back non-finite on the very first step.  The loop then
+  // broke out and returned the start unchanged.
+  double t = std::min(std::max(t_init, t_min), t_max);
   for (int iter = 0; iter < max_iter; ++iter) {
     const double ld = log_dens_at(t);
     const double increment = log_dens_mode_val - ld;
@@ -77,28 +79,33 @@ double contact_point_newton(double t_init,
   return t;
 }
 
-// ====================================================================
-// Section 3: piecewise_envelope_sample — piece selection + per-piece
-//   inverse-CDF sampling.
-// ====================================================================
+// Upper bound for a right-contact search on the log axis.
+//
+// The log-axis density carries exp(2y), which overflows past y = 354, and the
+// derivative then comes back as NaN or -Inf.  Leaving the search unbounded let
+// a single Newton step land there: for alpha = 1e-4 the derivative at the start
+// is 1e-4, so the step is ten thousand.  The search returned a point whose
+// slope was not a number, and because NaN fails every ordinary comparison the
+// sign guard let it through -- the plateau piece was then dropped without any
+// error, truncating the sampler's support so that it excluded the mode.
+//
+// contact_point_newton bisects *toward* this bound when a step would exceed it,
+// so the bound must stay above the mode even when the mode itself is large.
+double right_contact_bound(double m_g) {
+  return m_g + std::min(40.0, std::max(1.0, 354.0 - m_g));
+}
 
-// Pick a piece index proportional to exp(piece.log_area).
-// Uses log-space stable normalization (subtract max before exp).
-int select_piece(const std::vector<EnvelopePiece>& pieces) {
-  const std::size_t K = pieces.size();
-  double m = -std::numeric_limits<double>::infinity();
-  for (const auto& p : pieces) if (p.log_area > m) m = p.log_area;
-  double total = 0.0;
-  std::vector<double> cum(K);
-  for (std::size_t i = 0; i < K; ++i) {
-    total += std::exp(pieces[i].log_area - m);
-    cum[i] = total;
-  }
-  const double u = R::runif(0.0, 1.0) * total;
-  for (std::size_t i = 0; i < K; ++i) {
-    if (u <= cum[i]) return static_cast<int>(i);
-  }
-  return static_cast<int>(K - 1);
+// Piece selection and per-piece inverse-CDF sampling.
+// Pick a piece index proportional to exp(piece.log_area), reading the
+// cumulative table that finalize_pieces built once for this envelope.
+// lower_bound returns the first entry with cum >= u, which is the index the
+// equivalent linear scan would have chosen.
+int select_piece(const mhn::RtdrEnvelope& env) {
+  const std::vector<double>& cum = env.piece_cum_area;
+  const double u = R::runif(0.0, 1.0) * env.piece_area_total;
+  const auto it = std::lower_bound(cum.begin(), cum.end(), u);
+  if (it == cum.end()) return static_cast<int>(cum.size()) - 1;
+  return static_cast<int>(it - cum.begin());
 }
 
 // Inverse-CDF sampling within one piece.  Returns x (or y, depending on
@@ -124,10 +131,9 @@ double sample_within_piece(const EnvelopePiece& piece) {
       // EXP_BOUNDED and SECANT; the type tag is informational (region D
       // distinguishes secants from tangents in the piece table).
       // F^-1: x = a + log(1 + u * (exp(slope*(b-a)) - 1)) / slope.
-      // Stable form via expm1 / log1p.
       const double width = piece.b - piece.a;
-      const double z = std::expm1(piece.slope * width);
-      return piece.a + std::log1p(u * z) / piece.slope;
+      return piece.a
+             + mhn::log1p_u_expm1(u, piece.slope * width) / piece.slope;
     }
     case PIECE_TNEGHALF_LEFT:
       // Inverse-square hat on (-inf, pl].  With b = ppl, aux = om1,
@@ -138,15 +144,8 @@ double sample_within_piece(const EnvelopePiece& piece) {
       // F^-1: x = ppr + om3 / u.
       return piece.b + piece.aux / u;
     default:
-      Rcpp::stop("piecewise_envelope_sample: unknown PieceType.");
+      Rcpp::stop("rmhn: internal invariant violated (unknown envelope piece). Please report this to the package maintainer.");
   }
-}
-
-// One draw from the piecewise envelope.  Caller owns the accept/reject
-// decision (caller knows the target density on x).
-double piecewise_envelope_sample(const std::vector<EnvelopePiece>& pieces) {
-  const int idx = select_piece(pieces);
-  return sample_within_piece(pieces[idx]);
 }
 
 // log h(x) on a single piece, evaluated at point x.  Used inside the
@@ -170,9 +169,33 @@ double log_piece_at(const EnvelopePiece& piece, double x) {
   return -std::numeric_limits<double>::infinity();
 }
 
+// Report a failure to build the envelope in the caller's own terms.
+//
+// These conditions are all "the construction of Gao & Wang (2025) did not
+// produce a usable envelope at this parameter triple".  Naming the internal
+// routine and the sign of an intermediate slope tells a user nothing they can
+// act on, so say what failed, at which parameters, and what to do about it.
+// The region and stage are kept as a short tag for a bug report.
+[[noreturn]] void envelope_failure(const mhn::RtdrEnvelope& env,
+                                   const char* stage) {
+  const double beta = env.sqrt_beta * env.sqrt_beta;
+  const double gamma = env.gamma_norm * env.sqrt_beta;
+  Rcpp::stop("rmhn: could not construct a sampling envelope for alpha = %g, "
+             "beta = %g, gamma = %g. This is a defect; please report these "
+             "parameter values to the package maintainer. [%s]",
+             env.alpha, beta, gamma, stage);
+}
+
 // Classify the (alpha, gamma_norm) point into one of the three RTDR regions.
 mhn::RtdrRegion classify_region(double alpha, double gamma_norm) {
-  if (alpha >= 1.0) return mhn::REGION_A;
+  // Region A needs an interior mode in x, and at alpha = 1 exactly there is
+  // none: the mode formula returns 0 for a non-positive tilt, log f(0) is
+  // -Inf, and the envelope degenerated to a plateau of height -Inf spanning
+  // [0, Inf], so every proposal was rejected and the draws came back NaN.
+  // The log-axis mode used by region BC is strictly positive for every
+  // alpha > 0, and the concavity test there is on the tilt alone, so alpha = 1
+  // belongs on that side of the boundary.
+  if (alpha > 1.0) return mhn::REGION_A;
   if (alpha >= 0.5) return mhn::REGION_BC;
   // alpha in (0, 1/2).  Threshold gamma_d = 2(1 - sqrt(1 - 2*alpha)).
   const double gamma_d = 2.0 * (1.0 - std::sqrt(1.0 - 2.0 * alpha));
@@ -180,8 +203,7 @@ mhn::RtdrRegion classify_region(double alpha, double gamma_norm) {
   return mhn::REGION_D;
 }
 
-// Forward declarations of region setups (definitions below; stubbed in
-// Step 3.2.1, filled in Steps 3.2.3 / 3.2.4 / 3.2.5).
+// Forward declarations of the region setups; definitions follow below.
 void setup_region_a(mhn::RtdrEnvelope& env);
 void setup_region_bc(mhn::RtdrEnvelope& env);
 void setup_region_d(mhn::RtdrEnvelope& env);
@@ -196,7 +218,7 @@ void setup_region_d(mhn::RtdrEnvelope& env);
 // Both factors share the same sign so the absolute-value cancels into a
 // real positive area.  We assume slope != 0 (caller guarantees).
 double log_area_exp_bounded(double base, double slope, double width) {
-  return base + std::log(std::abs(std::expm1(slope * width)))
+  return base + mhn::log_abs_expm1(slope * width)
               - std::log(std::abs(slope));
 }
 
@@ -271,10 +293,25 @@ EnvelopePiece make_tneghalf_right(double t, double half_slope,
 }
 
 void finalize_pieces(mhn::RtdrEnvelope& env, std::vector<EnvelopePiece>& pieces) {
-  env.pieces = pieces;
+  const std::size_t K = pieces.size();
   env.piece_log_area.clear();
-  env.piece_log_area.reserve(pieces.size());
-  for (const auto& p : pieces) env.piece_log_area.push_back(p.log_area);
+  env.piece_log_area.reserve(K);
+  env.piece_cum_area.clear();
+  env.piece_cum_area.reserve(K);
+
+  // Normalise by the largest log-area before exponentiating, so that a very
+  // peaked envelope cannot overflow the running sum.
+  double max_log_area = -std::numeric_limits<double>::infinity();
+  for (const auto& p : pieces) if (p.log_area > max_log_area) max_log_area = p.log_area;
+
+  double total = 0.0;
+  for (const auto& p : pieces) {
+    env.piece_log_area.push_back(p.log_area);
+    total += std::exp(p.log_area - max_log_area);
+    env.piece_cum_area.push_back(total);
+  }
+  env.piece_area_total = total;
+  env.pieces = std::move(pieces);
 }
 
 // ====================================================================
@@ -284,8 +321,9 @@ void setup_region_a(mhn::RtdrEnvelope& env) {
   const double alpha = env.alpha;
   const double gn = env.gamma_norm;
 
-  // mode of log f(x) = (alpha-1) log x - x^2 + gamma_norm * x
-  const double m = (gn + std::sqrt(gn * gn + 8.0 * (alpha - 1.0))) / 4.0;
+  // mode of log f(x) = (alpha-1) log x - x^2 + gamma_norm * x, i.e. the
+  // positive root of 2x^2 - gamma_norm x - (alpha-1) = 0 at beta = 1.
+  const double m = mhn::positive_root(1.0, gn, alpha - 1.0);
   env.mode = m;
 
   auto log_f = [alpha, gn](double x) -> double {
@@ -318,8 +356,8 @@ void setup_region_a(mhn::RtdrEnvelope& env) {
                                    0.46, 2.49, /*max_iter=*/30, /*tol=*/1e-10,
                                    /*t_min=*/m, /*t_max=*/std::numeric_limits<double>::infinity());
   env.slope_r = dlog_f(env.t_r);
-  if (env.slope_r >= 0.0) {
-    Rcpp::stop("setup_region_a: right contact has non-negative slope (Newton failure).");
+  if (!(env.slope_r < 0.0) || !std::isfinite(env.slope_r)) {
+    ::envelope_failure(env, "region A right contact");
   }
   env.p_r = env.t_r + (log_f_mode - log_f(env.t_r)) / env.slope_r;
 
@@ -327,19 +365,25 @@ void setup_region_a(mhn::RtdrEnvelope& env) {
 
   if (!simplified) {
     // Left contact point: 0 < t_l < m, slope_l = L'(t_l) > 0.
-    // Initial: m / 2 (kept strictly positive).
-    const double t_l_init = std::max(0.5 * m, 1e-6);
+    // Start at half the mode.  An absolute floor of 1e-6 was applied here as
+    // well, which put the start to the *right* of the mode whenever the mode
+    // was smaller than 2e-6 -- and the search tests the acceptance band before
+    // it clamps into [t_min, t_max], so it could return a point on the wrong
+    // side with a non-positive slope.  rmhn(200, 4, 1, -1e7), where the mode is
+    // 3e-7, failed outright on the default path.  m > 0 here because this
+    // branch is only reached for alpha > 1.
+    const double t_l_init = 0.5 * m;
     env.t_l = ::contact_point_newton(t_l_init, log_f_mode, 1.0, log_f, dlog_f,
                                      0.46, 2.49, /*max_iter=*/30, /*tol=*/1e-10,
                                      /*t_min=*/0.0, /*t_max=*/m);
     if (env.t_l <= 0.0) env.t_l = 0.5 * m;  // defensive
     env.slope_l = dlog_f(env.t_l);
-    if (env.slope_l <= 0.0) {
-      Rcpp::stop("setup_region_a: left contact has non-positive slope (Newton failure).");
+    if (!(env.slope_l > 0.0) || !std::isfinite(env.slope_l)) {
+      ::envelope_failure(env, "region A left contact");
     }
     env.p_l = env.t_l + (log_f_mode - log_f(env.t_l)) / env.slope_l;
     if (env.p_l <= 0.0 || env.p_l >= env.p_r) {
-      Rcpp::stop("setup_region_a: invalid intersection points (p_l out of range).");
+      ::envelope_failure(env, "region A intersection");
     }
     // Left tangent: [0, p_l], h(p_l) = f(m), so base at piece.a = 0
     // is log_f_mode - slope_l * p_l.
@@ -358,7 +402,7 @@ void setup_region_a(mhn::RtdrEnvelope& env) {
 }
 
 // ====================================================================
-// Region BC setup [alpha < 1, T_{-1/2}-concave on g(y) = exp(alpha*y
+// Region BC setup [alpha <= 1, T_{-1/2}-concave on g(y) = exp(alpha*y
 //   - exp(2y) + gamma_norm * exp(y)), y in R]
 // ====================================================================
 void setup_region_bc(mhn::RtdrEnvelope& env) {
@@ -367,7 +411,7 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
 
   // Mode in u = exp(y): 2 u^2 - gamma_norm u - alpha = 0,
   //   u_+ = (gamma_norm + sqrt(gamma_norm^2 + 8 alpha)) / 4 > 0.
-  const double u_mode = (gn + std::sqrt(gn * gn + 8.0 * alpha)) / 4.0;
+  const double u_mode = mhn::positive_root(1.0, gn, alpha);
   const double m_g = std::log(u_mode);
   env.mode = m_g;
 
@@ -406,20 +450,20 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
                                    /*t_min=*/-std::numeric_limits<double>::infinity(),
                                    /*t_max=*/m_g);
   env.slope_l = dlog_g(env.t_l);
-  if (env.slope_l <= 0.0) {
-    Rcpp::stop("setup_region_bc: left contact has non-positive slope (Newton failure).");
+  if (!(env.slope_l > 0.0) || !std::isfinite(env.slope_l)) {
+    ::envelope_failure(env, "region BC left contact");
   }
   const double log_g_tl = log_g(env.t_l);
 
   // Right contact point: t_r > m_g, slope_r < 0.
   env.t_r = ::contact_point_newton(m_g + inc, log_g_mode, delta,
                                    log_g, dlog_g, band_lo, band_hi,
-                                   /*max_iter=*/30, /*tol=*/1e-10,
+                                   /*max_iter=*/200, /*tol=*/1e-10,
                                    /*t_min=*/m_g,
-                                   /*t_max=*/std::numeric_limits<double>::infinity());
+                                   /*t_max=*/::right_contact_bound(m_g));
   env.slope_r = dlog_g(env.t_r);
-  if (env.slope_r >= 0.0) {
-    Rcpp::stop("setup_region_bc: right contact has non-negative slope (Newton failure).");
+  if (!(env.slope_r < 0.0) || !std::isfinite(env.slope_r)) {
+    ::envelope_failure(env, "region BC right contact");
   }
   const double log_g_tr = log_g(env.t_r);
 
@@ -434,7 +478,7 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
     env.p_l = left.b - left.aux;    // ppl - om1
     env.p_r = right.b + right.aux;  // ppr + om3
     if (env.p_l >= env.p_r) {
-      Rcpp::stop("setup_region_bc: invalid intersection points (p_l >= p_r).");
+      ::envelope_failure(env, "region BC intersection");
     }
     pieces.push_back(left);
     pieces.push_back(make_plateau(env.p_l, env.p_r, log_g_mode));
@@ -444,7 +488,7 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
     env.p_l = env.t_l + (log_g_mode - log_g_tl) / env.slope_l;
     env.p_r = env.t_r + (log_g_mode - log_g_tr) / env.slope_r;
     if (env.p_l >= env.p_r) {
-      Rcpp::stop("setup_region_bc: invalid intersection points (p_l >= p_r).");
+      ::envelope_failure(env, "region BC intersection");
     }
     pieces.push_back(make_exp_left(env.p_l, env.slope_l, log_g_mode));
     pieces.push_back(make_plateau(env.p_l, env.p_r, log_g_mode));
@@ -470,10 +514,10 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
   const double alpha = env.alpha;
   const double gn = env.gamma_norm;
 
-  if (gn <= 0.0) Rcpp::stop("setup_region_d: gamma_norm must be positive");
+  if (gn <= 0.0) ::envelope_failure(env, "region D tilt");
 
   // Mode (in y) and inflection point (in y).
-  const double u_mode = (gn + std::sqrt(gn * gn + 8.0 * alpha)) / 4.0;
+  const double u_mode = mhn::positive_root(1.0, gn, alpha);
   const double m_g = std::log(u_mode);
   const double y_star = std::log(gn / 4.0);
   env.mode = m_g;
@@ -514,7 +558,7 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
                                    log_g, dlog_g, 0.93, 1.99,
                                    30, 1e-10, y_star, m_g);
     if (!(t_l_d < y_0)) {
-      Rcpp::stop("setup_region_d (env 15): t_l >= y_0 (cannot compute t_hat_l).");
+      ::envelope_failure(env, "region D envelope 15 breakpoint");
     }
     t_hat_l = std::log(gn / 2.0 - std::exp(t_l_d));
     slope_l_d = dlog_g(t_l_d);
@@ -522,8 +566,7 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
     if (slope_l_d <= alpha) {
       // Gao & Wang (2025) Lemma 4.5 requires L'(t_l) > alpha for the
       // dual-point construction.
-      Rcpp::stop("setup_region_d (env 15): L'(t_l) <= alpha "
-                 "(Gao & Wang 2025 Lemma 4.5 violated).");
+      ::envelope_failure(env, "region D envelope 15 slope");
     }
     p_l_d = t_l_d + (log_g_mode - log_g_t_l) / slope_l_d;
     // rho = L_g(t_hat_l) - alpha * t_hat_l
@@ -531,7 +574,7 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
     rho = log_g(t_hat_l) - alpha * t_hat_l;
   }
   env.rho = rho;
-  if (rho <= 0.0) Rcpp::stop("setup_region_d: rho <= 0 (unexpected)");
+  if (rho <= 0.0) ::envelope_failure(env, "region D secant count");
 
   const int K = static_cast<int>(std::ceil(rho));
 
@@ -544,7 +587,9 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
   }
 
   if (K_eff < 1) {
-    Rcpp::warning("setup_region_d: K_eff < 1, falling back to region BC.");
+    // No secant breakpoint fits; the region-BC envelope is equally valid for
+    // this density, so use it and record the fallback on the envelope.
+    env.fell_back_to_bc = true;
     env.region = mhn::REGION_BC;
     setup_region_bc(env);
     return;
@@ -583,7 +628,7 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
     const double rk = 4.0 * static_cast<double>(k) * drho;
     const double inside = gn * gn - rk;
     if (inside <= 0.0) {
-      Rcpp::stop("setup_region_d: breakpoint inside non-positive (K_eff guard).");
+      ::envelope_failure(env, "region D breakpoint");
     }
     const double yk = std::log(2.0 * static_cast<double>(k) * drho
                                / (std::sqrt(inside) + gn));
@@ -619,11 +664,11 @@ void setup_region_d(mhn::RtdrEnvelope& env) {
   const double t_r_init = m_g + 1.0;
   env.t_r = ::contact_point_newton(t_r_init, log_g_mode, std::log(4.0),
                                    log_g, dlog_g, 0.93, 1.99,
-                                   30, 1e-10, m_g,
-                                   std::numeric_limits<double>::infinity());
+                                   200, 1e-10, m_g,
+                                   ::right_contact_bound(m_g));
   env.slope_r = dlog_g(env.t_r);
-  if (env.slope_r >= 0.0) {
-    Rcpp::stop("setup_region_d: right contact slope >= 0 (Newton failure).");
+  if (!(env.slope_r < 0.0) || !std::isfinite(env.slope_r)) {
+    ::envelope_failure(env, "region D right contact");
   }
   env.p_r = env.t_r + (log_g_mode - log_g(env.t_r)) / env.slope_r;
 
@@ -682,10 +727,12 @@ double log_target_y(double y, double alpha, double gamma_norm) {
 }
 
 // ====================================================================
-// Section 4: Test-only fixtures for the Newton iterator.
+// Fixtures used only by the contact-point unit test below.
 // ====================================================================
-// Three small log-concave functions used by .rtdr_contact_point_newton_test_cpp.
-// Kept tiny and pure so unit tests can verify convergence in isolation.
+// Three small targets whose contact points can be written down, so that
+// tests/testthat/test-rtdr-newton.R can check the search in isolation from any
+// envelope: a normal log-density, a gamma-like kernel on t > 0, and a
+// T_{-1/2}-concave function on the log axis.
 
 // 1) Standard normal log-density (up to constant): log f(t) = -t^2 / 2
 inline double tf_normal_log(double t)        { return -0.5 * t * t; }
@@ -705,7 +752,7 @@ inline double tf_tneghalf_dlog(double y)     { return 0.7 - 2.0 * std::exp(2.0 *
 }  // namespace
 
 // ====================================================================
-// Section 5: Public API stubs for Step 3.2 to fill.
+// Public API.
 // ====================================================================
 
 namespace mhn {
@@ -733,7 +780,7 @@ double sample_rtdr(const RtdrEnvelope& env, int* retries_out) {
   const int max_retries = 1000;  // safety; theory guarantees acceptance prob >= 1/e
   int retries = 0;
   for (int iter = 0; iter < max_retries; ++iter) {
-    const int idx = ::select_piece(env.pieces);
+    const int idx = ::select_piece(env);
     const double s = ::sample_within_piece(env.pieces[idx]);
     const double log_h = ::log_piece_at(env.pieces[idx], s);
     const double log_target = y_space
@@ -747,17 +794,19 @@ double sample_rtdr(const RtdrEnvelope& env, int* retries_out) {
     }
     ++retries;
   }
-  Rcpp::warning("sample_rtdr: max retries exceeded; returning last proposal.");
+  // Retry budget exhausted, which the 1/e acceptance lower bound of
+  // Gao & Wang (2025) makes vanishingly unlikely.  Report it as NaN and leave
+  // the reporting to the caller: raising an R warning here would leave this
+  // frame by a long jump under options(warn = 2), skipping the destructors of
+  // the envelope's vectors.
   if (retries_out != nullptr) *retries_out += retries;
-  // Fall through: return last proposal scaled.  This should be statistically
-  // rare under the theoretical 1/e acceptance lower bound.
   return std::numeric_limits<double>::quiet_NaN();
 }
 
 }  // namespace mhn
 
 // ====================================================================
-// Section 6: Test-only Rcpp export for isolated Newton testing.
+// Entry points used by the test suite; not part of the public API.
 // ====================================================================
 // concavity tag selects one of three fixed test fixtures defined above.
 
@@ -777,7 +826,7 @@ Rcpp::NumericVector rmhn_rtdr_cpp(int n, double alpha, double beta, double gamma
   return out;
 }
 
-// [[Rcpp::export(.dump_rtdr_envelope_cpp)]]
+// [[Rcpp::export(.dump_rtdr_envelope_cpp, rng = false)]]
 Rcpp::List dump_rtdr_envelope_cpp(double alpha, double beta, double gamma) {
   mhn::check_params_scalar(alpha, beta, gamma);
   mhn::RtdrEnvelope env = mhn::build_rtdr_envelope(alpha, beta, gamma);
@@ -811,6 +860,7 @@ Rcpp::List dump_rtdr_envelope_cpp(double alpha, double beta, double gamma) {
     Rcpp::Named("slope_r")         = env.slope_r,
     Rcpp::Named("simplified")          = env.simplified,
     Rcpp::Named("has_left_tangent_d")  = env.has_left_tangent_d,
+    Rcpp::Named("fell_back_to_bc")     = env.fell_back_to_bc,
     Rcpp::Named("K_eff")               = env.K_eff,
     Rcpp::Named("y_star")          = env.y_star,
     Rcpp::Named("rho")             = env.rho,
@@ -822,7 +872,7 @@ Rcpp::List dump_rtdr_envelope_cpp(double alpha, double beta, double gamma) {
   );
 }
 
-// [[Rcpp::export(.rtdr_contact_point_newton_test_cpp)]]
+// [[Rcpp::export(.rtdr_contact_point_newton_test_cpp, rng = false)]]
 Rcpp::List rtdr_contact_point_newton_test_cpp(double t_init,
                                               double log_dens_mode_val,
                                               double delta,

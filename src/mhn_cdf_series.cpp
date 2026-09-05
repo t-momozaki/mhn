@@ -17,7 +17,9 @@
 //                                   + log P(s_i, y) - lgamma(i + 1).
 //   * gamma >= 0 (z >= 0): every T_i is non-negative => single log_sum_exp.
 //   * gamma <  0 (z <  0): T_i alternates sign; collect log|T_i| separately
-//                          for even / odd i, then combine via log_diff_exp.
+//                          for even / odd i, then subtract in log space as
+//                          log_S_pos + log1p(-exp(log_S_neg - log_S_pos)),
+//                          under the cancellation guard described below.
 //   * Truncation: the upper bound is taken from Sun et al. (2023)
 //     Supplementary, Lemma 10(d).  Because the i-th CDF term satisfies
 //     |T_{2k}| <= A(k) and |T_{2k+1}| <= |B(k)|, the same K = max(K1, K2)
@@ -33,13 +35,17 @@
 //
 // Cancellation guard (gamma < 0):
 //   The log_sum_exp accumulators for log_S_pos and log_S_neg each
-//   carry relative precision ~ 2^-52 (= eps_d).  Their difference
-//   S_pos - S_neg therefore has relative error roughly
+//   carry relative precision ~ 2^-52 (= eps_d) per term, and over the
+//   i_max terms of the sum that roundoff accumulates as a random walk,
+//   ~ eps_d * sqrt(i_max).  Their difference S_pos - S_neg therefore
+//   has relative error roughly
 //
-//      rel_err = 2 * eps_d / (1 - exp(log_S_neg - log_S_pos)),
+//      rel_err = 2 * eps_d * sqrt(i_max)
+//                / (1 - exp(log_S_neg - log_S_pos)),
 //
 //   so to keep the final F within the user's tolerance tol_eff we
-//   require 1 - exp(log_S_neg - log_S_pos) >= 2 * eps_d / tol_eff.
+//   require 1 - exp(log_S_neg - log_S_pos)
+//     >= 2 * eps_d * sqrt(i_max) / tol_eff.
 //   When the inequality is violated, the routine returns NaN so the
 //   dispatcher can fall back to the Boost.Math integration of the
 //   unnormalised density.  This formalises Sun et al.'s qualitative
@@ -47,8 +53,8 @@
 //   accumulates lgamma rounding errors that can exceed Psi for
 //   gamma < 0, by quantifying "too many digits lost" in terms of
 //   double precision's known floor.
-//   See mhn/inst/audits/results/series_breakdown_audit_<date>.csv
-//   for the empirical breakdown audit.
+//   inst/audits/series_breakdown_audit.R reproduces the measurement that
+//   fixes the threshold, against an arbitrary-precision reference.
 
 #include "mhn_cdf_series.h"
 #include "mhn_constants.h"
@@ -71,12 +77,22 @@ namespace {
 // rule consistent across the two routines that share K1/K2.
 constexpr double Q_LEMMA10 = 0.5;
 
-// 2 * 2^-52 -- twice the double-precision unit roundoff, the constant
-// numerator in the cancellation-loss formula derived in the file
-// header comment.  Multiplying by 1 / tol_eff gives the minimum
-// allowable 1 - exp(log_S_neg - log_S_pos) for the cancellation to
-// stay within the user's tolerance.
+// 2 * 2^-52 -- twice the double-precision unit roundoff.  This is only
+// the constant numerator of the cancellation-loss formula derived in
+// the file header comment; the guard in log_cdf_series multiplies it
+// by sqrt(i_max) / tol_eff to get the minimum allowable
+// 1 - exp(log_S_neg - log_S_pos).
 constexpr double DOUBLE_EPS_TIMES_TWO = 2.0 * 2.220446049250313e-16;
+
+// Hard ceiling on the number of series terms.  The Lemma 10(d) truncation
+// length grows like z^2, so a large |gamma| asks for a summation whose cost
+// and memory are quadratic in the tilt: |z| = 1e4 alone would request ~5e7
+// terms, several hundred megabytes of accumulator and tens of seconds.
+// Quadrature evaluates the same probability in a bounded number of function
+// calls, so past this ceiling it is the better method on every axis.
+// Exceeding it returns the NaN sentinel, which routes the caller to
+// quadrature exactly as a cancellation failure would.
+constexpr long I_MAX_GUARD = 1000000L;
 
 }  // namespace
 
@@ -109,9 +125,15 @@ double log_cdf_series(double alpha, double beta, double gamma,
                             10.0 * Q_LEMMA10, 12.0 * Q_LEMMA10);
   const long K1 = lemma10_K(alpha / 2.0,        abs_z, z2, C1,
                             Q_LEMMA10, log_eps_quarter, /*is_A=*/true);
-  const long K2 = lemma10_K((alpha + 1.0) / 2.0, abs_z, z2, C2,
+  // Both branches take a = alpha/2: the odd CDF term i = 2k+1 has
+  // s_i = alpha/2 + k + 1/2, and lemma10_K's B branch adds that half itself.
+  // Passing (alpha+1)/2 counted it twice and over-stated K2.
+  const long K2 = lemma10_K(alpha / 2.0, abs_z, z2, C2,
                             Q_LEMMA10, log_eps_quarter, /*is_A=*/false);
   const long i_max = 2L * std::max(K1, K2) + 1L;
+  if (i_max > I_MAX_GUARD) {
+    return std::numeric_limits<double>::quiet_NaN();  // -> quadrature
+  }
 
   std::vector<double> log_pos;
   std::vector<double> log_neg;
@@ -153,14 +175,23 @@ double log_cdf_series(double alpha, double beta, double gamma,
   } else {
     const double log_S_neg = log_sum_exp(log_neg);
     // Double-precision cancellation guard.  Require
-    //   1 - exp(log_S_neg - log_S_pos) >= 2 * 2^-52 / tol_eff
-    // so the relative error in S_pos - S_neg stays within the
-    // user's tolerance.  The previous coarser test
-    // (log_S_neg >= log_S_pos) only caught total wipeout; the
-    // empirical breakdown audit at
-    // inst/audits/results/series_breakdown_audit_<date>.csv showed
-    // silent wrong values whenever this inequality is violated.
-    const double min_one_minus_ratio = DOUBLE_EPS_TIMES_TWO / tol_eff;
+    //   1 - exp(log_S_neg - log_S_pos) >= 2 * 2^-52 * sqrt(i_max) / tol_eff
+    // so the relative error in S_pos - S_neg stays within the user's
+    // tolerance.  Testing only for total wipeout (log_S_neg >= log_S_pos)
+    // is not enough: the series returns silently wrong values well before
+    // that, as inst/audits/series_breakdown_audit.R demonstrates.
+    //
+    // The sqrt(i_max) is what each accumulator actually carries.  Charging one
+    // unit of roundoff assumes a single rounding, but the two sums run over
+    // i_max terms and their errors accumulate as a random walk.  Without it the
+    // guard admitted results some twenty times worse than the tolerance asked
+    // for: at (alpha, gamma) = (10, -100) the dispatcher returned 0.542194283
+    // where an independent quadrature gives 0.542194428, a relative error of
+    // 2.7e-7 against a requested 1.5e-8.  The package's own integration path
+    // matches the reference there, so the cost of firing earlier is only that
+    // more calls take it.
+    const double min_one_minus_ratio =
+        DOUBLE_EPS_TIMES_TWO * std::sqrt(static_cast<double>(i_max)) / tol_eff;
     const double one_minus_ratio = -std::expm1(log_S_neg - log_S_pos);
     if (!(one_minus_ratio > min_one_minus_ratio)) {
       return std::numeric_limits<double>::quiet_NaN();

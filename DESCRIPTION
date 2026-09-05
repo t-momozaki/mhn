@@ -6,8 +6,8 @@ Authors@R: person("Tomotaka", "Momozaki", role = c("aut", "cre"),
     email = "momozaki.stat@gmail.com")
 Description: Provides density, distribution, quantile, and random generation
     functions for the Modified Half-Normal (MHN) distribution, along with
-    moments, mode, and the Fox-Wright Psi function used as the normalizing
-    constant. The MHN distribution arises as a conditional posterior in
+    moments and mode; the Fox-Wright Psi normalizing constant is evaluated
+    internally. The MHN distribution arises as a conditional posterior in
     Bayesian Markov chain Monte Carlo and generalizes the half-normal,
     truncated normal, and square-root gamma distributions. Implements
     efficient sampling via the Sun, Kong & Pal (2023)

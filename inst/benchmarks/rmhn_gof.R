@@ -18,7 +18,8 @@
 #     using the closed-form mhn_mean() / mhn_var();
 #   - the relative variance error |var(x) - Var[X]| / Var[X].
 # These mirror the pass/fail assertions in tests/testthat/test-rmhn.R
-# (KS p > 0.001, |mean error| < 5 SE, relative variance error < 0.10),
+# (KS p > 0.001, |mean error| < 5 SE, relative variance error within
+# four sampling standard deviations of the sample variance),
 # promoted here to a CSV so they can be summarised in a table/figure.
 #
 # method = "sun" is unavailable for alpha < 1 & gamma > 0 (Sun's
@@ -61,13 +62,25 @@ SEED <- {
 #   alpha >= 1, gamma!=0 -> region (a): Sun A1 (gamma>0) / A3 (gamma<0)
 #   0.5 <= alpha < 1     -> region (b)
 #   alpha < 0.5, gamma<=thr -> region (c); alpha < 0.5, gamma>thr -> region (d)
-ALPHAS <- if (QUICK) c(0.3, 1, 5) else c(0.3, 0.7, 1, 1.5, 3, 10, 100)
-GAMMAS <- if (QUICK) c(-2, 0, 5)  else c(-10, -2, 0, 2, 10)
-BETA   <- 1.0
+ALPHAS <- if (QUICK) c(0.3, 1, 5) else c(0.05, 0.3, 0.7, 1, 1.5, 3, 10, 100)
+# The grid reaches past the point where each of this package's sampling defects
+# began.  Stopping at |gamma| = 10 and beta = 1, as it used to, put both of them
+# outside: the region (d) envelope overflows between gamma = 50 and 100, and the
+# Algorithm 3 starting point lost a factor of sqrt(beta), which is invisible at
+# beta = 1.  An audit is only as wide as its grid.
+GAMMAS <- if (QUICK) c(-2, 0, 5)  else
+  c(-10000, -1000, -100, -10, -2, 0, 2, 10, 100, 1000, 10000)
+BETAS  <- if (QUICK) 1.0 else c(0.01, 1, 100)
 METHODS <- c("auto", "rtdr", "sun")
 
 OUTDIR <- Sys.getenv("MHN_GOF_OUTDIR", unset = "")
-if (!nzchar(OUTDIR)) OUTDIR <- file.path("mhn", "inst", "benchmarks", "results")
+if (!nzchar(OUTDIR)) {
+  # Only write into the repository layout when it is actually there.  Run from
+  # an installed package the working directory belongs to the user, and
+  # creating mhn/inst/benchmarks/ inside it would be a surprise.
+  repo <- file.path("mhn", "inst", "benchmarks")
+  OUTDIR <- if (dir.exists(repo)) file.path(repo, "results") else tempdir()
+}
 dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("rmhn_gof_%s.csv", TODAY))
@@ -76,7 +89,7 @@ DIAG_CSV   <- file.path(OUTDIR, sprintf("rmhn_gof_diagnostics_%s.csv", TODAY))
 cat(sprintf("[rmhn_gof] mode=%s N=%d alpha=%d gamma=%d methods=%d cells=%d\n",
             if (QUICK) "QUICK" else "FULL", N,
             length(ALPHAS), length(GAMMAS), length(METHODS),
-            length(ALPHAS) * length(GAMMAS) * length(METHODS)))
+            length(ALPHAS) * length(BETAS) * length(GAMMAS) * length(METHODS)))
 cat(sprintf("[rmhn_gof] result_csv=%s\n", RESULT_CSV))
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -127,7 +140,8 @@ gof_one <- function(alpha, beta, gamma, method, n = N, seed = SEED) {
     error = NA_character_, stringsAsFactors = FALSE)
 }
 
-grid <- expand.grid(alpha = ALPHAS, gamma = GAMMAS, method = METHODS,
+grid <- expand.grid(alpha = ALPHAS, beta = BETAS, gamma = GAMMAS,
+                    method = METHODS,
                     KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
 n_cells <- nrow(grid)
 rows <- vector("list", n_cells)
@@ -135,20 +149,33 @@ t0 <- Sys.time()
 
 for (k in seq_len(n_cells)) {
   a <- grid$alpha[k]
+  b <- grid$beta[k]
   g <- grid$gamma[k]
   m <- grid$method[k]
-  rows[[k]] <- gof_one(a, BETA, g, m)
+  rows[[k]] <- gof_one(a, b, g, m)
   r <- rows[[k]]
-  cat(sprintf("[%3d/%3d] alpha=%-6g gamma=%-6g %-4s ", k, n_cells, a, g, m))
+  cat(sprintf("[%4d/%4d] a=%-6g b=%-6g g=%-8g %-4s ", k, n_cells, a, b, g, m))
   if (!is.na(r$error)) {
     cat(sprintf("%s\n", r$error))
   } else {
     cat(sprintf("KS.p=%.3f mean_z=%+.2f var_rel=%.3f\n",
                 r$ks_pvalue, r$mean_z, r$var_rel_err))
   }
+  # The grid now runs for the better part of an hour; without this the progress
+  # lines sit in R's buffer until the end whenever stdout is not a terminal.
+  utils::flush.console()
 }
 
 results <- do.call(rbind, rows)
+
+# The variance tolerance travels with the results, since it is part of the
+# pass/fail record and a reader of the CSV cannot reconstruct it otherwise.
+# It depends only on the parameter triple and n, not on the draws.
+results$var_kurt <- mapply(function(a, b, g)
+  tryCatch(mhn::mhn_kurtosis(a, b, g), error = function(e) NA_real_),
+  results$alpha, results$beta, results$gamma)
+results$var_tol <- pmax(4 * sqrt(pmax(results$var_kurt + 2, 2) / results$n), 0.05)
+
 write.csv(results, RESULT_CSV, row.names = FALSE)
 
 # -----------------------------------------------------------------------
@@ -157,7 +184,16 @@ write.csv(results, RESULT_CSV, row.names = FALSE)
 ok <- is.na(results$error)
 ks_fail   <- ok & results$ks_pvalue < 0.001
 mean_fail <- ok & abs(results$mean_z) > 5
-var_fail  <- ok & results$var_rel_err > 0.10
+
+# The variance tolerance has to follow the distribution, not a fixed percentage.
+# A sample variance from n draws has relative standard deviation
+# sqrt((excess kurtosis + 2)/n), which at alpha = 0.05 with a negative tilt is
+# 0.11 -- so a flat 10 percent flags a dozen cells that are doing nothing wrong,
+# and a grid wide enough to reach them cannot use it.  Four of those standard
+# deviations, floored for light tails, keeps the criterion where it was in the
+# body of the parameter space (at alpha = 1 the bound is 0.108) and stops it
+# firing on heavy ones.
+var_fail  <- ok & !is.na(results$var_tol) & results$var_rel_err > results$var_tol
 
 # Precompute the headline scalars once (shared by the console summary
 # and the diagnostics CSV below).  `safe()` leaves its argument a
@@ -175,8 +211,9 @@ cat(sprintf("  KS p < 0.001                   : %d  [min p = %.4f]\n",
             sum(ks_fail, na.rm = TRUE), min_ks_p))
 cat(sprintf("  |mean_z| > 5                   : %d  [max = %.2f]\n",
             sum(mean_fail, na.rm = TRUE), max_mean))
-cat(sprintf("  var_rel_err > 0.10             : %d  [max = %.3f]\n",
-            sum(var_fail, na.rm = TRUE), max_var))
+cat(sprintf("  var_rel_err over its tolerance : %d  [max err = %.3f, max err/tol = %.3f]\n",
+            sum(var_fail, na.rm = TRUE), max_var,
+            safe(max(results$var_rel_err[ok] / results$var_tol[ok], na.rm = TRUE))))
 
 # -----------------------------------------------------------------------
 # Diagnostics CSV (single-row environment / provenance record)

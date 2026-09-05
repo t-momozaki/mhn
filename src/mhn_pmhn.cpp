@@ -24,6 +24,7 @@
 #include "mhn_pmhn_state.h"
 #include "mhn_psi.h"
 #include "mhn_special_cases.h"
+#include "mhn_param_slots.h"
 
 #include <Rcpp.h>
 #include <algorithm>
@@ -33,25 +34,36 @@
 
 namespace {
 
-// Translate F in [0, 1] to the requested (lower.tail, log.p) form.
-double tail_log_transform(double F, bool lower_tail, bool log_p) {
-  if (Rcpp::NumericVector::is_na(F)) return NA_REAL;
-  if (log_p) {
-    if (lower_tail) {
-      if (F <= 0.0) return R_NegInf;
-      if (F >= 1.0) return 0.0;
-      return std::log(F);
-    }
-    if (F <= 0.0) return 0.0;
-    if (F >= 1.0) return R_NegInf;
-    return std::log1p(-F);
+// Evaluate one element in the requested (lower.tail, log.p) form.
+//
+// The upper tail is taken from the state's own survival evaluation rather than
+// derived as 1 - F.  Deriving it loses the answer once F rounds to 1, which
+// happens as soon as the survival probability drops below about 1e-16: at
+// alpha = 2.5, beta = 1, gamma = 1 that is q = 8, where the true value is
+// 5e-18 and 1 - F is exactly 0.
+double eval_tail(const mhn::CdfState& state, double qi,
+                 bool lower_tail, bool log_p) {
+  // NA and NaN are distinct in the base R d/p/q contract, and
+  // Rcpp::NumericVector::is_na does not separate them -- it is ISNAN.
+  // qmhn already tested them apart; these two collapsed NaN to NA.
+  if (R_IsNA(qi)) return NA_REAL;
+  if (R_IsNaN(qi)) return R_NaN;
+  if (!lower_tail) {
+    const double log_Q = state.log_upper_tail(qi);
+    if (Rcpp::NumericVector::is_na(log_Q)) return NA_REAL;
+    return log_p ? log_Q : std::exp(log_Q);
   }
-  return lower_tail ? F : (1.0 - F);
+  const double F = state.cdf_linear(qi);
+  if (Rcpp::NumericVector::is_na(F)) return NA_REAL;
+  if (!log_p) return F;
+  if (F <= 0.0) return R_NegInf;
+  if (F >= 1.0) return 0.0;
+  return std::log(F);
 }
 
 }  // namespace
 
-// [[Rcpp::export(.pmhn_cpp)]]
+// [[Rcpp::export(.pmhn_cpp, rng = false)]]
 Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q,
                              Rcpp::NumericVector alpha,
                              Rcpp::NumericVector beta,
@@ -72,7 +84,7 @@ Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q,
   // pnorm/pgamma tail precision.
   if (na == 1 && nb == 1 && ng == 1) {
     const double a = alpha[0], b = beta[0], g = gamma[0];
-    if (mhn::is_sqrt_gamma(g)) {
+    if (mhn::is_sqrt_gamma(g, b)) {
       return mhn::pmhn_sqrt_gamma(q, a, b, lower_tail, log_p);
     }
     if (mhn::is_truncated_normal(a)) {
@@ -82,8 +94,8 @@ Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q,
     state.recompute(a, b, g);
     Rcpp::NumericVector out(nq);
     for (R_xlen_t i = 0; i < nq; ++i) {
-      const double F = state.cdf_linear(q[i]);
-      out[i] = tail_log_transform(F, lower_tail, log_p);
+      out[i] = eval_tail(state, q[i], lower_tail, log_p);
+      if ((i & 255) == 0) Rcpp::checkUserInterrupt();
     }
     return out;
   }
@@ -91,11 +103,10 @@ Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q,
   const R_xlen_t n = std::max({nq, na, nb, ng});
   Rcpp::NumericVector out(n);
 
-  mhn::CdfState state;
-  double prev_a = std::numeric_limits<double>::quiet_NaN();
-  double prev_b = std::numeric_limits<double>::quiet_NaN();
-  double prev_g = std::numeric_limits<double>::quiet_NaN();
-  bool primed = false;
+  // One cache slot per distinct triple in the recycling cycle: under
+  // recycling consecutive elements rarely share a triple, so a single
+  // most-recently-used slot missed on every element.
+  mhn::ParamSlots<mhn::CdfState> slots(na, nb, ng, n);
 
   for (R_xlen_t i = 0; i < n; ++i) {
     const double qi = q[i % nq];
@@ -103,14 +114,8 @@ Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q,
     const double b = beta[i % nb];
     const double g = gamma[i % ng];
 
-    if (!primed || a != prev_a || b != prev_b || g != prev_g) {
-      state.recompute(a, b, g);
-      prev_a = a; prev_b = b; prev_g = g;
-      primed = true;
-    }
-
-    const double F = state.cdf_linear(qi);
-    out[i] = tail_log_transform(F, lower_tail, log_p);
+    out[i] = eval_tail(slots.at(i, a, b, g), qi, lower_tail, log_p);
+    if ((i & 255) == 0) Rcpp::checkUserInterrupt();
   }
   return out;
 }
@@ -131,7 +136,7 @@ Rcpp::NumericVector pmhn_cpp(Rcpp::NumericVector q,
 // Boundary handling matches the dispatcher: NA -> NA;
 // q <= 0 -> 0; q == +Inf -> 1.
 //
-// [[Rcpp::export(.pmhn_force_cpp)]]
+// [[Rcpp::export(.pmhn_force_cpp, rng = false)]]
 double pmhn_force_cpp(double q, double alpha, double beta, double gamma,
                       std::string method) {
   if (!(alpha > 0.0)) Rcpp::stop("alpha must be positive");
@@ -139,7 +144,10 @@ double pmhn_force_cpp(double q, double alpha, double beta, double gamma,
   if (method != "series" && method != "integrate") {
     Rcpp::stop("method must be \"series\" or \"integrate\"");
   }
-  if (Rcpp::NumericVector::is_na(q)) return NA_REAL;
+  // NA and NaN are distinct in the base R d/p/q contract, and
+  // Rcpp::NumericVector::is_na does not separate them -- it is ISNAN.
+  if (R_IsNA(q)) return NA_REAL;
+  if (R_IsNaN(q)) return R_NaN;
   if (q <= 0.0) return 0.0;
   if (q == R_PosInf) return 1.0;
 

@@ -127,12 +127,24 @@ test_that("dmhn is vectorized over x", {
 # 7. NA propagation
 # ============================================================
 
-test_that("dmhn returns NA for NA input", {
+test_that("dmhn returns NA for NA input and NaN for NaN input", {
+  # is.na() is TRUE for NaN as well, so the two have to be told apart: as in
+  # base R's d/p/q family, NA in gives NA out and NaN in gives NaN out, on the
+  # general path and on each special case (gamma = 0, alpha = 1).
   result <- dmhn(c(1, NA, 2), alpha = 2, beta = 1, gamma = 0)
   expect_equal(length(result), 3)
-  expect_true(is.na(result[2]))
+  expect_true(is.na(result[2]) && !is.nan(result[2]))
   expect_false(is.na(result[1]))
   expect_false(is.na(result[3]))
+
+  for (p in list(c(2, 1, 1), c(2, 1, 0), c(1, 1, 1))) {
+    info <- sprintf("alpha=%g beta=%g gamma=%g", p[1], p[2], p[3])
+    na  <- dmhn(NA_real_, p[1], p[2], p[3])
+    nan <- dmhn(NaN, p[1], p[2], p[3])
+    expect_true(is.na(na) && !is.nan(na), info = info)
+    expect_true(is.nan(nan), info = info)
+  }
+  expect_true(is.nan(dmhn(NaN, 2, 1, 1, log = TRUE)))
 })
 
 # ============================================================

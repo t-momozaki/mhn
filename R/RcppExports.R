@@ -73,8 +73,8 @@
     .Call(`_mhn_rtdr_contact_point_newton_test_cpp`, t_init, log_dens_mode_val, delta, concavity, max_iter)
 }
 
-.is_sqrt_gamma <- function(gamma) {
-    .Call(`_mhn_is_sqrt_gamma_R`, gamma)
+.is_sqrt_gamma <- function(gamma, beta = 1.0) {
+    .Call(`_mhn_is_sqrt_gamma_R`, gamma, beta)
 }
 
 .is_truncated_normal <- function(alpha) {

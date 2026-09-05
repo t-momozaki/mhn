@@ -46,7 +46,14 @@ regimes <- list(
   list(alpha = 5,   beta = 1, gamma =  0.5, label = "region a (alpha=5, gamma=0.5)"),
   list(alpha = 0.7, beta = 1, gamma =  0,   label = "region b/c (alpha=0.7, gamma=0)"),
   list(alpha = 0.3, beta = 1, gamma = -5,   label = "region c (alpha=0.3, gamma=-5)"),
-  list(alpha = 0.3, beta = 1, gamma =  5,   label = "region d (alpha=0.3, gamma=5)")
+  list(alpha = 0.3, beta = 1, gamma =  5,   label = "region d (alpha=0.3, gamma=5)"),
+  # Non-unit beta.  Every sampler test used beta = 1, which is exactly where a
+  # setup that has dropped a factor of sqrt(beta) still looks correct -- the
+  # Sun Algorithm 3 starting point had, and its acceptance fell away from 1.
+  list(alpha = 1.5, beta = 4,    gamma = -2,  label = "region a, beta=4"),
+  list(alpha = 5,   beta = 0.25, gamma = 0.5, label = "region a, beta=0.25"),
+  list(alpha = 0.7, beta = 9,    gamma = 0,   label = "region b/c, beta=9"),
+  list(alpha = 0.3, beta = 0.01, gamma = 5,   label = "region d, beta=0.01")
 )
 
 for (r in regimes) {
@@ -179,10 +186,21 @@ test_that("NA in beta and gamma propagates to NA outputs", {
   expect_equal(is.na(x_g), c(FALSE, TRUE, FALSE, TRUE))
 })
 
-test_that("non-finite gamma (Inf, -Inf, NaN) propagates to NA", {
+test_that("a non-finite alpha, beta, or gamma propagates to NA", {
   x <- rmhn(5, alpha = 2,
             gamma = c(0.5, Inf, 0.5, -Inf, NaN))
   expect_equal(is.na(x), c(FALSE, TRUE, FALSE, TRUE, TRUE))
+
+  # The guard covers all three parameters, not gamma alone: an infinite alpha
+  # or beta used to reach the sampler and come back as something the caller
+  # could not tell from a draw.  A negative infinity never gets that far, being
+  # caught by the positivity check.
+  x_a <- rmhn(5, alpha = c(2, Inf, 2, NaN, 2))
+  expect_equal(is.na(x_a), c(FALSE, TRUE, FALSE, TRUE, FALSE))
+  x_b <- rmhn(5, alpha = 2, beta = c(1, Inf, 1, NaN, 1))
+  expect_equal(is.na(x_b), c(FALSE, TRUE, FALSE, TRUE, FALSE))
+  expect_error(rmhn(5, alpha = c(2, -Inf)), "alpha must be positive")
+  expect_error(rmhn(5, beta = c(1, -Inf)), "beta must be positive")
 })
 
 test_that("invalid alpha or beta still throws", {
@@ -388,4 +406,36 @@ test_that("auto vectorised params: per-sample-amortisation drives dispatch", {
   set.seed(7L)
   s <- rmhn(5L, alpha = c(5, 5, 5, 5, 5), gamma = -10, method = "sun")
   expect_identical(a, s)
+})
+
+test_that("the samplers are scale-equivariant in beta", {
+  skip_on_cran()
+
+  # If X ~ MHN(alpha, beta, gamma) then sqrt(beta) X ~ MHN(alpha, 1, gamma/sqrt(beta)):
+  # the family depends on the tilt only through Delta = gamma/sqrt(beta)
+  # (Sun et al. 2023, Theorem 1c).  A setup that has lost a factor of sqrt(beta)
+  # still samples the right law at beta = 1 and drifts away from it elsewhere,
+  # which is how the Sun Algorithm 3 starting point went unnoticed.  Comparing
+  # the two sides with a two-sample Kolmogorov-Smirnov test needs no reference
+  # implementation at all.
+  cases <- list(
+    c(1.5, 4,    -2), c(5,   0.25, 0.5), c(0.7, 9,    0),
+    c(0.3, 0.01, 5),  c(3,   4,    -4),  c(2,   100,  50),
+    c(0.45, 0.5, 1),  c(10,  0.04, -1)
+  )
+  for (par in cases) {
+    alpha <- par[1]; beta <- par[2]; gamma <- par[3]
+    delta <- gamma / sqrt(beta)
+    for (method in c("auto", "rtdr")) {
+      if (method == "rtdr" && alpha >= 1 && gamma > 0) next
+      set.seed(101)
+      x <- rmhn(6000, alpha, beta, gamma, method = method) * sqrt(beta)
+      set.seed(202)
+      y <- rmhn(6000, alpha, 1, delta, method = method)
+      info <- sprintf("alpha=%g beta=%g gamma=%g method=%s",
+                      alpha, beta, gamma, method)
+      expect_gt(suppressWarnings(stats::ks.test(x, y)$p.value), 0.001,
+                label = info)
+    }
+  }
 })

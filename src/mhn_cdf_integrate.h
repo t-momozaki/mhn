@@ -26,6 +26,30 @@ namespace mhn {
 double log_cdf_integrate(double alpha, double beta, double gamma,
                          double x, double tol);
 
+// The same integral with gamma^2/(4 beta) removed, for the caller that pairs it
+// with psi_integrate_shifted.  For a large positive tilt log Psi and this
+// integral are each about gamma^2/(4 beta) -- 2.5e13 at gamma = 1e7 -- while
+// their difference, log F, is of order one, so assembling F from the unshifted
+// pair loses it.  Removing the term from both analytically leaves nothing large.
+double log_cdf_integrate_shifted(double alpha, double beta, double gamma,
+                                 double x, double tol);
+
+// The complement: log integral_x^inf g(t) dt, over the same kernel and with
+// the same caller-supplied prefactor, giving log(1 - F(x)).
+//
+// Deriving the upper tail as 1 - F loses it entirely once F rounds to 1, which
+// happens as soon as the survival probability falls below about 1e-16 -- at
+// alpha = 2.5, beta = 1, gamma = 1 that is already q = 8.  Integrating the
+// other way keeps the full range, exactly as base R's distribution functions
+// do with their lower.tail argument.
+double log_ccdf_integrate(double alpha, double beta, double gamma,
+                          double x, double tol);
+
+// The complement with gamma^2/(4 beta) removed, to pair with the shifted
+// normalising constant exactly as log_cdf_integrate_shifted does.
+double log_ccdf_integrate_shifted(double alpha, double beta, double gamma,
+                                  double x, double tol);
+
 }  // namespace mhn
 
 #endif  // MHN_CDF_INTEGRATE_H

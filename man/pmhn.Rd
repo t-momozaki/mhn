@@ -48,7 +48,8 @@ identity \eqn{\Gamma(s)\, P(s, y) = \gamma(s, y)}, where
 the paper).  The infinite sum is truncated at the constructive bound
 \eqn{K = \max\{K_1, K_2\}} from Sun et al. (2023), Supplementary
 Lemma 10(d), which makes the truncation residual bounded by the
-user's tolerance divided by \eqn{\Psi}.  When
+working tolerance \code{sqrt(.Machine$double.eps)} divided by
+\eqn{\Psi}.  When
 double-precision cancellation in the alternating-sign accumulator
 for \eqn{\gamma < 0} would exceed that tolerance, the series is
 replaced by a Gauss-Kronrod (or tanh-sinh for \eqn{\alpha < 1})
@@ -62,7 +63,7 @@ Special cases are detected and dispatched to standard R primitives:
 
 When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the CDF
 is evaluated element-wise.  The Fox-Wright \eqn{\Psi} normalizing
-constant is recomputed only when consecutive elements present a
+constant is computed once per distinct triple in the recycling
 different \eqn{(\alpha, \beta, \gamma)} triple, so passing grouped
 parameters is significantly faster than calling \code{pmhn} inside an
 R loop.

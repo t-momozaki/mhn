@@ -224,6 +224,118 @@ log_cdf_series_mpfr <- function(alpha, beta, gamma, x,
 }
 
 # -----------------------------------------------------------------------
+# Independent reference: mpfr quadrature on the log axis.
+#
+# `log_cdf_series_mpfr` above evaluates the same Lemma 1b series that the
+# package does, only in higher precision, and takes log Psi from the package's
+# own dispatcher.  That makes it a sharper version of the object under test
+# rather than an independent check of it, and it inherits the series'
+# weaknesses: at alpha = 10 with |z| >= 10 it returns values outside [0, 1],
+# reaching -71138 at gamma = -100.
+#
+# This reference shares nothing with the implementation.  Substituting
+# x = exp(u) turns both integrals into
+#
+#     int exp(alpha u - beta e^{2u} + gamma e^u) du,
+#
+# so the normalising constant is computed from scratch alongside the numerator
+# and cancels in the ratio -- no Psi, no series, no package call.  Below U the
+# kernel is exp(alpha u) times a factor within 4e-14 of one, and that half of
+# the range is integrated term by term in closed form.  The rest is a trapezoid
+# rule with Richardson extrapolation; the integrand is analytic, so the
+# extrapolation converges quickly, and the levels are chosen so that the last
+# two agree.
+#
+# Validated against the two closed forms the family admits, each written in a
+# non-cancelling form: F = P(alpha/2, beta q^2) at gamma = 0 (36 points,
+# maximum relative error 7.8e-16) and the truncated normal at alpha = 1
+# (48 points, 8.7e-15).
+# -----------------------------------------------------------------------
+QUAD_LEVELS <- 5L
+QUAD_PER_SCALE <- 16L
+
+cdf_quad_mpfr <- function(alpha, beta, gamma, x, prec_bits = PREC_BITS,
+                          levels = QUAD_LEVELS, per_scale = QUAD_PER_SCALE) {
+  a <- Rmpfr::mpfr(alpha, prec_bits)
+  b <- Rmpfr::mpfr(beta, prec_bits)
+  g <- Rmpfr::mpfr(gamma, prec_bits)
+  one <- Rmpfr::mpfr(1, prec_bits)
+
+  # Peak of the log-axis kernel: 2 b v^2 - g v - a = 0 with v = exp(u*), and
+  # the curvature there is -(2 b v^2 + a).
+  v <- (g + sqrt(g * g + 8 * a * b)) / (4 * b)
+  ustar <- log(v)
+  curv <- 2 * b * v * v + a
+  sig <- 1 / sqrt(curv)
+
+  drop <- Rmpfr::mpfr(prec_bits, prec_bits) * log(Rmpfr::mpfr(2, prec_bits)) + 60
+  # Below U the omitted factor is within 4e-14 of one, so the expansion below
+  # is exact to about 1e-27 relative.
+  U <- log(Rmpfr::mpfr(4e-14, prec_bits) / (b + abs(g) + one))
+  hi <- ustar + sig * sqrt(2 * drop)
+
+  head_int <- function(Uc) {
+    exp(a * Uc) / a - b * exp((a + 2) * Uc) / (a + 2) +
+      g * exp((a + 1) * Uc) / (a + 1)
+  }
+  kern <- function(u) exp(a * u - b * exp(2 * u) + g * exp(u))
+  dlog <- function(u) a - 2 * b * exp(2 * u) + g * exp(u)
+
+  # Trapezoid with Richardson extrapolation.  `scale` is the length over which
+  # the integrand varies; the node count is set from it so that even the
+  # coarsest level resolves the peak.  Sizing the grid by the panel width alone
+  # left the coarse levels unresolved and the extrapolation non-asymptotic,
+  # which cost five digits at alpha = 10 with a narrow peak.
+  romberg <- function(lo, up, scale) {
+    if (up <= lo) return(Rmpfr::mpfr(0, prec_bits))
+    n0 <- max(64L, min(8192L,
+      as.integer(ceiling(per_scale * as.numeric((up - lo) / scale)))))
+    tab <- vector("list", levels)
+    for (k in seq_len(levels)) {
+      n <- n0 * 2^(k - 1L)
+      hh <- (up - lo) / n
+      vv <- kern(lo + hh * Rmpfr::mpfr(0:n, prec_bits))
+      tab[[k]] <- hh * (sum(vv) - (vv[1] + vv[n + 1]) / 2)
+    }
+    for (m in seq_len(levels - 1L)) {
+      f <- Rmpfr::mpfr(4, prec_bits)^m
+      tab <- lapply(seq_len(levels - m),
+                    function(k) (f * tab[[k + 1]] - tab[[k]]) / (f - 1))
+    }
+    tab[[1]]
+  }
+
+  # int_{-inf}^{up}.  How far below `up` the kernel is still visible is set by
+  # the slope there, falling back to the curvature at the peak where the slope
+  # vanishes.  Anchoring instead on the peak is wrong whenever `up` lies below
+  # it, which is exactly the case for a small quantile.
+  integrate_to <- function(up) {
+    if (up <= U) return(head_int(up))
+    s <- abs(dlog(up))
+    reach <- 2 * drop / (s + sqrt(s * s + 2 * drop * curv))
+    lo <- max(U, up - reach)
+    scale <- min(sig, reach / Rmpfr::mpfr(20, prec_bits))
+    total <- if (lo > U) {
+      # Everything below lo is bounded by head_int(U) + (lo - U) kern(lo).
+      bound <- head_int(U) + (lo - U) * kern(lo)
+      if (as.numeric(log(bound) - log(reach * kern(up))) < -60) {
+        Rmpfr::mpfr(0, prec_bits)
+      } else {
+        head_int(U) + romberg(U, lo, min(sig, one / a))
+      }
+    } else {
+      head_int(U)
+    }
+    mid <- min(max(ustar, lo), up)
+    total + romberg(lo, mid, scale) + romberg(mid, up, scale)
+  }
+
+  lx <- log(Rmpfr::mpfr(x, prec_bits))
+  as.numeric(integrate_to(min(lx, hi)) / integrate_to(hi))
+}
+
+
+# -----------------------------------------------------------------------
 # Grid + main loop
 # -----------------------------------------------------------------------
 grid <- expand.grid(alpha = ALPHAS, gamma = GAMMAS, q_factor = Q_FACTORS,
@@ -263,6 +375,8 @@ for (k in seq_len(N)) {
                 iterations = NA_integer_, reached_max = NA)
     }
   )
+  ref_quad <- tryCatch(cdf_quad_mpfr(alpha, BETA, gamma, q_value),
+                       error = function(e) NA_real_)
   ref_value      <- as.numeric(ref)
   ref_iterations <- attr(ref, "iterations", exact = TRUE)
   if (is.null(ref_iterations)) ref_iterations <- NA_integer_
@@ -271,11 +385,14 @@ for (k in seq_len(N)) {
 
   series_returned_nan <- is.na(val_series) || is.nan(val_series)
 
+  # Errors are measured against the independent quadrature reference where it
+  # is available, since the series reference is not independent of the code
+  # under test and degrades in the same corner.
   rel <- function(v) {
-    if (is.na(ref_value)) return(NA_real_)
-    if (is.na(v))         return(NA_real_)
-    denom <- max(abs(ref_value), 1e-300)
-    abs(v - ref_value) / denom
+    base <- if (!is.na(ref_quad)) ref_quad else ref_value
+    if (is.na(base)) return(NA_real_)
+    if (is.na(v))    return(NA_real_)
+    abs(v - base) / max(abs(base), 1e-300)
   }
 
   rows[[k]] <- data.frame(
@@ -283,6 +400,7 @@ for (k in seq_len(N)) {
     q_factor = q_factor, q = q_value, abs_z = abs_z,
     val_series = val_series, val_integrate = val_integrate,
     val_dispatch = val_dispatch, val_ref = ref_value,
+    val_ref_quad = ref_quad,
     series_returned_nan = series_returned_nan,
     rel_err_series = rel(val_series),
     rel_err_integrate = rel(val_integrate),

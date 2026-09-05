@@ -15,7 +15,9 @@
 #' not evaluate \eqn{\Psi}; the rejection-sampling kernels cancel it out.
 #'
 #' @param n Non-negative integer giving the number of variates to draw.
-#'   \code{n = 0} returns \code{numeric(0)}.
+#'   \code{n = 0} returns \code{numeric(0)}. Following the base R convention
+#'   of \code{rnorm()} and \code{rgamma()}, if \code{length(n) > 1} the
+#'   number required is taken to be \code{length(n)}.
 #' @param alpha Shape parameter (\eqn{\alpha > 0}). Scalar or numeric vector.
 #'   Default: 1.
 #' @param beta Scale parameter (\eqn{\beta > 0}). Scalar or numeric vector.
@@ -48,9 +50,13 @@
 #'     25 variates per setup, raised to 100 for \eqn{\alpha < 0.1} where the
 #'     crossover between the two samplers occurs later. These thresholds were
 #'     fixed by benchmarking (see \code{inst/benchmarks/auto_dispatch.R}).
-#'   \item \code{"rtdr"}: Force the Relaxed Transformed Density Rejection
-#'     method of Gao & Wang (2025). The acceptance probability is bounded
-#'     below by \eqn{1/e \approx 0.368} uniformly over the parameter space.
+#'   \item \code{"rtdr"}: Use the Relaxed Transformed Density Rejection
+#'     method of Gao & Wang (2025) for the general case. The acceptance
+#'     probability is bounded below by \eqn{1/e \approx 0.368} uniformly over
+#'     the parameter space. The closed-form special cases are still taken
+#'     first: a negligible tilt draws from the square root of a Gamma, and
+#'     \eqn{\alpha \approx 1} from a truncated normal. Both are exact and
+#'     faster than any rejection scheme, so no sampler choice overrides them.
 #'     Note: Gao & Wang (2025) use the parameterization
 #'     \eqn{(\lambda, \alpha, \beta)} with density proportional to
 #'     \eqn{x^{\lambda - 1} \exp(-\alpha x^2 - \beta x)}; the mapping to
@@ -58,16 +64,18 @@
 #'     \eqn{\lambda \leftrightarrow \alpha},
 #'     \eqn{\alpha \leftrightarrow \beta},
 #'     \eqn{\beta \leftrightarrow -\gamma} (sign flip on the linear term).
-#'   \item \code{"sun"}: Force the Sun et al. (2023) algorithms.
+#'   \item \code{"sun"}: Use the Sun et al. (2023) algorithms for the general
+#'     case, with the same closed-form special cases taken first.
 #'     Algorithm 1 is used when \eqn{\gamma > 0} and \eqn{\alpha > 1};
 #'     Algorithm 3 is used when \eqn{\gamma \le 0}. The combination
 #'     \eqn{\alpha < 1} with \eqn{\gamma > 0} is unsupported and triggers
-#'     an error.
+#'     an error, unless a special case answers it first.
 #' }
 #'
 #' Vector parameters are recycled to length \code{n} following standard R
-#' rules. Trailing parameter elements beyond index \code{n - 1} are
-#' silently ignored, matching the convention of \code{rnorm}.
+#' rules: only the first \code{n} elements of each parameter are used, and any
+#' further elements are silently ignored, matching the convention of
+#' \code{rnorm}.
 #'
 #' Internally the setup state of the chosen sampler is reused as long as
 #' consecutive \eqn{(\alpha, \beta, \gamma)} triples are equal, so passing
@@ -100,8 +108,15 @@
 #' @export
 rmhn <- function(n, alpha = 1, beta = 1, gamma = 0,
                  method = c("auto", "rtdr", "sun")) {
-  method <- match.arg(method)
-  .rmhn_cpp(as.integer(n)[1L],
+  # match.arg is roughly 55% of the cost of rmhn(1, alpha, beta, gamma), the
+  # single-variate call a Gibbs sampler makes once per sweep.  Skipping it when
+  # the argument was not supplied costs nothing and validates exactly as before
+  # for any value that was.
+  method <- if (missing(method)) "auto" else match.arg(method)
+  # Follow the base R convention shared by rnorm(), runif() and rgamma():
+  # a vector n asks for length(n) variates.
+  n <- if (length(n) > 1L) length(n) else as.integer(n)[1L]
+  .rmhn_cpp(n,
             as.numeric(alpha), as.numeric(beta), as.numeric(gamma),
             method)
 }

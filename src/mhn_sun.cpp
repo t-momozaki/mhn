@@ -9,6 +9,7 @@
 
 #include "mhn_sun.h"
 #include "mhn_check.h"
+#include "mhn_stable.h"
 
 #include <Rcpp.h>
 #include <boost/math/special_functions/digamma.hpp>
@@ -23,26 +24,43 @@ namespace {
 // =====================================================================
 
 // log K_1 - log K_2 with Psi cancelled (it appears as a common factor in
-// both K_1(mu) and K_2(delta), per theory_sun.md sec 5.1 / Theorem 1a).
+// both K_1(mu) and K_2(delta); Sun et al. 2023, Theorem 1a).
 // Sign convention: < 0 -> use NORMAL proposal, >= 0 -> use SQRT_GAMMA.
-double log_K1_minus_K2(double alpha, double beta, double gamma,
-                       double mu, double delta) {
-  // log K_1 = log(2 sqrt pi)
-  //          + (alpha-1) [ 0.5 log(beta(alpha-1)) - log(2 beta mu - gamma) ]
-  //          - (alpha-1) + beta mu^2
-  //          - log Psi    (cancels)
-  const double log_K1 = std::log(2.0) + 0.5 * std::log(M_PI)
-    + (alpha - 1.0) *
-      ( 0.5 * std::log(beta * (alpha - 1.0)) - std::log(2.0 * beta * mu - gamma) )
-    - (alpha - 1.0) + beta * mu * mu;
-  // log K_2 = (alpha/2) log beta + log Gamma(alpha/2)
-  //          + gamma^2 / (4 (beta - delta))
-  //          - (alpha/2) log delta
-  //          - log Psi    (cancels)
-  const double log_K2 = 0.5 * alpha * std::log(beta) + std::lgamma(0.5 * alpha)
-    + gamma * gamma / (4.0 * (beta - delta))
-    - 0.5 * alpha * std::log(delta);
-  return log_K1 - log_K2;
+double log_K1_minus_K2(double alpha, double beta, double gamma) {
+  // Both constants carry a term of size gamma^2 / (4 beta) -- beta mu_opt^2 in
+  // K_1, gamma^2 / (4 (beta - delta_opt)) in K_2 -- while their difference is
+  // O(1).  Subtracting them as written loses it: at gamma = 1e6 the comparison
+  // returned 3.0 for a true 1.0, and by 1e9 it returned exactly 0, which sent
+  // Algorithm 1 to the sqrt-Gamma proposal with a scale of 1e17 and produced
+  // nothing but NaN.
+  //
+  // The two large terms cancel in closed form.  With D = gamma^2 + 8(alpha-1)beta
+  // and E = gamma^2 + 8 alpha beta, the optima give
+  // mu_opt = (gamma + sqrt(D)) / (4 beta) and beta - delta_opt
+  // = 2 beta gamma / (sqrt(E) + gamma), so
+  //
+  //     beta mu_opt^2 - gamma^2 / (4(beta - delta_opt))
+  //       = [ 2 gamma (sqrt(D) - sqrt(E)) + 8(alpha-1)beta ] / (16 beta)
+  //       = -gamma / (sqrt(D) + sqrt(E)) + (alpha-1)/2,
+  //
+  // using sqrt(D) - sqrt(E) = -8 beta / (sqrt(D) + sqrt(E)).  Nothing large
+  // appears in that.
+  const double D = std::sqrt(gamma * gamma + 8.0 * (alpha - 1.0) * beta);
+  const double E = std::sqrt(gamma * gamma + 8.0 * alpha * beta);
+  const double big = -gamma / (D + E) + 0.5 * (alpha - 1.0);
+
+  const double slope = mhn::sun_tangency_slope(alpha, beta, gamma);
+  const double delta = mhn::sun_delta_opt(alpha, beta, gamma);
+
+  // The remaining terms are all O(log), and Psi cancels between the two
+  // constants so it never has to be evaluated.
+  return std::log(2.0) + 0.5 * std::log(M_PI)
+       + (alpha - 1.0) * (0.5 * std::log(beta) + std::log(alpha - 1.0)
+                          - std::log(slope))
+       - (alpha - 1.0)
+       - 0.5 * alpha * std::log(beta) - std::lgamma(0.5 * alpha)
+       + 0.5 * alpha * std::log(delta)
+       + big;
 }
 
 // =====================================================================
@@ -57,7 +75,8 @@ double log_K1_minus_K2(double alpha, double beta, double gamma,
 double right_inflection_point(double alpha, double beta, double gamma_signed,
                               double x_mode) {
   if (!(alpha > 1.0)) {
-    Rcpp::stop("right_inflection_point requires alpha > 1.");
+    Rcpp::stop("rmhn: internal invariant violated (inflection point requested "
+               "for alpha <= 1). Please report this to the package maintainer.");
   }
   auto F = [alpha, beta, gamma_signed](double x) -> double {
     if (x <= 0.0) return std::numeric_limits<double>::infinity();
@@ -79,7 +98,10 @@ double right_inflection_point(double alpha, double beta, double gamma_signed,
     ++doublings;
   }
   if (F(hi) < 0.0) {
-    Rcpp::stop("right_inflection_point: failed to bracket.");
+    Rcpp::stop("rmhn: could not locate the inflection point needed by the "
+               "Sun Algorithm 3 setup for alpha = %g, beta = %g, gamma = %g. "
+               "This is a defect; please report these parameter values to the "
+               "package maintainer.", alpha, beta, gamma_signed);
   }
   for (int it = 0; it < 100; ++it) {
     const double mid = 0.5 * (lo + hi);
@@ -98,19 +120,28 @@ double right_inflection_point(double alpha, double beta, double gamma_signed,
 // inflection-point heuristic (a lambda-weighted mix of the mode and
 // the right-inflection point); for alpha <= 1.1 we fall back to the
 // simple closed form m = alpha^2 / (1 + alpha).
+//
+// That closed form is stated for the normalised beta = 1.  The matching point
+// carries the units of x, and sqrt(beta) X is MHN(alpha, 1, gamma/sqrt(beta)),
+// so it has to be divided by sqrt(beta) to be the same point.  Taken literally
+// it made Algorithm 3's acceptance depend on beta at a fixed tilt, which the
+// scale identity says it cannot: at Delta = -2 the measured rate ran from
+// 0.897 to 0.976 as beta moved over four orders of magnitude.  The alpha > 1.1
+// branch was already correct, since the mode and the inflection point are both
+// computed in x.
 // `used_inflex_out` reports which path was taken (for diagnostics).
 double m_init_algo3(double alpha, double beta, double gamma,
                     bool* used_inflex_out) {
   if (alpha > 1.1) {
-    // X_mode for f(x) ∝ x^(α-1) exp(γx - βx²); same closed form as
-    // mhn_mode_cpp.  Valid for alpha > 1 (else mode at boundary).
-    const double x_mode = (gamma + std::sqrt(gamma * gamma
-                                             + 8.0 * beta * (alpha - 1.0)))
-                          / (4.0 * beta);
+    // X_mode for the kernel x^(alpha-1) exp(gamma x - beta x^2); the same
+    // closed form as mhn_mode_cpp.  Valid for alpha > 1 (else the mode sits
+    // at the boundary).  Algorithm 3 runs with gamma <= 0, which is exactly
+    // where the literal form cancels, so use the stable one.
+    const double x_mode = mhn::positive_root(beta, gamma, alpha - 1.0);
     const double x_inflex = ::right_inflection_point(alpha, beta, gamma, x_mode);
     const double x_left = 2.0 * x_mode - x_inflex;
     if (x_left > 0.0) {
-      // lambda = f̃(x_left) / (f̃(x_left) + f̃(x_inflex)) via log-space sigmoid.
+      // lambda = f~(x_left) / (f~(x_left) + f~(x_inflex)) via log-space sigmoid.
       auto log_f_tilde = [alpha, beta, gamma](double x) -> double {
         return (alpha - 1.0) * std::log(x) + gamma * x - beta * x * x;
       };
@@ -119,10 +150,16 @@ double m_init_algo3(double alpha, double beta, double gamma,
       if (used_inflex_out != nullptr) *used_inflex_out = true;
       return 1.5 * lambda * x_mode + (1.0 - 1.5 * lambda) * x_inflex;
     }
-    // x_left <= 0: f̃(x_left) undefined; fall back to simple heuristic.
+    // x_left <= 0 puts f~(x_left) outside the support, so lambda is not
+    // defined.  Sun's own expression at lambda = 0 is x_inflex, which is a
+    // point the construction already trusts; falling through to the alpha <= 1.1
+    // heuristic instead discarded the inflection information entirely and
+    // started the search somewhere unrelated to the kernel's shape.
+    if (used_inflex_out != nullptr) *used_inflex_out = true;
+    return x_inflex;
   }
   if (used_inflex_out != nullptr) *used_inflex_out = false;
-  return alpha * alpha / (1.0 + alpha);
+  return alpha * alpha / ((1.0 + alpha) * std::sqrt(beta));
 }
 
 // First derivative l'(m) of the log-acceptance for Sun Algorithm 3,
@@ -200,21 +237,19 @@ SunAlgo1Setup build_sun_algo1(double alpha, double beta, double gamma) {
   s.alpha = alpha;
   s.beta  = beta;
   s.gamma = gamma;
-  // mu_opt = (gamma + sqrt(gamma^2 + 8 (alpha-1) beta)) / (4 beta)
-  s.mu_opt = (gamma + std::sqrt(gamma * gamma + 8.0 * (alpha - 1.0) * beta))
-             / (4.0 * beta);
-  // delta_opt = beta + (gamma^2 - gamma sqrt(gamma^2 + 8 alpha beta)) / (4 alpha)
-  s.delta_opt = beta + (gamma * gamma - gamma *
-                        std::sqrt(gamma * gamma + 8.0 * alpha * beta))
-                       / (4.0 * alpha);
+  // Sun et al. (2023) Theorem 1b.  Both optima are evaluated through the
+  // stable forms in mhn_stable.h; written literally they lose precision for
+  // large |gamma|, and delta_opt can leave the (0, beta) interval that
+  // Theorem 1a requires.
+  s.mu_opt    = mhn::positive_root(beta, gamma, alpha - 1.0);
+  s.delta_opt = mhn::sun_delta_opt(alpha, beta, gamma);
   s.sigma = 1.0 / std::sqrt(2.0 * beta);
 
   // Proposal selection: K_2 > K_1 (i.e. log K_1 - log K_2 < 0) -> Normal,
   // otherwise -> sqrt-Gamma.  K_1 / K_2 are the per-proposal rejection
   // constants for the Normal and sqrt-Gamma envelopes respectively
   // (Sun et al. 2023 Section 5.1, Theorem 1).
-  s.log_K1_minus_K2 = ::log_K1_minus_K2(alpha, beta, gamma,
-                                        s.mu_opt, s.delta_opt);
+  s.log_K1_minus_K2 = ::log_K1_minus_K2(alpha, beta, gamma);
   s.chosen = (s.log_K1_minus_K2 < 0.0)
              ? SunAlgo1Setup::NORMAL
              : SunAlgo1Setup::SQRT_GAMMA;
@@ -233,7 +268,7 @@ double sample_sun_algo1(const SunAlgo1Setup& s, int* retries_out) {
         const double log_u = std::log(R::runif(0.0, 1.0));
         const double log_acc =
           (s.alpha - 1.0) * std::log(X / s.mu_opt)
-          + (2.0 * s.beta * s.mu_opt - s.gamma) * (s.mu_opt - X);
+          + mhn::sun_tangency_slope(s.alpha, s.beta, s.gamma) * (s.mu_opt - X);
         if (log_u <= log_acc) {
           if (retries_out != nullptr) *retries_out += retries;
           return X;
@@ -255,7 +290,9 @@ double sample_sun_algo1(const SunAlgo1Setup& s, int* retries_out) {
     }
     ++retries;
   }
-  Rcpp::warning("sample_sun_algo1: max retries (%d) exceeded.", max_retries);
+  // Retry budget exhausted.  Report failure as NaN and let the caller decide
+  // how to surface it; raising an R warning from here would leave this frame
+  // by a long jump under options(warn = 2).
   if (retries_out != nullptr) *retries_out += retries;
   return std::numeric_limits<double>::quiet_NaN();
 }
@@ -285,7 +322,6 @@ SunAlgo3Setup build_sun_algo3(double alpha, double beta, double gamma) {
   s.r            = bm_g / (2.0 * beta * s.m + s.gamma_abs);
   s.shape        = alpha * s.r;
   s.rate         = s.m * bm_g;
-  s.m_betam_gam  = s.m * bm_g;
   return s;
 }
 
@@ -296,10 +332,10 @@ double sample_sun_algo3(const SunAlgo3Setup& s, int* retries_out) {
     // T ~ Gamma(shape, rate); R::rgamma takes (shape, scale=1/rate).
     const double T = R::rgamma(s.shape, 1.0 / s.rate);
     const double X = s.m * std::pow(T, s.r);
-    // Acceptance: log U <= m_betam_gam (X/m)^(1/r) - beta X^2 - |gamma| X
+    // Acceptance: log U <= rate (X/m)^(1/r) - beta X^2 - |gamma| X
     const double pow_term = std::pow(X / s.m, 1.0 / s.r);
     const double log_u   = std::log(R::runif(0.0, 1.0));
-    const double log_acc = s.m_betam_gam * pow_term
+    const double log_acc = s.rate * pow_term
                            - s.beta * X * X
                            - s.gamma_abs * X;
     if (log_u <= log_acc) {
@@ -308,7 +344,7 @@ double sample_sun_algo3(const SunAlgo3Setup& s, int* retries_out) {
     }
     ++retries;
   }
-  Rcpp::warning("sample_sun_algo3: max retries (%d) exceeded.", max_retries);
+  // Retry budget exhausted; see the note in sample_sun_algo1.
   if (retries_out != nullptr) *retries_out += retries;
   return std::numeric_limits<double>::quiet_NaN();
 }
@@ -316,8 +352,8 @@ double sample_sun_algo3(const SunAlgo3Setup& s, int* retries_out) {
 }  // namespace mhn
 
 // =====================================================================
-// Test-only Rcpp exports (for region-by-region validation ahead of the
-// full rmhn() dispatcher in Step 3.4).
+// Entry points used by the test suite to exercise each sampler in
+// isolation, bypassing the rmhn() dispatcher.  Not part of the public API.
 // =====================================================================
 
 // [[Rcpp::export(.rmhn_sun_algo1_cpp)]]
@@ -337,7 +373,7 @@ Rcpp::NumericVector rmhn_sun_algo1_cpp(int n, double alpha, double beta, double 
   return out;
 }
 
-// [[Rcpp::export(.dump_sun_algo1_cpp)]]
+// [[Rcpp::export(.dump_sun_algo1_cpp, rng = false)]]
 Rcpp::List dump_sun_algo1_cpp(double alpha, double beta, double gamma) {
   mhn::check_params_scalar(alpha, beta, gamma);
   mhn::SunAlgo1Setup s = mhn::build_sun_algo1(alpha, beta, gamma);
@@ -369,7 +405,7 @@ Rcpp::NumericVector rmhn_sun_algo3_cpp(int n, double alpha, double beta, double 
   return out;
 }
 
-// [[Rcpp::export(.dump_sun_algo3_cpp)]]
+// [[Rcpp::export(.dump_sun_algo3_cpp, rng = false)]]
 Rcpp::List dump_sun_algo3_cpp(double alpha, double beta, double gamma) {
   mhn::check_params_scalar(alpha, beta, gamma);
   mhn::SunAlgo3Setup s = mhn::build_sun_algo3(alpha, beta, gamma);
@@ -379,7 +415,6 @@ Rcpp::List dump_sun_algo3_cpp(double alpha, double beta, double gamma) {
     Rcpp::Named("r")                     = s.r,
     Rcpp::Named("shape")                 = s.shape,
     Rcpp::Named("rate")                  = s.rate,
-    Rcpp::Named("m_betam_gam")           = s.m_betam_gam,
     Rcpp::Named("used_inflex_heuristic") = s.used_inflex_heuristic
   );
 }

@@ -12,7 +12,11 @@
 
 namespace mhn {
 
-bool is_sqrt_gamma(double gamma);
+// The family depends on gamma only through the scale-free tilt
+// Delta = gamma / sqrt(beta) (Sun et al. 2023, Theorem 1c), so the
+// "is the tilt negligible?" test has to be made on Delta, not on gamma.
+// beta defaults to 1, for which the two coincide.
+bool is_sqrt_gamma(double gamma, double beta = 1.0);
 bool is_truncated_normal(double alpha);
 
 // log = false: density; log = true: log-density.

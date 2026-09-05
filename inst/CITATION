@@ -1,5 +1,5 @@
 ## Citation for the mhn R package and the underlying papers.
-## Show all three with `citation("mhn")`.
+## Show all four with `citation("mhn")`.
 
 bibentry(
   bibtype  = "Manual",

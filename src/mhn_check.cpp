@@ -13,7 +13,7 @@ using namespace Rcpp;
 namespace {
 
 // Replicates R's `is.numeric(x) && length(x) == 1L && !is.na(x)`.
-// `expect_finite_for_gamma` toggles the "finite" requirement (gamma must be finite,
+// `require_finite` toggles the "finite" requirement (gamma must be finite,
 // while alpha/beta only need to be a non-NA scalar before the >0 check).
 bool is_scalar_numeric(SEXP x, bool require_finite) {
   if (Rf_length(x) != 1) return false;
@@ -48,8 +48,16 @@ double as_double_unchecked(SEXP x) {
 namespace mhn {
 
 void check_params_scalar(double alpha, double beta, double gamma) {
-  if (!(alpha > 0.0)) Rcpp::stop("alpha must be positive");
-  if (!(beta > 0.0))  Rcpp::stop("beta must be positive");
+  // alpha > 0 is true of Inf, so an infinite shape used to pass here and reach
+  // the series, where a truncation length computed from it overflowed the
+  // size_t handed to std::vector.  What surfaced was that container's own
+  // exception, whose entire message is the word "vector".
+  if (!(alpha > 0.0) || !std::isfinite(alpha)) {
+    Rcpp::stop("alpha must be positive and finite");
+  }
+  if (!(beta > 0.0) || !std::isfinite(beta)) {
+    Rcpp::stop("beta must be positive and finite");
+  }
   if (!std::isfinite(gamma)) Rcpp::stop("gamma must be a finite numeric value");
 }
 
@@ -61,14 +69,14 @@ void check_params_vector(const Rcpp::NumericVector& alpha,
   if (gamma.size() == 0) Rcpp::stop("gamma must be a finite numeric value");
   for (R_xlen_t i = 0; i < alpha.size(); ++i) {
     const double a = alpha[i];
-    if (Rcpp::NumericVector::is_na(a) || !(a > 0.0)) {
-      Rcpp::stop("alpha must be positive");
+    if (Rcpp::NumericVector::is_na(a) || !(a > 0.0) || !std::isfinite(a)) {
+      Rcpp::stop("alpha must be positive and finite");
     }
   }
   for (R_xlen_t i = 0; i < beta.size(); ++i) {
     const double b = beta[i];
-    if (Rcpp::NumericVector::is_na(b) || !(b > 0.0)) {
-      Rcpp::stop("beta must be positive");
+    if (Rcpp::NumericVector::is_na(b) || !(b > 0.0) || !std::isfinite(b)) {
+      Rcpp::stop("beta must be positive and finite");
     }
   }
   for (R_xlen_t i = 0; i < gamma.size(); ++i) {
@@ -94,14 +102,15 @@ void check_params_vector_allow_na(const Rcpp::NumericVector& alpha,
     if (Rcpp::NumericVector::is_na(b)) continue;
     if (!(b > 0.0)) Rcpp::stop("beta must be positive");
   }
-  // gamma: NA passes (caller emits NA_REAL); Inf/-Inf/NaN also pass
-  // (caller treats non-finite gamma as NA, see mhn_rmhn.cpp design J).
+  // gamma is deliberately not rejected here: rmhn() maps an NA or
+  // non-finite gamma to an NA draw rather than aborting the whole call, so
+  // this validator lets those through for the caller to handle.
   (void)gamma;
 }
 
 }  // namespace mhn
 
-// [[Rcpp::export(.check_mhn_params)]]
+// [[Rcpp::export(.check_mhn_params, rng = false)]]
 SEXP check_mhn_params_R(SEXP alpha, SEXP beta, SEXP gamma) {
   if (!is_scalar_numeric(alpha, /*require_finite=*/false) ||
       as_double_unchecked(alpha) <= 0.0) {
@@ -117,7 +126,7 @@ SEXP check_mhn_params_R(SEXP alpha, SEXP beta, SEXP gamma) {
   return R_NilValue;
 }
 
-// [[Rcpp::export(.convert_to_gw)]]
+// [[Rcpp::export(.convert_to_gw, rng = false)]]
 Rcpp::List convert_to_gw_R(double alpha, double beta, double gamma) {
   return Rcpp::List::create(
     Rcpp::Named("lambda_gw") = alpha,

@@ -8,8 +8,10 @@
 // R-side wrapper: dmhn() in mhn/R/dmhn.R.
 
 #include "mhn_check.h"
+#include "mhn_constants.h"
 #include "mhn_psi.h"
 #include "mhn_special_cases.h"
+#include "mhn_param_slots.h"
 
 #include <Rcpp.h>
 #include <algorithm>
@@ -24,10 +26,66 @@ enum SpecialKind {
   KIND_TRUNCATED_NORMAL = 2 // alpha == 1
 };
 
+// The general-case log density.
+//
+// Both the scalar fast path and the recycling loop need this, and when each
+// carried its own copy they were free to drift apart -- which is how pmhn came
+// to return two different answers for the same truncated-normal tail.  One
+// definition, used by both.
+struct GeneralDensity {
+  double log_const = 0.0;
+  double kernel_centre = 0.0;
+  bool completed_square = false;
+
+  void set(double alpha, double beta, double gamma) {
+    // For a large positive tilt, log Psi and the kernel exponent are each about
+    // gamma^2/(4 beta) while the log density is of order one, so assembling the
+    // two directly leaves an absolute error of about eps gamma^2/(4 beta).
+    // That passes the working tolerance at |z| = gamma/sqrt(beta) around 2e4
+    // and reaches 5 percent by 3e7.  Past a threshold well inside the safe
+    // range, take log Psi with that term removed and complete the square in the
+    // kernel, so it cancels analytically instead of numerically.  Below the
+    // threshold the ordinary assembly is used unchanged, and is the more
+    // accurate of the two there.
+    const double z = gamma / std::sqrt(beta);
+    completed_square = (z > 1.0e3);
+    if (completed_square) {
+      const double log_nc =
+          mhn::psi_integrate_shifted(alpha, beta, gamma, mhn::mhn_eps());
+      log_const = std::log(2.0) + (alpha / 2.0) * std::log(beta) - log_nc;
+      kernel_centre = gamma / (2.0 * beta);
+    } else {
+      const double log_nc =
+          mhn::mhn_log_normalizing_const(alpha, beta, gamma, -1.0);
+      log_const = std::log(2.0) + (alpha / 2.0) * std::log(beta) - log_nc;
+      kernel_centre = 0.0;
+    }
+  }
+
+  double at(double xi, double alpha, double beta, double gamma) const {
+    // The density vanishes at infinity, as every base R density does.  Left to
+    // the general expression it came back as NaN: (alpha-1) log(x) and gamma x
+    // are +Inf while -beta x^2 is -Inf.
+    if (xi == R_PosInf) return R_NegInf;
+    if (xi > 0.0) {
+      if (completed_square) {
+        const double d = xi - kernel_centre;
+        return log_const + (alpha - 1.0) * std::log(xi) - beta * d * d;
+      }
+      return log_const + (alpha - 1.0) * std::log(xi)
+             - beta * xi * xi + gamma * xi;
+    }
+    if (xi == 0.0) {
+      if (alpha > 1.0) return R_NegInf;
+      if (alpha < 1.0) return R_PosInf;
+      return log_const;  // alpha == 1 is normally intercepted as a special case
+    }
+    return R_NegInf;
+  }
+};
+
 // Per-parameter cached state used by the vectorized loop.
 struct ParamCache {
-  // General-case constant: log(2) + (alpha/2) log(beta) - log Psi
-  double log_const = 0.0;
   // Truncated-normal pre-computed quantities
   double tn_mu = 0.0;
   double tn_sigma = 0.0;
@@ -35,9 +93,10 @@ struct ParamCache {
   // Boundary value at x=0 for the sqrt-Gamma branch
   double sqg_log_zero = R_NegInf;
   SpecialKind kind = KIND_GENERAL;
+  GeneralDensity general;
 
   void recompute(double alpha, double beta, double gamma) {
-    if (mhn::is_sqrt_gamma(gamma)) {
+    if (mhn::is_sqrt_gamma(gamma, beta)) {
       kind = KIND_SQRT_GAMMA;
       if (alpha > 1.0) {
         sqg_log_zero = R_NegInf;
@@ -54,13 +113,16 @@ struct ParamCache {
                              /*lower_tail=*/1, /*log_p=*/1);
     } else {
       kind = KIND_GENERAL;
-      const double log_nc = mhn::mhn_log_normalizing_const(alpha, beta, gamma, -1.0);
-      log_const = std::log(2.0) + (alpha / 2.0) * std::log(beta) - log_nc;
+      general.set(alpha, beta, gamma);
     }
   }
 
   double log_density_at(double xi, double alpha, double beta, double gamma) const {
-    if (Rcpp::NumericVector::is_na(xi)) return NA_REAL;
+    // NA and NaN are distinct in the base R d/p/q contract, and Rcpp's
+    // is_na does not separate them -- it is ISNAN -- so each is tested
+    // with the R_Is* predicate that isolates it.
+    if (R_IsNA(xi)) return NA_REAL;
+    if (R_IsNaN(xi)) return R_NaN;
     switch (kind) {
       case KIND_SQRT_GAMMA:
         if (xi > 0.0) {
@@ -77,51 +139,37 @@ struct ParamCache {
         return R_NegInf;
       case KIND_GENERAL:
       default:
-        if (xi > 0.0) {
-          return log_const + (alpha - 1.0) * std::log(xi)
-                 - beta * xi * xi + gamma * xi;
-        }
-        if (xi == 0.0) {
-          if (alpha > 1.0) return R_NegInf;
-          if (alpha < 1.0) return R_PosInf;
-          return log_const;  // alpha == 1 is normally caught by KIND_TRUNCATED_NORMAL
-        }
-        return R_NegInf;
+        return general.at(xi, alpha, beta, gamma);
     }
   }
 };
 
 // Fast path when all of alpha, beta, gamma are scalars.
-// Identical layout to the pre-vectorization implementation, kept hot
-// because this is the dominant call shape in practice (MCMC density
-// evaluations with fixed parameters).
+// Kept separate from the recycling loop because this is the dominant call
+// shape in practice: MCMC density evaluations at fixed parameters, where
+// the modular indexing and the cache check would be pure overhead.
 Rcpp::NumericVector dmhn_scalar_path(const Rcpp::NumericVector& x,
                                      double alpha, double beta, double gamma,
                                      bool log_p) {
-  if (mhn::is_sqrt_gamma(gamma)) {
+  if (mhn::is_sqrt_gamma(gamma, beta)) {
     return mhn::dmhn_sqrt_gamma(x, alpha, beta, log_p);
   }
   if (mhn::is_truncated_normal(alpha)) {
     return mhn::dmhn_truncated_normal(x, beta, gamma, log_p);
   }
 
-  const double log_nc = mhn::mhn_log_normalizing_const(alpha, beta, gamma, -1.0);
-  const double log_const = std::log(2.0) + (alpha / 2.0) * std::log(beta) - log_nc;
+  GeneralDensity general;
+  general.set(alpha, beta, gamma);
 
   const R_xlen_t n = x.size();
   Rcpp::NumericVector log_f(n, R_NegInf);
 
   for (R_xlen_t i = 0; i < n; ++i) {
     const double xi = x[i];
-    if (Rcpp::NumericVector::is_na(xi)) {
-      log_f[i] = NA_REAL;
-    } else if (xi > 0.0) {
-      log_f[i] = log_const + (alpha - 1.0) * std::log(xi)
-                 - beta * xi * xi + gamma * xi;
-    } else if (xi == 0.0) {
-      if (alpha > 1.0) log_f[i] = R_NegInf;
-      else if (alpha < 1.0) log_f[i] = R_PosInf;
-      // alpha == 1 is handled by the truncated-normal dispatch above.
+    if (ISNAN(xi)) {
+      log_f[i] = R_IsNA(xi) ? NA_REAL : R_NaN;
+    } else {
+      log_f[i] = general.at(xi, alpha, beta, gamma);
     }
   }
 
@@ -133,7 +181,7 @@ Rcpp::NumericVector dmhn_scalar_path(const Rcpp::NumericVector& x,
 
 }  // namespace
 
-// [[Rcpp::export(.dmhn_cpp)]]
+// [[Rcpp::export(.dmhn_cpp, rng = false)]]
 Rcpp::NumericVector dmhn_cpp(Rcpp::NumericVector x,
                              Rcpp::NumericVector alpha,
                              Rcpp::NumericVector beta,
@@ -158,14 +206,9 @@ Rcpp::NumericVector dmhn_cpp(Rcpp::NumericVector x,
   const R_xlen_t n = std::max({nx, na, nb, ng});
   Rcpp::NumericVector log_f(n);
 
-  // Cache the most recently used parameter triple to avoid recomputing
-  // log Psi when consecutive elements share parameters (common in
-  // grouped-parameter sweeps).
-  ParamCache cache;
-  double prev_a = std::numeric_limits<double>::quiet_NaN();
-  double prev_b = std::numeric_limits<double>::quiet_NaN();
-  double prev_g = std::numeric_limits<double>::quiet_NaN();
-  bool primed = false;
+  // One cache slot per distinct triple in the recycling cycle, so that
+  // log Psi is computed once per triple rather than once per element.
+  mhn::ParamSlots<ParamCache> slots(na, nb, ng, n);
 
   for (R_xlen_t i = 0; i < n; ++i) {
     const double xi = x[i % nx];
@@ -173,13 +216,8 @@ Rcpp::NumericVector dmhn_cpp(Rcpp::NumericVector x,
     const double b = beta[i % nb];
     const double g = gamma[i % ng];
 
-    if (!primed || a != prev_a || b != prev_b || g != prev_g) {
-      cache.recompute(a, b, g);
-      prev_a = a; prev_b = b; prev_g = g;
-      primed = true;
-    }
-
-    log_f[i] = cache.log_density_at(xi, a, b, g);
+    log_f[i] = slots.at(i, a, b, g).log_density_at(xi, a, b, g);
+    if ((i & 255) == 0) Rcpp::checkUserInterrupt();
   }
 
   if (!log_p) {

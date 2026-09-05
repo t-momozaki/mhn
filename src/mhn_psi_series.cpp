@@ -126,16 +126,20 @@ double psi_series(double alpha, double beta, double gamma, double tol) {
   const long K2 = lemma10_K(a, z, z2, C2, q, log_eps_quarter, /*is_A=*/false);
 
   if (K1 > K_MAX_GUARD || K2 > K_MAX_GUARD) {
-    Rcpp::stop("psi_series: truncation length exceeds K_MAX_GUARD; "
-               "consider tightening tol or using closed-form/integration paths");
+    // The Lemma 10(d) truncation length grows like z^2, so a large tilt asks
+    // for a summation that is neither affordable nor necessary: quadrature
+    // evaluates the same quantity in a bounded number of function calls.
+    // Report the refusal so the dispatcher can hand over, rather than raising
+    // -- an ordinary parameter set such as (2.5, 1e-4, 20) reaches this.
+    return std::numeric_limits<double>::quiet_NaN();
   }
 
   // Single allocation holding both series:
   //   [0 .. K1]                  -> A-series (K1 + 1 entries)
   //   [K1 + 1 .. K1 + K2 + 1]    -> B-series (K2 + 1 entries)
   // log Psi = log( sum_k A(k) + sum_k B(k) ) = log_sum_exp(combined pool).
-  // This fuses what was two log_sum_exp + one log_add_exp into a single
-  // max + sum scan.
+  // Pooling both series into one buffer lets a single max-and-sum scan do
+  // the work of two separate log-sum-exps and a combining step.
   const std::size_t n_A = static_cast<std::size_t>(K1) + 1;
   const std::size_t n_B = static_cast<std::size_t>(K2) + 1;
   std::vector<double> log_terms(n_A + n_B);

@@ -15,9 +15,9 @@
 
 namespace mhn {
 
-// C++-callable parameter validation.  Throws Rcpp::exception on failure
-// with the same error messages as the R-side `.check_mhn_params` so
-// existing regex-based expect_error() tests apply to both paths.
+// C++-callable parameter validation.  Throws Rcpp::exception on failure.
+// The messages are part of the package's documented contract, so keep them
+// in step with the ones asserted in tests/testthat/test-input-validation.R.
 void check_params_scalar(double alpha, double beta, double gamma);
 
 // Element-wise validation for the vectorized dmhn entry point.

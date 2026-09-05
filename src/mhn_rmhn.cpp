@@ -2,8 +2,8 @@
 // 2025, mhn_rtdr.cpp) and the Sun et al. (2023) Algorithm 1 / 3 paths
 // (mhn_sun.cpp), with closed-form shortcuts for the three special
 // cases identified in Sun Lemma 6.  Vectorized over parameter inputs
-// with the ParamCacheRmhn re-use pattern; auto-method decision rules
-// follow spec §8.7.3 and are spelled out below.
+// with the ParamCacheRmhn re-use pattern; the auto-method decision rules
+// are spelled out below.
 //
 // R-side wrapper: rmhn() in mhn/R/rmhn.R.
 
@@ -50,28 +50,24 @@ struct ParamCacheRmhn {
   mhn::SunAlgo1Setup   sun_a1;
   mhn::SunAlgo3Setup   sun_a3;
 
-  // Reserved for Step 3.7 diagnostic instrumentation.
-  int last_retries = 0;
-
   bool needs_rebuild(double a, double b, double g) const {
     return kind == Kind::NONE || a != prev_a || b != prev_b || g != prev_g;
   }
 };
 
 // The setup (rebuild_cache) does NOT consume R RNG state. This invariant
-// is critical for the vectorization-reproducibility test (spec Sec.12.7),
-// where rmhn(n, alpha=v) must equal vapply(v, function(a) rmhn(1, a)).
-// build_rtdr_envelope / build_sun_algo1 / build_sun_algo3 are all
-// deterministic Newton/closed-form computations (Step 3.1-3.3).
+// is what makes a vectorised call reproduce the element-wise loop:
+// rmhn(n, alpha = v) equals vapply(v, function(a) rmhn(1, a), 0) under one
+// seed.  build_rtdr_envelope / build_sun_algo1 / build_sun_algo3 are all
+// deterministic Newton or closed-form computations.
 //
 // samples_per_setup: estimated number of samples drawn per setup, used by
-// the auto path's gamma<0 dispatch (Step 3.7.3).  For scalar params this
-// equals n; for fully vectorized params it can be 1.  Other paths ignore
-// this parameter.
+// the auto path's gamma<0 dispatch.  For scalar parameters this equals n;
+// for fully vectorised parameters it can be 1.  Other paths ignore it.
 void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
                    const std::string& method,
                    R_xlen_t samples_per_setup) {
-  const bool is_sg = mhn::is_sqrt_gamma(g);
+  const bool is_sg = mhn::is_sqrt_gamma(g, b);
   const bool is_tn = mhn::is_truncated_normal(a);
 
   if (is_sg && is_tn) {
@@ -98,13 +94,15 @@ void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
     } else {
       // alpha < 1 && gamma > 0 with method="sun": should have been
       // caught by prescan_sun_compat. Defensive stop.
-      Rcpp::stop("internal: method=\"sun\" with alpha<1 and gamma>0 "
-                 "should have been caught by pre-scan");
+      Rcpp::stop("rmhn: internal invariant violated (an unsupported alpha < 1 "
+                 "with gamma > 0 reached the Sun sampler). Please report this "
+                 "to the package maintainer.");
     }
   } else {
-    // method == "auto".  Decision rules from spec Sec 8.7.3, benchmarked
-    // in mhn/inst/benchmarks/auto_dispatch.R (iter=50, seven n_per_call
-    // patterns 1/5/10/25/50/100/10000).
+    // method == "auto".  The thresholds below are benchmarked rather than
+    // theoretical; inst/benchmarks/auto_dispatch.R reproduces the
+    // measurement (50 iterations over seven per-call sample counts,
+    // 1/5/10/25/50/100/10000).
     //
     // Reaching this branch implies neither special case applies, so
     // |gamma| >= MHN_EPS (intercepted as SQRT_GAMMA above) and
@@ -116,8 +114,8 @@ void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
     //                              acceptance >= 0.8 for alpha >= 4;
     //                              wins uniformly across all n.
     //   gamma > 0 && alpha < 1 -> RTDR.  Sun A2 is not implemented in
-    //                              this package; spec Sec 3.4 [2]
-    //                              confirms this region for RTDR.
+    //                              this package, and RTDR's acceptance
+    //                              bound holds uniformly in this region.
     //   gamma < 0              -> n-dependent.  For small n (Gibbs) Sun
     //                              A3's lighter setup wins; for large n
     //                              its heavier per-sample cost (rgamma +
@@ -146,9 +144,9 @@ void rebuild_cache(ParamCacheRmhn& c, double a, double b, double g,
       // The Algorithm 3 -> RTDR crossover moves right as the shape shrinks:
       // it sits near n = 25 for alpha around 0.8 and above, but by
       // alpha = 0.01 it has moved out to n ~ 100, because Algorithm 3's
-      // setup gets relatively cheaper as the density spikes at the origin
-      // (measured in rtdr_sun_race.R).  Switching at 25 there would cost
-      // up to 10% for 25 <= n < 100, so very small shapes wait longer.
+      // setup gets relatively cheaper as the density spikes at the origin.
+      // Switching at 25 there would cost up to 10% for 25 <= n < 100, so
+      // very small shapes wait longer.
       const R_xlen_t n_switch = (a < 0.1) ? 100 : 25;
       if (samples_per_setup >= n_switch && a < 10.0) {
         c.kind = Kind::GENERAL_RTDR;
@@ -180,23 +178,37 @@ double sample_one(ParamCacheRmhn& c) {
     case Kind::GENERAL_SUN_A3:
       return mhn::sample_sun_algo3(c.sun_a3, nullptr);
     default:
-      Rcpp::stop("internal: ParamCacheRmhn not initialized");
+      Rcpp::stop("rmhn: internal invariant violated (sampler state not "
+                 "initialised). Please report this to the package maintainer.");
   }
 }
 
 // Pre-scan in method="sun" mode. Reject (alpha<1 && gamma>0) before
 // the main loop consumes any RNG state. NA / non-finite gamma elements
 // are skipped; they emit NA in the main loop.
+//
+// The rows the dispatcher answers with a closed form are skipped too.  Testing
+// the bare floats rejected parameters the sun path handles perfectly well:
+// rebuild_cache intercepts |alpha - 1| < sqrt(eps) as the truncated normal and
+// a negligible scale-free tilt as sqrt-Gamma before it ever reaches a Sun
+// algorithm, so rmhn(3, 1 - 1e-9, 1, 2, method = "sun") raised "not available
+// for alpha<1 and gamma>0" for a call that method = "auto" answers in closed
+// form.  Mirroring the dispatcher's own predicates keeps the two in step.
 void prescan_sun_compat(const Rcpp::NumericVector& alpha,
+                        const Rcpp::NumericVector& beta,
                         const Rcpp::NumericVector& gamma,
                         R_xlen_t n) {
   const R_xlen_t na = alpha.size();
+  const R_xlen_t nb = beta.size();
   const R_xlen_t ng = gamma.size();
   for (R_xlen_t i = 0; i < n; ++i) {
     const double a = alpha[i % na];
+    const double b = beta[i % nb];
     const double g = gamma[i % ng];
     if (Rcpp::NumericVector::is_na(a) || Rcpp::NumericVector::is_na(g)) continue;
     if (!std::isfinite(g)) continue;
+    if (Rcpp::NumericVector::is_na(b) || !std::isfinite(b)) continue;
+    if (mhn::is_sqrt_gamma(g, b) || mhn::is_truncated_normal(a)) continue;
     if (a < 1.0 && g > 0.0) {
       Rcpp::stop("Sun method not available for alpha<1 and gamma>0; "
                  "use method=\"rtdr\"");
@@ -224,7 +236,7 @@ Rcpp::NumericVector rmhn_cpp(int n,
   const R_xlen_t nn = static_cast<R_xlen_t>(n);
 
   if (method == "sun") {
-    prescan_sun_compat(alpha, gamma, nn);
+    prescan_sun_compat(alpha, beta, gamma, nn);
   }
 
   const R_xlen_t na = alpha.size();
@@ -232,32 +244,57 @@ Rcpp::NumericVector rmhn_cpp(int n,
   const R_xlen_t ng = gamma.size();
 
   // Estimate of samples drawn per cache rebuild, used by the auto path's
-  // gamma<0 dispatch (Step 3.7.3).  For scalar params (na=nb=ng=1) this
+  // gamma<0 dispatch.  For scalar params (na=nb=ng=1) this
   // equals n; for fully vectorized params (max(na,nb,ng) >= n) it is 1.
   // Partial vectorisation lands somewhere in between.
   const R_xlen_t L_param = std::max({na, nb, ng});
   const R_xlen_t samples_per_setup = (L_param >= nn) ? 1 : (nn / L_param);
 
   Rcpp::NumericVector out(nn);
-  ParamCacheRmhn cache;
+  R_xlen_t n_exhausted = 0;
 
-  for (R_xlen_t i = 0; i < nn; ++i) {
-    const double a = alpha[i % na];
-    const double b = beta[i % nb];
-    const double g = gamma[i % ng];
+  // The cache is scoped so that it is destroyed before the warning below is
+  // raised.  Under options(warn = 2) an R warning becomes an error and leaves
+  // the C++ frame by a long jump, which would not run the destructors of the
+  // vectors held inside the cached RTDR envelope.
+  {
+    ParamCacheRmhn cache;
 
-    if (Rcpp::NumericVector::is_na(a) ||
-        Rcpp::NumericVector::is_na(b) ||
-        Rcpp::NumericVector::is_na(g) ||
-        !std::isfinite(g)) {
-      out[i] = NA_REAL;
-      continue;
+    for (R_xlen_t i = 0; i < nn; ++i) {
+      const double a = alpha[i % na];
+      const double b = beta[i % nb];
+      const double g = gamma[i % ng];
+
+      // The documented contract is an NA draw for any non-finite parameter,
+      // not only for gamma: an infinite alpha or beta used to reach the
+      // sampler and come back as something the caller could not distinguish
+      // from a draw.  R_IsNA covers NA specifically; !isfinite covers NaN and
+      // the infinities.
+      if (!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(g)) {
+        out[i] = NA_REAL;
+        continue;
+      }
+
+      if (cache.needs_rebuild(a, b, g)) {
+        rebuild_cache(cache, a, b, g, method, samples_per_setup);
+      }
+      out[i] = sample_one(cache);
+      if ((i & 1023) == 0) Rcpp::checkUserInterrupt();
+      // A rejection sampler that exhausts its retry budget returns NaN; no
+      // successful draw ever does.  Count them and report once, rather than
+      // emitting one warning per failed draw.
+      // R_IsNA, not Rcpp::NumericVector::is_na: for doubles the latter is
+      // ISNAN, so the conjunction was identically false and the count never
+      // rose -- rmhn returned all-NaN vectors in complete silence.
+      if (ISNAN(out[i]) && !R_IsNA(out[i])) ++n_exhausted;
     }
+  }
 
-    if (cache.needs_rebuild(a, b, g)) {
-      rebuild_cache(cache, a, b, g, method, samples_per_setup);
-    }
-    out[i] = sample_one(cache);
+  if (n_exhausted > 0) {
+    Rcpp::warning("rmhn: the rejection sampler exhausted its retry budget for "
+                  "%lld of %lld draws, which were returned as NaN.",
+                  static_cast<long long>(n_exhausted),
+                  static_cast<long long>(nn));
   }
 
   return out;

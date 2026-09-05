@@ -22,8 +22,12 @@ Computes the excess kurtosis
 for \eqn{X \sim \mathrm{MHN}(\alpha, \beta, \gamma)}.
 }
 \details{
-Uses the moment recurrence (Sun et al., 2023, Lemma 2b) to compute
-raw moments up to fourth order, then converts to central moments.
+Integrates the fourth central moment against the unnormalised kernel,
+in the variable centred on its peak. Building it from raw moments by
+the Lemma 2b recurrence is exact algebra but cancels once the standard
+deviation is small next to the mean, which is what a large tilt
+produces; that expansion is kept only for the parameter values where
+the integration window cannot be established.
 }
 \examples{
 mhn_kurtosis(alpha = 2, beta = 1, gamma = 0)

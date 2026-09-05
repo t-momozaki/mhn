@@ -203,22 +203,24 @@ test_that("pmhn errors on invalid parameters", {
 # 9. Series-vs-integration cross-check across the accuracy grid
 # ============================================================
 #
-# Loads the most recent `cdf_series_accuracy_<YYYYMMDD>.csv` shipped
-# under inst/audits/results/ and asserts that the dispatch
-# (`pmhn(q, alpha, beta, gamma)`) agrees with the corresponding
-# Boost.Math `gauss_kronrod` / `tanh_sinh` integration result
-# (`val_integrate`) across every grid point.  The integration baseline
-# is the same independent path the dispatcher itself falls back to
-# when the Lemma 1b series triggers its cancellation guard, so
-# matching it is the strongest in-package regression we can run.
+# Loads the most recent `cdf_series_accuracy_<YYYYMMDD>.csv` shipped under
+# inst/audits/results/ and asserts that the dispatch
+# (`pmhn(q, alpha, beta, gamma)`) reproduces the reference across every grid
+# point.
 #
-# The mpfr reference in the same CSV (`val_ref`) is intentionally not
-# used here: for the most extreme (alpha = 10, |gamma| >= 15) corner
-# the mpfr-Psi via Lemma 10 series itself loses precision, occasionally
-# producing |F_mpfr| > 1.  Those rows would cause spurious failures
-# even though the dispatch result is mathematically correct.
+# The reference used is `val_ref_quad`, the arbitrary-precision quadrature on
+# the log axis.  It shares no code with the package: substituting x = exp(u)
+# lets it compute the normalising constant from scratch alongside the
+# numerator, so there is no Psi, no series, and no package call anywhere in it.
+#
+# The other two columns are deliberately not used.  `val_integrate` is the
+# package's own Boost.Math fallback, so comparing against it makes this a test
+# of the dispatcher against one of its own branches rather than against the
+# truth.  `val_ref` is the same Lemma 1b series in higher precision with log Psi
+# taken from the package, and it degrades where the series does: at alpha = 10
+# with |z| >= 10 it leaves [0, 1] entirely, reaching -71138 at gamma = -100.
 
-test_that("pmhn matches the Boost.Math integration across the cdf_series_accuracy grid", {
+test_that("pmhn matches an independent reference across the cdf_series_accuracy grid", {
   csv_dir <- system.file("audits", "results", package = "mhn")
   skip_if(csv_dir == "",
           "cdf_series_accuracy CSV is not present in this installation")
@@ -233,30 +235,30 @@ test_that("pmhn matches the Boost.Math integration across the cdf_series_accurac
   csv_path <- tail(sort(csv_files), 1L)
   df <- utils::read.csv(csv_path)
 
-  # Skip rows where F is well past the bulk of the distribution
-  # (|F| < 1e-10 or |1 - F| < 1e-10).  In those deep tails the
-  # truncated-normal closed form and the Boost.Math integration disagree
-  # not because either is wrong but because each tail probability sits
-  # at the double-precision floor where rounding noise dominates the
-  # comparison.
-  skip_row <- is.na(df$val_integrate) |
-                abs(df$val_integrate) < 1e-10 |
-                abs(1 - df$val_integrate) < 1e-10
-  df <- df[!skip_row, ]
+  skip_if(is.null(df$val_ref_quad),
+          "CSV predates the independent quadrature reference")
 
-  # Tolerance 1e-6 reflects the practical agreement between the Sun et
-  # al. (2023, Lemma 1b) series and the Boost.Math integration of the
-  # unnormalised density at double precision -- for the high-alpha,
-  # moderate-|gamma| corner the two independent paths intrinsically
-  # differ by O(1e-7).  The pre-audit silent bugs were 1e-1 to 1 in
-  # magnitude, so 1e-6 still catches every meaningful regression.
+  # Skip rows where F sits at the double-precision floor -- below 1e-10, or
+  # within 1e-10 of 1 -- since there a relative comparison measures rounding
+  # rather than accuracy.  The two tails are tested directly, and to much
+  # greater depth, in test-numerical-stability.R.
+  skip_row <- is.na(df$val_ref_quad) |
+                df$val_ref_quad < 1e-10 |
+                (1 - df$val_ref_quad) < 1e-10
+  df <- df[!skip_row, ]
+  expect_gt(nrow(df), 100)
+
+  # 1e-8 is the working tolerance the package is written to, and the
+  # dispatcher meets it across this grid with several digits to spare.  The
+  # defects this audit found were 1e-1 to 1 in magnitude, or returned exactly
+  # zero, so the bound is far tighter than it needs to be to catch a regression.
   for (i in seq_len(nrow(df))) {
     r <- df[i, ]
     val <- pmhn(r$q, alpha = r$alpha, beta = r$beta, gamma = r$gamma)
     expect_lt(
-      abs(val - r$val_integrate) / max(abs(r$val_integrate), 1e-300),
-      1e-6,
-      label = sprintf("pmhn(q=%g, alpha=%g, beta=%g, gamma=%g) vs val_integrate",
+      abs(val - r$val_ref_quad) / max(abs(r$val_ref_quad), 1e-300),
+      1e-8,
+      label = sprintf("pmhn(q=%g, alpha=%g, beta=%g, gamma=%g)",
                       r$q, r$alpha, r$beta, r$gamma)
     )
   }

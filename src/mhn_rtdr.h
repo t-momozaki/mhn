@@ -15,9 +15,10 @@ namespace mhn {
 // Region classification for the Gao & Wang (2025) RTDR algorithm.
 // The (alpha, gamma) cases follow Section 4 of that paper.
 enum RtdrRegion {
-  REGION_A   = 0,   // alpha >= 1, log-concave on f(x); T_0 tangent hat
-  REGION_BC  = 1,   // alpha < 1, on g(y): T_0 tangent hat if gamma <= 0
-                    //   (log-concave), else T_{-1/2} tangent hat (Thm 3.2)
+  REGION_A   = 0,   // alpha > 1, log-concave on f(x); T_0 tangent hat
+  REGION_BC  = 1,   // alpha <= 1 apart from the region D corner, on g(y):
+                    //   T_0 tangent hat if gamma <= 0 (log-concave), else
+                    //   T_{-1/2} tangent hat (Thm 3.2)
   REGION_D   = 2    // alpha < 1/2 and gamma > 2(1 - sqrt(1 - 2*alpha)),
                     //   inflection-point envelope
 };
@@ -71,7 +72,7 @@ struct RtdrEnvelope {
   double gamma_norm;      // = gamma / sqrt(beta)
   double sqrt_beta;       // scale-restoration factor
 
-  // Common envelope quantities (filled by region-specific setups in Step 3.2).
+  // Common envelope quantities, filled by the region-specific setups.
   double mode = 0.0;
   double log_dens_mode = 0.0;
   double t_l = 0.0, t_r = 0.0;
@@ -79,7 +80,7 @@ struct RtdrEnvelope {
   double slope_l = 0.0, slope_r = 0.0;
   bool simplified = false;       // region a only
 
-  // Region D specific (filled in Step 3.2).
+  // Region D specific.
   int K_eff = 0;
   double y_star = 0.0;
   double rho = 0.0;
@@ -87,22 +88,37 @@ struct RtdrEnvelope {
   std::vector<double> log_dens_break;
   std::vector<double> alpha_k;
   bool has_left_tangent_d = false;
+  // Set when a region-D setup could not place a single secant breakpoint and
+  // handed the triple to the region-BC construction instead.  Both envelopes
+  // are valid for the same density, so this is recorded rather than warned
+  // about; it is exposed for inspection because the theory says it should
+  // never happen.
+  bool fell_back_to_bc = false;
 
   // Piece table built by the region-specific setups and consumed by
-  // sample_rtdr.  Pieces appear left-to-right by support range; piece_log_area
-  // duplicates the log-areas for convenient access (and is what dispatchers
-  // typically need).  The two stay in lockstep (same indexing).
+  // sample_rtdr.  Pieces appear left-to-right by support range.
+  // piece_log_area mirrors pieces[i].log_area and exists so that the
+  // diagnostic dump, and the tests that read it, can inspect the areas
+  // without unpacking the piece table; the sampling path does not use it,
+  // selecting instead through piece_cum_area / piece_area_total below.
   std::vector<EnvelopePiece> pieces;
   std::vector<double> piece_log_area;
+
+  // Running sum of the piece areas, normalised by the largest log-area so the
+  // exponentials stay in range.  Selecting a piece needs only a uniform draw
+  // scaled by piece_area_total and a search in this table, so the per-draw
+  // cost is a search rather than a fresh pass over every piece.  Region D can
+  // hold thousands of pieces, which is where that matters.
+  std::vector<double> piece_cum_area;
+  double piece_area_total = 0.0;
 };
 
 // Build the envelope for the given (alpha, beta, gamma) triple.
-// Step 3.1 ships a stub that throws; region setups are filled in Step 3.2.
 RtdrEnvelope build_rtdr_envelope(double alpha, double beta, double gamma);
 
 // Draw one sample using the supplied envelope.  retries_out, if non-null,
 // is incremented by the number of accept/reject retries.  Implementation
-// in Step 3.2.
+// is in mhn_rtdr.cpp.
 double sample_rtdr(const RtdrEnvelope& env, int* retries_out = nullptr);
 
 }  // namespace mhn

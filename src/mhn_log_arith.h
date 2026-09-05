@@ -25,15 +25,6 @@ inline double log_sum_exp(const std::vector<double>& log_x) {
   return m + std::log(s);
 }
 
-// log(exp(a) + exp(b)) with numerical stability.  Pairs the larger value
-// with std::log1p(exp(smaller - larger)) so the exp() argument is always
-// non-positive (no overflow) and small differences are preserved by
-// log1p rather than collapsing to log(1.0) = 0.
-inline double log_add_exp(double a, double b) {
-  if (a > b) return a + std::log1p(std::exp(b - a));
-  return b + std::log1p(std::exp(a - b));
-}
-
 }  // namespace mhn
 
 #endif  // MHN_LOG_ARITH_H

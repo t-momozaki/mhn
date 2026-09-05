@@ -29,8 +29,10 @@ struct SunAlgo3Setup {
   double m;                  // matching point (after Newton refinement)
   double r;                  // = (beta*m + |gamma|) / (2*beta*m + |gamma|)
   double shape;              // = alpha * r
-  double rate;               // = m * (beta*m + |gamma|)
-  double m_betam_gam;        // = m * (beta*m + |gamma|), pre-cached
+  // = m * (beta*m + |gamma|).  This is both the rate of the proposal and
+  // the coefficient of the acceptance test; it was carried twice, under two
+  // names assigned the same expression.
+  double rate;
   double m_init;             // diagnostic: m before Newton refinement
   bool used_inflex_heuristic;// true when alpha > 1.1 elaborate path is taken
 };

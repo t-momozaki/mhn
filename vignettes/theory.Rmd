@@ -376,15 +376,24 @@ $2(1 - \sqrt{1 - 2\alpha})$.
 
 | Region | $\alpha$        | $\gamma$             | Envelope target              | Reference                                          |
 |:------:|-----------------|----------------------|------------------------------|----------------------------------------------------|
-| (a)    | $\geq 1$        | any                  | $f$ log-concave              | Gao & Wang (2025, Theorem 3.1)                     |
-| (b)    | $[1/2,\, 1)$    | any                  | $g$ $T_{-1/2}$-concave       | Gao & Wang (2025, Corollary 3.1; Theorem 3.2)      |
-| (c)    | $(0,\, 1/2)$    | $\leq 2(1 - \sqrt{1 - 2\alpha})$ | $g$ $T_{-1/2}$-concave | Gao & Wang (2025, Lemma 3.5; Theorem 3.2)        |
+| (a)    | $> 1$           | any                  | $f$ log-concave              | Gao & Wang (2025, Theorem 3.1)                     |
+| (b)    | $[1/2,\, 1]$    | any                  | $g$ log-concave if $\gamma \leq 0$, else $T_{-1/2}$-concave | Gao & Wang (2025, Corollary 3.1; Theorem 3.2)      |
+| (c)    | $(0,\, 1/2)$    | $\leq 2(1 - \sqrt{1 - 2\alpha})$ | $g$ log-concave if $\gamma \leq 0$, else $T_{-1/2}$-concave | Gao & Wang (2025, Lemma 3.5; Theorem 3.2)        |
 | (d)    | $(0,\, 1/2)$    | $> 2(1 - \sqrt{1 - 2\alpha})$    | $g$ with inflection at $y^{*} = \log(\gamma/4)$ | Gao & Wang (2025, Theorem 4.4)      |
 
 Region (a) is the easiest: $f$ is log-concave, two tangent lines
-and a constant segment suffice. Regions (b) and (c) reuse the same
-$T_{-1/2}$ envelope on $g$, with only the validity argument
-differing. Region (d) is the hardest — $g$ has an inflection
+and a constant segment suffice. The boundary $\alpha = 1$ is handled
+in region (b) rather than (a): $f$ is log-concave there too, but the
+envelope of region (a) is built around an interior mode in $x$, and at
+$\alpha = 1$ with $\gamma \leq 0$ there is none. The mode of $g$ on the
+log axis is strictly positive for every $\alpha > 0$, so the region (b)
+construction applies without a special case. Regions (b) and (c) share one
+construction on $g$; the sign of $\gamma$ picks the transform. Since
+$\mathrm{d}^{2} \log g / \mathrm{d} y^{2} = \gamma e^{y} - 4 e^{2y}$ is
+negative for every $y$ exactly when $\gamma \leq 0$, a $T_0$ log-tangent
+hat serves on that side, while for $\gamma > 0$ only $T_{-1/2}$-concavity
+survives and the hat switches to inverse-square pieces. Region (d) is the
+hardest — $g$ has an inflection
 point and the envelope needs $K$ secant segments on the
 log-convex side, with $K$ growing logarithmically in $\gamma$.
 
@@ -400,7 +409,8 @@ the contact points lie *anywhere* inside a fixed interval — namely
 $$\log\!\frac{f(m)}{f(t)} \in
  \begin{cases}
    [0.46,\, 2.49] & f \text{ log-concave (region (a))}, \\
-   [0.93,\, 1.99] & g \text{ $T_{-1/2}$-concave (regions (b), (c))}.
+   [0.46,\, 2.49] & g \text{ log-concave (regions (b), (c), } \gamma \leq 0), \\
+   [0.93,\, 1.99] & g \text{ $T_{-1/2}$-concave (regions (b), (c), } \gamma > 0).
  \end{cases}$$
 
 Setup is therefore a handful of cheap iterations that terminate as
@@ -443,14 +453,18 @@ data.frame(cases,
            theoretical_mean = round(theoretical, 4))
 ```
 
-The four rows hit the right means to two-to-three decimal places —
-about the sampling tolerance at $n = 5000$.
+The four rows hit the right means to within about two Monte-Carlo
+standard errors — at $n = 5000$ those errors run from $0.005$ to
+$0.011$, so the gaps land in the second decimal place, not the third.
 
 ## The `rmhn(method = "auto")` dispatch
 
-`rmhn` exposes three values of `method`: `"sun"` (force the Sun
-Algorithm 1 / 3 path), `"rtdr"` (force the Gao & Wang RTDR path),
-and `"auto"` (default). The `"auto"` route is the package's
+`rmhn` exposes three values of `method`: `"sun"` (the Sun
+Algorithm 1 / 3 path), `"rtdr"` (the Gao & Wang RTDR path),
+and `"auto"` (default). The first two select the sampler used for the
+general case; the closed-form special cases below are taken first
+whatever `method` is set to, since they are exact and cheaper than any
+rejection scheme. The `"auto"` route is the package's
 recommendation; it composes the four shortcuts above into one
 decision tree (this is the Step 3.7.3 final form, confirmed by the
 benchmarks under `inst/benchmarks/`):
@@ -472,8 +486,10 @@ benchmarks under `inst/benchmarks/`):
        │      →  Sun Algorithm 1                    (Sun et al. 2023, Theorems 1, 2)
        │
        └─ gamma < 0
-              ├─ samples_per_setup ≥ 25  →  RTDR    (region (a))
-              └─ samples_per_setup < 25  →  Sun Algorithm 3
+              ├─ alpha ≥ 10                     →  Sun Algorithm 3
+              ├─ samples_per_setup ≥ N*         →  RTDR    (regions (a)-(c))
+              └─ samples_per_setup < N*         →  Sun Algorithm 3
+                 where N* = 25, raised to 100 for alpha < 0.1
 ```
 
 Write $S$ for the `samples_per_setup` quantity in the last branch,
@@ -516,11 +532,18 @@ trade-off:
 When $S$ is large the per-proposal term dominates and RTDR wins;
 when it is small — the Gibbs case where each iteration redraws
 $(\alpha, \beta, \gamma)$ — the setup term dominates and Sun
-Algorithm 3 wins. The crossover at 25 is
-the round value chosen inside the empirical break-even window
-$n \in [10,\, 25]$ observed at every one of the 20 surveyed
-$(\alpha, \gamma)$ cells in
+Algorithm 3 wins. The base crossover $N^{*} = 25$ is the round value
+chosen inside the empirical break-even window $n \in [10,\, 25]$ observed
+across the surveyed $(\alpha, \gamma)$ grid in
 [inst/benchmarks/auto_dispatch.R](https://github.com/t-momozaki/mhn/blob/main/inst/benchmarks/auto_dispatch.R).
+
+Two refinements sit on top of it. The crossover moves to larger batches as
+the shape shrinks — Algorithm 3's setup gets relatively cheaper as the
+density spikes at the origin — so $N^{*}$ is raised to 100 for
+$\alpha < 0.1$. And for $\alpha \ge 10$ Algorithm 3's per-proposal cost
+falls below RTDR's, because RTDR builds a fuller envelope as the mode
+sharpens, so it wins in the batch regime too and is used there regardless
+of $S$.
 
 A small concrete demonstration: with `set.seed` aligned,
 `method = "auto"` and the *expected* forced method produce

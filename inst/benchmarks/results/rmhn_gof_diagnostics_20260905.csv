@@ -1,2 +1,2 @@
 "timestamp","r_version","platform","os","mhn_version","mode","n","seed","cells","cells_evaluated","total_secs","ks_fail_count","min_ks_pvalue","mean_fail_count","max_abs_mean_z","var_fail_count","max_var_rel_err"
-"2026-07-10T08:12:54+0900","4.5.1","aarch64-apple-darwin20","macOS Tahoe 26.3.1","0.1.1","FULL",10000,1,105,101,60.14,0,0.144247687679196,0,1.6654875986193,0,0.072411316112452
+"2026-09-05T14:33:16+0900","4.5.1","aarch64-apple-darwin20","macOS Tahoe 26.5.2","0.1.1","FULL",10000,1,792,747,4743.52,0,0.10325204474679,0,1.66548759861943,0,0.229252620880702

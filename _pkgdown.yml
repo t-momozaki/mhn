@@ -1,4 +1,61 @@
 url: https://t-momozaki.github.io/mhn/
+
 template:
   bootstrap: 5
+  bslib:
+    primary: "#1c5d99"
+  math-rendering: mathjax
 
+home:
+  title: The Modified Half-Normal Distribution
+  description: >
+    Density, distribution, quantile and random generation for the modified
+    half-normal distribution, with moments, mode, and the Fox-Wright Psi
+    function that normalises it.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+
+reference:
+  - title: Distribution functions
+    desc: >
+      Density, distribution, quantile and random generation, following the
+      argument conventions of base R's stats package.  All four are vectorised
+      over the evaluation argument and over the parameters, with the usual
+      recycling rule.
+    contents:
+      - dmhn
+      - pmhn
+      - qmhn
+      - rmhn
+
+  - title: Summary statistics
+    desc: >
+      Closed-form summaries of a single MHN(alpha, beta, gamma) law.  These
+      take one parameter triple rather than recycling vectors.
+    contents:
+      - mhn_mean
+      - mhn_var
+      - mhn_skewness
+      - mhn_kurtosis
+      - mhn_mode
+
+  - title: Package overview
+    contents:
+      - mhn-package
+
+articles:
+  - title: Articles
+    navbar: ~
+    contents:
+      - introduction
+      - theory
+
+authors:
+  Tomotaka Momozaki:
+    href: https://github.com/t-momozaki
+
+development:
+  mode: auto

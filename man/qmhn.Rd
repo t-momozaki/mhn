@@ -53,7 +53,7 @@ When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the
 quantile is evaluated element-wise.  The Fox-Wright \eqn{\Psi}
 normalizing constant and moments \eqn{E(X)}, \eqn{\mathrm{Var}(X)}
 (used to size the root-finder bracket) are recomputed only when
-consecutive elements present a different \eqn{(\alpha, \beta, \gamma)}
+the recycling cycle presents a distinct \eqn{(\alpha, \beta, \gamma)}
 triple.
 }
 \examples{

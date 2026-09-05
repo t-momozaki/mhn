@@ -41,7 +41,8 @@ run_sun_algo1 <- function(alpha, beta, gamma, n = 10000, seed = 1L) {
 
 test_that("Algo 1: KS, mean/var, sample shape across representative points", {
   skip_on_cran()
-  cases <- list(c(3, 1, 2), c(5, 1, 5), c(10, 1, 10), c(2, 1, 0.5))
+  cases <- list(c(3, 1, 2), c(5, 1, 5), c(10, 1, 10), c(2, 1, 0.5),
+                c(3, 4, 4), c(5, 0.25, 2.5))
   for (params in cases) {
     r <- run_sun_algo1(params[1], params[2], params[3])
     info <- sprintf("alpha=%g, gamma=%g", params[1], params[3])
@@ -105,7 +106,8 @@ run_sun_algo3 <- function(alpha, beta, gamma, n = 10000, seed = 1L) {
 
 test_that("Algo 3 alpha > 1: KS + acceptance >= 1/sqrt(2) (Theorem 4c)", {
   skip_on_cran()
-  for (params in list(c(3, 1, -2), c(5, 1, -5), c(1.5, 1, -1))) {
+  for (params in list(c(3, 1, -2), c(5, 1, -5), c(1.5, 1, -1),
+                      c(3, 4, -4), c(5, 0.01, -0.5), c(1.05, 100, -10))) {
     r <- run_sun_algo3(params[1], params[2], params[3])
     info <- sprintf("alpha=%g, gamma=%g", params[1], params[3])
     expect_gt(r$ks$p.value, 0.001)
@@ -144,14 +146,29 @@ test_that("Algo 3: rejects gamma > 0", {
 })
 
 test_that("Algo 3 dump exposes consistent fields and ordering invariants", {
-  d <- mhn:::.dump_sun_algo3_cpp(3, 1, -2)
-  expect_gt(d$m, 0)
-  expect_gt(d$m_init, 0)
-  expect_gt(d$r, 0); expect_lt(d$r, 1)   # r in (0, 1) by formula
-  expect_gt(d$shape, 0)
-  expect_gt(d$rate, 0)
-  expect_lt(abs(d$m_betam_gam - d$rate), 1e-12)  # both equal m*(beta*m+|gamma|)
-  expect_true(is.logical(d$used_inflex_heuristic))
+  # The fields are checked against the Sun et al. (2023, Supplementary Section
+  # 2.17) formulas recomputed here in R.  Comparing a dumped field to a sibling
+  # dumped field cannot fail -- the setup assigns both from one expression --
+  # and one such assertion did exactly that, against a second copy of the rate
+  # that has since been removed.
+  for (par in list(c(3, 1, -2), c(5, 0.25, -5), c(1.05, 4, -0.5),
+                   c(100, 1, -10))) {
+    alpha <- par[1]; beta <- par[2]; gamma <- par[3]
+    d <- mhn:::.dump_sun_algo3_cpp(alpha, beta, gamma)
+    g_abs <- abs(gamma)
+    A <- beta * d$m + g_abs
+    B <- 2 * beta * d$m + g_abs
+    info <- sprintf("alpha=%g beta=%g gamma=%g", alpha, beta, gamma)
+
+    expect_gt(d$m, 0)
+    expect_gt(d$m_init, 0)
+    expect_gt(d$r, 0); expect_lt(d$r, 1)
+    expect_equal(d$r, A / B, tolerance = 1e-12, info = info)
+    expect_equal(d$shape, alpha * A / B, tolerance = 1e-12, info = info)
+    expect_equal(d$rate, d$m * (beta * d$m + g_abs), tolerance = 1e-12,
+                 info = info)
+    expect_true(is.logical(d$used_inflex_heuristic))
+  }
 })
 
 # =====================================================================

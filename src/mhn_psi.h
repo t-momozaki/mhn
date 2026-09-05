@@ -44,6 +44,8 @@ long lemma10_C(double alpha_adj, double z2, double q,
 //  not stated in Sun et al. (2023), but follows immediately from
 //  comparing the Lemma 1(b) CDF term to A(k) and B(k) defined in
 //  Lemma 10.)
+// Truncation length for the Lemma 10(d) bound.  `a` is the Fox-Wright first
+// index alpha/2 for both branches; the B branch adds its own +1/2.
 long lemma10_K(double a, double z, double z2, long C, double q,
                double log_eps_quarter, bool is_A);
 
@@ -52,8 +54,14 @@ long lemma10_K(double a, double z, double z2, long C, double q,
 // Returns log Psi[alpha/2, gamma/sqrt(beta)].
 double psi_integrate(double alpha, double beta, double gamma, double tol);
 
+// log Psi[alpha/2, z] - z^2/4 with z = gamma / sqrt(beta), for z > 0.  See the
+// definition in mhn_psi_integrate.cpp: the subtracted term is the one that
+// cancels against the kernel exponent, and removing it from both analytically
+// is what keeps the log density accurate at a large tilt.
+double psi_integrate_shifted(double alpha, double beta, double gamma,
+                             double tol);
+
 // Dispatcher: log Psi[alpha/2, gamma/sqrt(beta)] for all (alpha, beta, gamma).
-// Mirrors R-side `.mhn_log_normalizing_const`.
 double mhn_log_normalizing_const(double alpha, double beta, double gamma,
                                  double tol);
 

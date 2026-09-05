@@ -90,13 +90,13 @@ rmhn(5, alpha = c(1, 2, 3), beta = 1, gamma = c(0, 1, -1))  # recycled
 | Function          | Description                                                         |
 |-------------------|---------------------------------------------------------------------|
 | `mhn_mean()`      | $E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])$, with $z = \gamma/\sqrt{\beta}$ |
-| `mhn_var()`       | Variance from Sun et al. (2023, Lemma 2c)                           |
+| `mhn_var()`       | Variance, Sun et al. (2023, Lemma 2c) where that form is well conditioned |
 | `mhn_skewness()`  | Skewness $\gamma_1$                                                 |
 | `mhn_kurtosis()`  | Excess kurtosis $\gamma_2$                                          |
 | `mhn_mode()`      | Mode (returns `NA` when no interior mode exists)                    |
 
 ```r
-mhn_mean(2, 1, 1)       # 1.16...
+mhn_mean(2, 1, 1)       # 1.1337...
 mhn_skewness(2, 1, 1)   # positive (density right-skewed)
 mhn_mode(0.5, 1, -1)    # NA: monotone-decreasing density
 ```
@@ -123,18 +123,28 @@ Region γ > 0, α > 1:
                                  closed-form optimal parameters)
 
 Region γ ≤ 0:
-  n-dependent (the crossover at 25 is benchmarked, not theoretical;
-  see vignette("theory") §7 for the cost-decomposition derivation):
-    samples per setup ≥ 25  -> RTDR (lighter per-proposal cost)
-    samples per setup <  25 -> Sun Algorithm 3 (lighter setup cost)
+  n-dependent (the crossover is benchmarked, not theoretical; see
+  vignette("theory") for the cost-decomposition derivation):
+    α ≥ 10                        -> Sun Algorithm 3 (lower per-proposal
+                                     cost than RTDR once the mode sharpens)
+    samples per setup ≥ N*, α < 10 -> RTDR (lighter per-proposal cost)
+    samples per setup <  N*        -> Sun Algorithm 3 (lighter setup cost)
+  where N* = 25, raised to 100 for α < 0.1: the crossover moves to larger
+  batches as the shape shrinks.
 ```
 
-Forcing a specific sampler:
+Choosing a specific sampler:
 
 ```r
-rmhn(1000, 2, 1, 1, method = "rtdr")   # always RTDR
-rmhn(1000, 2, 1, 1, method = "sun")    # always Sun (errors for α < 1, γ > 0)
+rmhn(1000, 2, 1, 1, method = "rtdr")   # RTDR for the general case
+rmhn(1000, 2, 1, 1, method = "sun")    # Sun for the general case
+                                       # (errors for α < 1, γ > 0)
 ```
+
+`method` selects the sampler used for the general case. The closed-form
+special cases are taken first whatever it is set to: a negligible tilt draws
+from the square root of a Gamma, and α ≈ 1 from a truncated normal. Both are
+exact and cheaper than any rejection scheme.
 
 ## Documentation
 
@@ -150,10 +160,10 @@ vignettes, is published at <https://t-momozaki.github.io/mhn/>.
 ## Citation
 
 If you use this package in academic work, please cite both the package
-and the methodology papers (`citation("mhn")` prints all three):
+and the methodology papers (`citation("mhn")` prints all four):
 
 * Momozaki, T. (2026). *mhn: The Modified Half-Normal Distribution.*
-  R package version 0.1.0.
+  R package version 0.1.1.
 * Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
   distribution: Properties and an efficient sampling scheme.
   *Communications in Statistics — Theory and Methods*, 52(5),
