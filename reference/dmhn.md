@@ -39,8 +39,10 @@ dmhn(x, alpha = 1, beta = 1, gamma = 0, log = FALSE)
 
 A numeric vector. The output length equals
 `max(length(x), length(alpha), length(beta), length(gamma))`; each input
-is recycled to that length following standard R recycling rules. For
-`x < 0`, the density is 0 (`-Inf` if `log = TRUE`).
+is recycled to that length following standard R recycling rules, with
+one exception: a zero-length `alpha`, `beta` or `gamma` is an error
+rather than a `numeric(0)` result. Only a zero-length `x` returns
+`numeric(0)`. For `x < 0`, the density is 0 (`-Inf` if `log = TRUE`).
 
 ## Details
 
@@ -64,7 +66,7 @@ underflow/overflow.
 
 When any of `alpha`, `beta`, `gamma` is a vector, the density is
 evaluated element-wise. The Fox-Wright \\\Psi\\ normalizing constant is
-recomputed only when consecutive elements present a different \\(\alpha,
+computed once per distinct triple in the present a different \\(\alpha,
 \beta, \gamma)\\ triple, so passing grouped parameters is significantly
 faster than calling `dmhn` inside an R loop.
 

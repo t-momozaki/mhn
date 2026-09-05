@@ -60,11 +60,11 @@ et al., 2023, Lemma 1b; equivalent to the paper's form via the identity
 lower incomplete gamma function used in the paper). The infinite sum is
 truncated at the constructive bound \\K = \max\\K_1, K_2\\\\ from Sun et
 al. (2023), Supplementary Lemma 10(d), which makes the truncation
-residual bounded by the user's tolerance divided by \\\Psi\\. When
-double-precision cancellation in the alternating-sign accumulator for
-\\\gamma \< 0\\ would exceed that tolerance, the series is replaced by a
-Gauss-Kronrod (or tanh-sinh for \\\alpha \< 1\\) numerical integration
-of the density on \\\[0, q\]\\.
+residual bounded by the working tolerance `sqrt(.Machine$double.eps)`
+divided by \\\Psi\\. When double-precision cancellation in the
+alternating-sign accumulator for \\\gamma \< 0\\ would exceed that
+tolerance, the series is replaced by a Gauss-Kronrod (or tanh-sinh for
+\\\alpha \< 1\\) numerical integration of the density on \\\[0, q\]\\.
 
 Special cases are detected and dispatched to standard R primitives:
 
@@ -73,8 +73,8 @@ Special cases are detected and dispatched to standard R primitives:
 - \\\alpha = 1\\: truncated-normal CDF via `pnorm`
 
 When any of `alpha`, `beta`, `gamma` is a vector, the CDF is evaluated
-element-wise. The Fox-Wright \\\Psi\\ normalizing constant is recomputed
-only when consecutive elements present a different \\(\alpha, \beta,
+element-wise. The Fox-Wright \\\Psi\\ normalizing constant is computed
+once per distinct triple in the recycling different \\(\alpha, \beta,
 \gamma)\\ triple, so passing grouped parameters is significantly faster
 than calling `pmhn` inside an R loop.
 

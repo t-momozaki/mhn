@@ -7,26 +7,24 @@ mode.
 
 ## Overview
 
-The MHN($`\alpha`$, $`\beta`$, $`\gamma`$) distribution has support on
-$`(0, \infty)`$ and density
+The MHN(\\\alpha\\, \\\beta\\, \\\gamma\\) distribution has support on
+\\(0, \infty)\\ and density
 
-``` math
-f(x \mid \alpha, \beta, \gamma) \;\propto\;
-  x^{\alpha - 1} \exp(-\beta x^2 + \gamma x), \qquad x > 0,
-```
+\\f(x \mid \alpha, \beta, \gamma) \\\propto\\ x^{\alpha - 1} \exp(-\beta
+x^2 + \gamma x), \qquad x \> 0,\\
 
-where $`\alpha, \beta > 0`$ and $`\gamma \in \mathbb{R}`$. It arises as
+where \\\alpha, \beta \> 0\\ and \\\gamma \in \mathbb{R}\\. It arises as
 a conditional posterior in Bayesian MCMC for several common models
-(skew-elliptical regression, $`t`$-shrinkage priors, log-concave
+(skew-elliptical regression, \\t\\-shrinkage priors, log-concave
 likelihoods with a quadratic Bayesian penalty) and generalises a number
 of familiar one-sided distributions:
 
 | Constraint | Reduction |
 |----|----|
-| $`\gamma = 0`$ | $`\sqrt{\mathrm{Gamma}}`$: $`X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)`$ |
-| $`\alpha = 1`$ | Truncated normal on $`(0, \infty)`$, mean $`\gamma / (2\beta)`$ |
-| $`\alpha = 1,\; \gamma = 0`$ | Half-normal with scale $`1/\sqrt{2\beta}`$ |
-| $`\beta \to 0^+,\; \gamma < 0`$ | $`\mathrm{Gamma}(\alpha, -\gamma)`$ (limit) |
+| \\\gamma = 0\\ | \\\sqrt{\mathrm{Gamma}}\\: \\X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\\ |
+| \\\alpha = 1\\ | Truncated normal on \\(0, \infty)\\, mean \\\gamma / (2\beta)\\ |
+| \\\alpha = 1,\\ \gamma = 0\\ | Half-normal with scale \\1/\sqrt{2\beta}\\ |
+| \\\beta \to 0^+,\\ \gamma \< 0\\ | \\\mathrm{Gamma}(\alpha, -\gamma)\\ (limit) |
 
 The package implements the efficient samplers of **Sun, Kong & Pal
 (2023)** (Algorithms 1 / 3) and the **Gao & Wang (2025)** Relaxed
@@ -88,15 +86,15 @@ rmhn(5, alpha = c(1, 2, 3), beta = 1, gamma = c(0, 1, -1))  # recycled
 
 | Function | Description |
 |----|----|
-| [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md) | $`E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])`$, with $`z = \gamma/\sqrt{\beta}`$ |
-| [`mhn_var()`](https://t-momozaki.github.io/mhn/reference/mhn_var.md) | Variance from Sun et al. (2023, Lemma 2c) |
-| [`mhn_skewness()`](https://t-momozaki.github.io/mhn/reference/mhn_skewness.md) | Skewness $`\gamma_1`$ |
-| [`mhn_kurtosis()`](https://t-momozaki.github.io/mhn/reference/mhn_kurtosis.md) | Excess kurtosis $`\gamma_2`$ |
+| [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md) | \\E(X) = \Psi\[(\alpha+1)/2,\\ z\] \\/\\ (\sqrt{\beta}\\ \Psi\[\alpha/2,\\ z\])\\, with \\z = \gamma/\sqrt{\beta}\\ |
+| [`mhn_var()`](https://t-momozaki.github.io/mhn/reference/mhn_var.md) | Variance, Sun et al. (2023, Lemma 2c) where that form is well conditioned |
+| [`mhn_skewness()`](https://t-momozaki.github.io/mhn/reference/mhn_skewness.md) | Skewness \\\gamma_1\\ |
+| [`mhn_kurtosis()`](https://t-momozaki.github.io/mhn/reference/mhn_kurtosis.md) | Excess kurtosis \\\gamma_2\\ |
 | [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md) | Mode (returns `NA` when no interior mode exists) |
 
 ``` r
 
-mhn_mean(2, 1, 1)       # 1.16...
+mhn_mean(2, 1, 1)       # 1.1337...
 mhn_skewness(2, 1, 1)   # positive (density right-skewed)
 mhn_mode(0.5, 1, -1)    # NA: monotone-decreasing density
 ```
@@ -122,18 +120,28 @@ benchmarked in `inst/benchmarks/auto_dispatch.R`:
                                      closed-form optimal parameters)
 
     Region γ ≤ 0:
-      n-dependent (the crossover at 25 is benchmarked, not theoretical;
-      see vignette("theory") §7 for the cost-decomposition derivation):
-        samples per setup ≥ 25  -> RTDR (lighter per-proposal cost)
-        samples per setup <  25 -> Sun Algorithm 3 (lighter setup cost)
+      n-dependent (the crossover is benchmarked, not theoretical; see
+      vignette("theory") for the cost-decomposition derivation):
+        α ≥ 10                        -> Sun Algorithm 3 (lower per-proposal
+                                         cost than RTDR once the mode sharpens)
+        samples per setup ≥ N*, α < 10 -> RTDR (lighter per-proposal cost)
+        samples per setup <  N*        -> Sun Algorithm 3 (lighter setup cost)
+      where N* = 25, raised to 100 for α < 0.1: the crossover moves to larger
+      batches as the shape shrinks.
 
-Forcing a specific sampler:
+Choosing a specific sampler:
 
 ``` r
 
-rmhn(1000, 2, 1, 1, method = "rtdr")   # always RTDR
-rmhn(1000, 2, 1, 1, method = "sun")    # always Sun (errors for α < 1, γ > 0)
+rmhn(1000, 2, 1, 1, method = "rtdr")   # RTDR for the general case
+rmhn(1000, 2, 1, 1, method = "sun")    # Sun for the general case
+                                       # (errors for α < 1, γ > 0)
 ```
+
+`method` selects the sampler used for the general case. The closed-form
+special cases are taken first whatever it is set to: a negligible tilt
+draws from the square root of a Gamma, and α ≈ 1 from a truncated
+normal. Both are exact and cheaper than any rejection scheme.
 
 ## Documentation
 
@@ -153,10 +161,10 @@ vignettes, is published at <https://t-momozaki.github.io/mhn/>.
 ## Citation
 
 If you use this package in academic work, please cite both the package
-and the methodology papers (`citation("mhn")` prints all three):
+and the methodology papers (`citation("mhn")` prints all four):
 
 - Momozaki, T. (2026). *mhn: The Modified Half-Normal Distribution.* R
-  package version 0.1.0.
+  package version 0.1.1.
 - Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
   distribution: Properties and an efficient sampling scheme.
   *Communications in Statistics — Theory and Methods*, 52(5), 1591–1613.
@@ -179,20 +187,15 @@ MIT © 2026 Tomotaka Momozaki. See
 
 # Package index
 
-## All functions
+## Distribution functions
+
+Density, distribution, quantile and random generation, following the
+argument conventions of base R’s stats package. All four are vectorised
+over the evaluation argument and over the parameters, with the usual
+recycling rule.
 
 - [`dmhn()`](https://t-momozaki.github.io/mhn/reference/dmhn.md) :
   Density of the Modified Half-Normal Distribution
-- [`mhn_kurtosis()`](https://t-momozaki.github.io/mhn/reference/mhn_kurtosis.md)
-  : Excess Kurtosis of the Modified Half-Normal Distribution
-- [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md)
-  : Mean of the Modified Half-Normal Distribution
-- [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md)
-  : Mode of the Modified Half-Normal Distribution
-- [`mhn_skewness()`](https://t-momozaki.github.io/mhn/reference/mhn_skewness.md)
-  : Skewness of the Modified Half-Normal Distribution
-- [`mhn_var()`](https://t-momozaki.github.io/mhn/reference/mhn_var.md) :
-  Variance of the Modified Half-Normal Distribution
 - [`pmhn()`](https://t-momozaki.github.io/mhn/reference/pmhn.md) :
   Distribution Function of the Modified Half-Normal Distribution
 - [`qmhn()`](https://t-momozaki.github.io/mhn/reference/qmhn.md) :
@@ -200,9 +203,31 @@ MIT © 2026 Tomotaka Momozaki. See
 - [`rmhn()`](https://t-momozaki.github.io/mhn/reference/rmhn.md) :
   Random Generation from the Modified Half-Normal Distribution
 
+## Summary statistics
+
+Closed-form summaries of a single MHN(alpha, beta, gamma) law. These
+take one parameter triple rather than recycling vectors.
+
+- [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md)
+  : Mean of the Modified Half-Normal Distribution
+- [`mhn_var()`](https://t-momozaki.github.io/mhn/reference/mhn_var.md) :
+  Variance of the Modified Half-Normal Distribution
+- [`mhn_skewness()`](https://t-momozaki.github.io/mhn/reference/mhn_skewness.md)
+  : Skewness of the Modified Half-Normal Distribution
+- [`mhn_kurtosis()`](https://t-momozaki.github.io/mhn/reference/mhn_kurtosis.md)
+  : Excess Kurtosis of the Modified Half-Normal Distribution
+- [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md)
+  : Mode of the Modified Half-Normal Distribution
+
+## Package overview
+
+- [`mhn`](https://t-momozaki.github.io/mhn/reference/mhn-package.md)
+  [`mhn-package`](https://t-momozaki.github.io/mhn/reference/mhn-package.md)
+  : mhn: The Modified Half-Normal Distribution
+
 # Articles
 
-### All vignettes
+### Articles
 
 - [Introduction to the mhn
   Package](https://t-momozaki.github.io/mhn/articles/introduction.md):

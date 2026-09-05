@@ -66,8 +66,8 @@ Special cases are detected and dispatched to standard R primitives:
 When any of `alpha`, `beta`, `gamma` is a vector, the quantile is
 evaluated element-wise. The Fox-Wright \\\Psi\\ normalizing constant and
 moments \\E(X)\\, \\\mathrm{Var}(X)\\ (used to size the root-finder
-bracket) are recomputed only when consecutive elements present a
-different \\(\alpha, \beta, \gamma)\\ triple.
+bracket) are recomputed only when the recycling cycle presents a
+distinct \\(\alpha, \beta, \gamma)\\ triple.
 
 ## References
 

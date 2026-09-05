@@ -7,7 +7,7 @@ Package*. The *Introduction* shows what the four exported functions
 (`dmhn` / `pmhn` / `qmhn` / `rmhn`) and their moment helpers do; this
 note develops the mathematical and algorithmic theory the package
 implements. We summarise the Modified Half-Normal (MHN) family, the
-Fox–Wright $`\Psi`$ function that appears in its normalising constant,
+Fox–Wright \\\Psi\\ function that appears in its normalising constant,
 and the two sampling schemes the package draws on — Sun, Kong & Pal
 (2023) and Gao & Wang (2025).
 
@@ -18,44 +18,42 @@ al. (2023) that the package silently corrects, and the benchmark-driven
 rationale for the `rmhn(method = "auto")` crossover at 25 — are inserted
 in §4 and §7 where they are most relevant.
 
-## The MHN($`\alpha`$, $`\beta`$, $`\gamma`$) family
+## The MHN(\\\alpha\\, \\\beta\\, \\\gamma\\) family
 
-The MHN distribution has support $`(0, \infty)`$ and density
+The MHN distribution has support \\(0, \infty)\\ and density
 
-``` math
-f(x \mid \alpha, \beta, \gamma) =
-  \frac{2 \beta^{\alpha/2} \, x^{\alpha-1} \, \exp(-\beta x^2 + \gamma x)}
-       {\Psi[\alpha/2,\, \gamma/\sqrt{\beta}]},
-  \qquad x > 0,
-```
+\\f(x \mid \alpha, \beta, \gamma) = \frac{2 \beta^{\alpha/2} \\
+x^{\alpha-1} \\ \exp(-\beta x^2 + \gamma x)} {\Psi\[\alpha/2,\\
+\gamma/\sqrt{\beta}\]}, \qquad x \> 0,\\
 
-with $`\alpha > 0`$, $`\beta > 0`$, $`\gamma \in \mathbb{R}`$. The three
-parameters control three independent factors of the density kernel:
+with \\\alpha \> 0\\, \\\beta \> 0\\, \\\gamma \in \mathbb{R}\\. The
+three parameters control three independent factors of the density
+kernel:
 
 | Parameter  | Factor it controls   | Role             |
 |------------|----------------------|------------------|
-| $`\alpha`$ | $`x^{\alpha-1}`$     | shape            |
-| $`\beta`$  | $`\exp(-\beta x^2)`$ | Gaussian tail    |
-| $`\gamma`$ | $`\exp(\gamma x)`$   | exponential tilt |
+| \\\alpha\\ | \\x^{\alpha-1}\\     | shape            |
+| \\\beta\\  | \\\exp(-\beta x^2)\\ | Gaussian tail    |
+| \\\gamma\\ | \\\exp(\gamma x)\\   | exponential tilt |
 
 Three familiar distributions sit inside the family as exact special
 cases (Sun et al. 2023, Lemma 6):
 
 | Constraint | Reduction |
 |----|----|
-| $`\gamma = 0`$ | $`X^2 \sim \mathrm{Gamma}(\alpha/2,\, \beta)`$, i.e. sqrt-Gamma |
-| $`\alpha = 1`$ | Truncated normal $`\mathrm{TN}(\gamma/(2\beta),\, 1/\sqrt{2\beta},\, 0,\, \infty)`$ |
-| $`\alpha = 1,\, \gamma = 0`$ | Half-normal $`\lvert Z \rvert`$ with $`Z \sim N(0,\, 1/(2\beta))`$ |
+| \\\gamma = 0\\ | \\X^2 \sim \mathrm{Gamma}(\alpha/2,\\ \beta)\\, i.e. sqrt-Gamma |
+| \\\alpha = 1\\ | Truncated normal \\\mathrm{TN}(\gamma/(2\beta),\\ 1/\sqrt{2\beta},\\ 0,\\ \infty)\\ |
+| \\\alpha = 1,\\ \gamma = 0\\ | Half-normal \\\lvert Z \rvert\\ with \\Z \sim N(0,\\ 1/(2\beta))\\ |
 
 There is also a degenerate *boundary* limit, not listed in the table: as
-$`\beta \to 0^+`$ with $`\gamma < 0`$, the MHN density converges to
-$`\mathrm{Gamma}(\alpha,\, -\gamma)`$. The package does not handle this
-limit specially because $`\beta > 0`$ is required by the MHN parameter
-space; for a Gamma draw with $`\beta = 0`$, use
+\\\beta \to 0^+\\ with \\\gamma \< 0\\, the MHN density converges to
+\\\mathrm{Gamma}(\alpha,\\ -\gamma)\\. The package does not handle this
+limit specially because \\\beta \> 0\\ is required by the MHN parameter
+space; for a Gamma draw with \\\beta = 0\\, use
 [`stats::rgamma`](https://rdrr.io/r/stats/GammaDist.html) directly.
 
 For each of the three *finite* special cases in the table above —
-$`\gamma = 0`$, $`\alpha = 1`$, and both together — the package detects
+\\\gamma = 0\\, \\\alpha = 1\\, and both together — the package detects
 the constraint within `sqrt(.Machine$double.eps)` tolerance and
 dispatches to the corresponding closed-form primitive in `stats`, so all
 four exported functions (`dmhn` / `pmhn` / `qmhn` / `rmhn`) are exact in
@@ -86,60 +84,53 @@ MHN density as alpha crosses the log-concavity threshold; beta = 1,
 gamma = 1 fixed.
 
 The figure illustrates the qualitative claims developed in the next
-section. The density is log-concave whenever $`\alpha \geq 1`$ (Sun et
-al. 2023, Lemma 3a). For $`\alpha > 1`$ it has a finite interior mode in
-closed form (Sun et al. 2023, Lemma 3b); the borderline case
-$`\alpha = 1`$ reduces to the truncated normal, whose mode is
-$`\max(0,\, \gamma/(2\beta))`$ — interior when $`\gamma > 0`$, on the
-boundary $`x = 0`$ otherwise. For $`\alpha < 1`$ the density is
-typically monotone decreasing with a boundary singularity at
-$`x \to 0^+`$. The one exception is $`\gamma > 0`$ together with
-$`\alpha \geq 1 - \gamma^2/(8\beta)`$, where the density is not
-unimodal: it diverges at $`x \to 0^+`$, dips to a local minimum, rises
-to a single interior local maximum, and then decays (Sun et al. 2023,
-Lemma 3c). At $`(\beta, \gamma) = (1, 1)`$ this threshold is
-$`1 - 1/8 = 0.875`$, so the orange ($`\alpha = 0.5`$) curve in the
-figure sits in the strict monotone-decreasing regime, with no interior
-local maximum.
+section. The density is log-concave whenever \\\alpha \geq 1\\ (Sun et
+al. 2023, Lemma 3a). For \\\alpha \> 1\\ it has a finite interior mode
+in closed form (Sun et al. 2023, Lemma 3b); the borderline case \\\alpha
+= 1\\ reduces to the truncated normal, whose mode is \\\max(0,\\
+\gamma/(2\beta))\\ — interior when \\\gamma \> 0\\, on the boundary \\x
+= 0\\ otherwise. For \\\alpha \< 1\\ the density is typically monotone
+decreasing with a boundary singularity at \\x \to 0^+\\. The one
+exception is \\\gamma \> 0\\ together with \\\alpha \geq 1 -
+\gamma^2/(8\beta)\\, where the density is not unimodal: it diverges at
+\\x \to 0^+\\, dips to a local minimum, rises to a single interior local
+maximum, and then decays (Sun et al. 2023, Lemma 3c). At \\(\beta,
+\gamma) = (1, 1)\\ this threshold is \\1 - 1/8 = 0.875\\, so the orange
+(\\\alpha = 0.5\\) curve in the figure sits in the strict
+monotone-decreasing regime, with no interior local maximum.
 
 ## Shape and moments
 
 Three facts from Sun et al. (2023) drive everything the package does
 with shape, moments, and the mode.
 
-**Log-concavity is a function of $`\alpha`$ alone** (Sun et al. 2023,
-Lemma 3a). For $`\alpha \geq 1`$ the density is log-concave irrespective
-of $`\beta`$ and $`\gamma`$; for $`\alpha < 1`$ it is not. This single
+**Log-concavity is a function of \\\alpha\\ alone** (Sun et al. 2023,
+Lemma 3a). For \\\alpha \geq 1\\ the density is log-concave irrespective
+of \\\beta\\ and \\\gamma\\; for \\\alpha \< 1\\ it is not. This single
 threshold is what splits the Gao & Wang (2025) RTDR sampler into its
 log-axis and original-axis branches in §6 below.
 
-**The mode has a closed form for $`\alpha > 1`$** (Sun et al. 2023,
+**The mode has a closed form for \\\alpha \> 1\\** (Sun et al. 2023,
 Lemma 3b):
 
-``` math
-X_{\mathrm{mode}}
- = \frac{\gamma + \sqrt{\gamma^2 + 8\beta(\alpha - 1)}}{4\beta}.
-```
+\\X\_{\mathrm{mode}} = \frac{\gamma + \sqrt{\gamma^2 + 8\beta(\alpha -
+1)}}{4\beta}.\\
 
-For $`\alpha = 1`$ the mode is $`\max(0,\, \gamma/(2\beta))`$ (the
-truncated-normal mode, Sun et al. 2023, Lemma 6b). For $`\alpha < 1`$
+For \\\alpha = 1\\ the mode is \\\max(0,\\ \gamma/(2\beta))\\ (the
+truncated-normal mode, Sun et al. 2023, Lemma 6b). For \\\alpha \< 1\\
 the density is either monotone decreasing or develops a non-trivial
-local maximum and local minimum, depending on the sign of
-$`1 - \gamma^2/(8\beta) - \alpha`$ (Sun et al. 2023, Lemma 3c–d). The
-helper
+local maximum and local minimum, depending on the sign of \\1 -
+\gamma^2/(8\beta) - \alpha\\ (Sun et al. 2023, Lemma 3c–d). The helper
 [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md)
 implements this case split and returns `NA` when no interior mode
 exists.
 
 **Moments satisfy a two-term recurrence** (Sun et al. 2023, Lemma 2b):
 
-``` math
-E(X^{k+2})
- = \frac{\alpha + k}{2 \beta}\, E(X^{k})
- + \frac{\gamma}{2 \beta}\, E(X^{k+1}).
-```
+\\E(X^{k+2}) = \frac{\alpha + k}{2 \beta}\\ E(X^{k}) + \frac{\gamma}{2
+\beta}\\ E(X^{k+1}).\\
 
-Together with the closed-form ratio for $`E(X)`$ in terms of $`\Psi`$
+Together with the closed-form ratio for \\E(X)\\ in terms of \\\Psi\\
 (Sun et al. 2023, Lemma 2a), this gives every higher moment. The helpers
 [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md),
 [`mhn_var()`](https://t-momozaki.github.io/mhn/reference/mhn_var.md),
@@ -148,53 +139,49 @@ and
 [`mhn_kurtosis()`](https://t-momozaki.github.io/mhn/reference/mhn_kurtosis.md)
 apply the recurrence in C++ via Rcpp; the *Introduction* vignette shows
 them in action. A useful sanity bound (Sun et al. 2023, Lemma 4c) is
-$`\mathrm{Var}(X) \leq 1/(2\beta)`$ for every $`\alpha \geq 1`$,
-$`\gamma \in \mathbb{R}`$.
+\\\mathrm{Var}(X) \leq 1/(2\beta)\\ for every \\\alpha \geq 1\\,
+\\\gamma \in \mathbb{R}\\.
 
-## The Fox–Wright $`\Psi`$ normalising constant
+## The Fox–Wright \\\Psi\\ normalising constant
 
 The normalising constant in the MHN density is
 
-``` math
-\Psi\!\left[\frac{\alpha}{2},\, z\right]
- \;=\; \sum_{n=0}^{\infty}
-        \frac{\Gamma\!\big(\tfrac{\alpha + n}{2}\big)}{n!} \, z^{n},
- \qquad z = \frac{\gamma}{\sqrt{\beta}}.
-```
+\\\Psi\\\left\[\frac{\alpha}{2},\\ z\right\] \\=\\ \sum\_{n=0}^{\infty}
+\frac{\Gamma\\\big(\tfrac{\alpha + n}{2}\big)}{n!} \\ z^{n}, \qquad z =
+\frac{\gamma}{\sqrt{\beta}}.\\
 
-This series is absolutely convergent for every $`\alpha > 0`$ and every
-$`z \in \mathbb{R}`$, and is strictly positive. It depends on
-$`(\alpha, \beta, \gamma)`$ only through the two-dimensional combination
-$`(\alpha, z)`$.
+This series is absolutely convergent for every \\\alpha \> 0\\ and every
+\\z \in \mathbb{R}\\, and is strictly positive. It depends on \\(\alpha,
+\beta, \gamma)\\ only through the two-dimensional combination \\(\alpha,
+z)\\.
 
-A useful organisational point: **$`\Psi`$ matters only for some of the
+A useful organisational point: **\\\Psi\\ matters only for some of the
 package’s exported functions**.
 
-| Function group | Needs $`\Psi`$? | Why |
+| Function group | Needs \\\Psi\\? | Why |
 |----|:--:|----|
-| `dmhn`, `pmhn`, `qmhn` | yes | $`\Psi`$ sits in the density’s denominator and in the CDF series. |
-| `mhn_mean`, `mhn_var`, `mhn_skewness`, `mhn_kurtosis` | yes | Moments are ratios $`\Psi[(\alpha+k)/2,\, z] / \Psi[\alpha/2,\, z]`$. |
-| `rmhn` (Sun or RTDR path) | no | $`\Psi`$ enters both proposal scale and target as a common factor that cancels. |
+| `dmhn`, `pmhn`, `qmhn` | yes | \\\Psi\\ sits in the density’s denominator and in the CDF series. |
+| `mhn_mean`, `mhn_var`, `mhn_skewness`, `mhn_kurtosis` | yes | Moments are ratios \\\Psi\[(\alpha+k)/2,\\ z\] / \Psi\[\alpha/2,\\ z\]\\. |
+| `rmhn` (Sun or RTDR path) | no | \\\Psi\\ enters both proposal scale and target as a common factor that cancels. |
 
 The practical consequence is that any numerical issues in evaluating
-$`\Psi`$ — accumulated rounding in `lgamma`, or truncation error in the
+\\\Psi\\ — accumulated rounding in `lgamma`, or truncation error in the
 series — can only affect `d/p/q` and the moment helpers; they cannot
 leak into the sampler.
 
 For evaluation, the package follows the case split of Sun et al. (2023,
 Lemma 9–11):
 
-- $`\gamma = 0`$ gives $`\Psi[\alpha/2, 0] = \Gamma(\alpha/2)`$.
-- $`\alpha = 1`$, and the $`\alpha = 2,\, \gamma \geq 0`$ corner, both
-  reduce to closed forms involving $`\Phi`$ (Sun et al. 2023, Lemma 9c).
-- $`\gamma > 0`$ uses the alternating-free series of Sun et al. (2023,
+- \\\gamma = 0\\ gives \\\Psi\[\alpha/2, 0\] = \Gamma(\alpha/2)\\.
+- \\\alpha = 1\\, and the \\\alpha = 2,\\ \gamma \geq 0\\ corner, both
+  reduce to closed forms involving \\\Phi\\ (Sun et al. 2023, Lemma 9c).
+- \\\gamma \> 0\\ uses the alternating-free series of Sun et al. (2023,
   Lemma 10) with a pre-computed truncation point. All terms are
   positive, so there is no catastrophic cancellation.
-- $`\gamma < 0`$ switches to the integral representation (Sun et
-  al. 2023, Lemma 11) and uses Boost’s `gauss_kronrod` (for
-  $`\alpha \geq 1`$) or `tanh_sinh` (for $`\alpha < 1`$, where the
-  boundary singularity $`u^{\alpha-1}`$ needs the double-exponential
-  rule).
+- \\\gamma \< 0\\ switches to the integral representation (Sun et
+  al. 2023, Lemma 11) and uses Boost’s `gauss_kronrod` (for \\\alpha
+  \geq 1\\) or `tanh_sinh` (for \\\alpha \< 1\\, where the boundary
+  singularity \\u^{\alpha-1}\\ needs the double-exponential rule).
 
 ### Errata in Sun et al. (2023)
 
@@ -202,110 +189,102 @@ The published paper has two typesetting errors that touch the
 implementation. Each is corrected in the supplementary derivation, and
 the package follows the corrected form.
 
-- **Mixture weights** $`p_{i}`$**in Lemma 7.** The main-text statement
-  of Lemma 7 gives the weights for the $`\sqrt{\mathrm{Gamma}}`$ mixture
-  representation as $`p_{i} = \tfrac{1}{2\beta^{\alpha/2}} \cdot
-   \tfrac{\Gamma((\alpha + 1 + i)/2)\, (\gamma/\sqrt{\beta})^{i}}
-        {i!\, \Psi[\alpha/2,\, \gamma/\sqrt{\beta}]}`$. These do not sum
-  to one, contradicting the definition of $`\Psi`$ and the Poisson–Gamma
+- **Mixture weights** \\p\_{i}\\ **in Lemma 7.** The main-text statement
+  of Lemma 7 gives the weights for the \\\sqrt{\mathrm{Gamma}}\\ mixture
+  representation as \\p\_{i} = \tfrac{1}{2\beta^{\alpha/2}} \cdot
+  \tfrac{\Gamma((\alpha + 1 + i)/2)\\ (\gamma/\sqrt{\beta})^{i}} {i!\\
+  \Psi\[\alpha/2,\\ \gamma/\sqrt{\beta}\]}\\. These do not sum to one,
+  contradicting the definition of \\\Psi\\ and the Poisson–Gamma
   hierarchical representation in Sun et al. (2023, Lemma 5a). The
   correct form, reproduced in the supplementary proof of Lemma 7
-  (Supplementary §2.13), is
-  ``` math
-  p_{i} \;=\;
-   \frac{\Gamma((\alpha + i)/2)\, (\gamma/\sqrt{\beta})^{i}}
-        {i!\, \Psi[\alpha/2,\, \gamma/\sqrt{\beta}]}
-  ```
-  i.e. drop the leading $`1/(2\beta^{\alpha/2})`$ and use $`\alpha + i`$
-  in the $`\Gamma`$ argument instead of $`\alpha + 1 + i`$. This affects
-  Algorithm 2 only, which the package does not implement; the correction
-  is recorded here for completeness.
+  (Supplementary §2.13), is \\p\_{i} \\=\\ \frac{\Gamma((\alpha +
+  i)/2)\\ (\gamma/\sqrt{\beta})^{i}} {i!\\ \Psi\[\alpha/2,\\
+  \gamma/\sqrt{\beta}\]}\\ i.e. drop the leading
+  \\1/(2\beta^{\alpha/2})\\ and use \\\alpha + i\\ in the \\\Gamma\\
+  argument instead of \\\alpha + 1 + i\\. This affects Algorithm 2 only,
+  which the package does not implement; the correction is recorded here
+  for completeness.
 
-- **Series truncation discriminants** $`C_{1}`$, $`C_{2}`$**in Lemma
-  10.** The truncation point of the $`\Psi`$ series is the smallest
-  $`k`$ for which $`A(k+1)/A(k) \leq q`$ (with an analogous bound for
-  $`B`$). Reducing this to a quadratic in $`k`$ gives a discriminant
-  whose last term is $`\alpha x^{2}`$ (and $`(\alpha+1) x^{2}`$ for
-  $`C_{2}`$). The main-text statement of Lemma 10 prints these as
-  $`\alpha x`$ and $`(\alpha+1) x`$ — a single missing power of $`x`$.
+- **Series truncation discriminants** \\C\_{1}\\, \\C\_{2}\\ **in Lemma
+  10.** The truncation point of the \\\Psi\\ series is the smallest
+  \\k\\ for which \\A(k+1)/A(k) \leq q\\ (with an analogous bound for
+  \\B\\). Reducing this to a quadratic in \\k\\ gives a discriminant
+  whose last term is \\\alpha x^{2}\\ (and \\(\alpha+1) x^{2}\\ for
+  \\C\_{2}\\). The main-text statement of Lemma 10 prints these as
+  \\\alpha x\\ and \\(\alpha+1) x\\ — a single missing power of \\x\\.
   The supplementary derivation (Supplementary §2.2.1, §2.2.2) carries
-  $`z^{2}`$ throughout, in agreement with the rederivation. The
-  corrected $`x^{2}`$ form is what the package uses in
+  \\z^{2}\\ throughout, in agreement with the rederivation. The
+  corrected \\x^{2}\\ form is what the package uses in
   [src/mhn_psi_series.cpp](https://github.com/t-momozaki/mhn/blob/main/src/mhn_psi_series.cpp)
-  (marked with an `// ERRATA` comment); evaluating $`\Psi`$ at the
-  published $`x`$ form would give a too-small truncation point and
+  (marked with an `// ERRATA` comment); evaluating \\\Psi\\ at the
+  published \\x\\ form would give a too-small truncation point and
   silently lose precision.
 
 ## Sampling: Sun et al. (2023)
 
 Sun et al. (2023) propose three Accept–Reject schemes, indexed by the
-sign of $`\gamma`$ and a coarse split on $`\alpha`$. Two of them —
+sign of \\\gamma\\ and a coarse split on \\\alpha\\. Two of them —
 Algorithm 1 and Algorithm 3 — are implemented in the package and
 reachable via `rmhn(method = "sun")`. Algorithm 2 is not, and this
 section explains the reason.
 
-### Algorithm 1 — $`\gamma > 0`$, $`\alpha \geq 1`$
+### Algorithm 1 — \\\gamma \> 0\\, \\\alpha \geq 1\\
 
 For each parameter triple, Algorithm 1 constructs **two** proposal
-distributions — a Normal with mean $`\mu_{\mathrm{opt}}`$ and variance
-$`1/(2\beta)`$, and a
-$`\sqrt{\mathrm{Gamma}(\alpha/2,\, \delta_{\mathrm{opt}})}`$ — each with
-a multiplicative envelope constant $`K_{1}`$ and $`K_{2}`$. Setup
-chooses whichever envelope is tighter ($`K_{1} \leq K_{2}`$ or the
-reverse). The two optima $`\mu_{\mathrm{opt}}`$ and
-$`\delta_{\mathrm{opt}}`$ have closed forms (Sun et al. 2023, Theorem
-1b), so setup is cheap. The acceptance probability is bounded below by
-0.8 for $`\alpha \geq 4`$ (Sun et al. 2023, Theorem 2e). For
-$`1 \leq \alpha < 4`$ no uniform lower bound is proved, but the original
-Figure 2 shows empirically high acceptance throughout that range.
+distributions — a Normal with mean \\\mu\_{\mathrm{opt}}\\ and variance
+\\1/(2\beta)\\, and a \\\sqrt{\mathrm{Gamma}(\alpha/2,\\
+\delta\_{\mathrm{opt}})}\\ — each with a multiplicative envelope
+constant \\K\_{1}\\ and \\K\_{2}\\. Setup chooses whichever envelope is
+tighter (\\K\_{1} \leq K\_{2}\\ or the reverse). The two optima
+\\\mu\_{\mathrm{opt}}\\ and \\\delta\_{\mathrm{opt}}\\ have closed forms
+(Sun et al. 2023, Theorem 1b), so setup is cheap. The acceptance
+probability is bounded below by 0.8 for \\\alpha \geq 4\\ (Sun et
+al. 2023, Theorem 2e). For \\1 \leq \alpha \< 4\\ no uniform lower bound
+is proved, but the original Figure 2 shows empirically high acceptance
+throughout that range.
 
-### Algorithm 3 — $`\gamma \leq 0`$
+### Algorithm 3 — \\\gamma \leq 0\\
 
 When the tilt is non-positive, Theorem 3 of Sun et al. (2023) supplies a
 proposal kernel based on an AM–GM-type inequality. With a tuning point
-$`m > 0`$ and the exponent
-$`r = (\beta m + |\gamma|)/(2\beta m + |\gamma|)`$, the candidate is
+\\m \> 0\\ and the exponent \\r = (\beta m + \|\gamma\|)/(2\beta m +
+\|\gamma\|)\\, the candidate is
 
-``` math
-T \sim \mathrm{Gamma}\!\big(\alpha \cdot r,\, m(\beta m + |\gamma|)\big),
-\qquad X = m \cdot T^{r}.
-```
+\\T \sim \mathrm{Gamma}\\\big(\alpha \cdot r,\\ m(\beta m +
+\|\gamma\|)\big), \qquad X = m \cdot T^{r}.\\
 
-The construction works for every $`\alpha > 0`$; the uniform acceptance
-bound $`\geq 1/\sqrt{2} \approx 0.707`$ (Sun et al. 2023, Theorem 4c) is
-proved only for $`\alpha > 1`$, but the procedure also samples correctly
-when $`\alpha \leq 1`$. The matching point is initialised from a
-closed-form heuristic of Sun et al. (2023, §4.2):
-$`m_{\mathrm{init}} = \alpha^{2}/(1 + \alpha)`$ for $`\alpha \leq 1.1`$
-and a more elaborate expression based on the mode and the rightmost
-inflection point for $`\alpha > 1.1`$. The package then applies a single
-Newton-Raphson refinement step in both regimes, producing
-$`m_{\mathrm{recommend}}`$, whose acceptance probability is within
-$`0.2\%`$ of the optimum across the parameter range tabulated in Sun et
-al. (2023, Table 1).
+The construction works for every \\\alpha \> 0\\; the uniform acceptance
+bound \\\geq 1/\sqrt{2} \approx 0.707\\ (Sun et al. 2023, Theorem 4c) is
+proved only for \\\alpha \> 1\\, but the procedure also samples
+correctly when \\\alpha \leq 1\\. The matching point is initialised from
+a closed-form heuristic of Sun et al. (2023, §4.2): \\m\_{\mathrm{init}}
+= \alpha^{2}/(1 + \alpha)\\ for \\\alpha \leq 1.1\\ and a more elaborate
+expression based on the mode and the rightmost inflection point for
+\\\alpha \> 1.1\\. The package then applies a single Newton-Raphson
+refinement step in both regimes, producing \\m\_{\mathrm{recommend}}\\,
+whose acceptance probability is within \\0.2\\\\ of the optimum across
+the parameter range tabulated in Sun et al. (2023, Table 1).
 
 ### Why Algorithm 2 is not implemented
 
-Algorithm 2 targets $`\gamma > 0`$ with $`\alpha < 1`$ via the mixture
+Algorithm 2 targets \\\gamma \> 0\\ with \\\alpha \< 1\\ via the mixture
 representation
 
-``` math
-f_{\mathrm{MHN}}(x \mid \alpha, \beta, \gamma)
- \;=\; \sum_{i=0}^{\infty} p_{i}\, f_{i}(x \mid \alpha, \beta),
-\qquad
-f_{i} \;\sim\; \sqrt{\mathrm{Gamma}\!\big((\alpha + i)/2,\, \beta\big)}.
-```
+\\f\_{\mathrm{MHN}}(x \mid \alpha, \beta, \gamma) \\=\\
+\sum\_{i=0}^{\infty} p\_{i}\\ f\_{i}(x \mid \alpha, \beta), \qquad
+f\_{i} \\\sim\\ \sqrt{\mathrm{Gamma}\\\big((\alpha + i)/2,\\
+\beta\big)}.\\
 
-The mixture-component sampler needs a truncation point $`M^{\dagger}`$
-chosen so that the tail mass beyond $`M^{\dagger}`$ is below a target
-tolerance (Sun et al. 2023, Lemma 8). For large $`\gamma^{2}/\beta`$
-this truncation grows like $`\gamma^{2}/(\varepsilon^{2} \beta)`$, and
+The mixture-component sampler needs a truncation point \\M^{\dagger}\\
+chosen so that the tail mass beyond \\M^{\dagger}\\ is below a target
+tolerance (Sun et al. 2023, Lemma 8). For large \\\gamma^{2}/\beta\\
+this truncation grows like \\\gamma^{2}/(\varepsilon^{2} \beta)\\, and
 the whole scheme degrades catastrophically — Gao & Wang (2025, Table 1)
-report a slowdown of up to $`\sim 3 \times 10^{4}\times`$ against RTDR
-in the most extreme case $`(\alpha, \gamma) = (0.01, 10000)`$. The
-package therefore declines to implement Algorithm 2 and routes
-$`(\alpha < 1, \gamma > 0)`$ to RTDR, where the acceptance bound
-$`\geq 1/e`$ (next section) holds uniformly.
+report a slowdown of up to \\\sim 3 \times 10^{4}\times\\ against RTDR
+in the most extreme case \\(\alpha, \gamma) = (0.01, 10000)\\. The
+package therefore declines to implement Algorithm 2 and routes \\(\alpha
+\< 1, \gamma \> 0)\\ to RTDR, where the acceptance bound \\\geq 1/e\\
+(next section) holds uniformly.
 
 ## Sampling: Gao & Wang (2025) RTDR
 
@@ -314,95 +293,95 @@ Gao & Wang (2025) introduce a *Relaxed* Transformed Density Rejection
 probability across the *entire* parameter space. Three ideas drive the
 construction.
 
-### $`T_{c}`$-concavity
+### \\T\_{c}\\-concavity
 
 Standard TDR builds piecewise-linear envelopes on top of a
-log-transformed density. RTDR generalises to the $`T_{c}`$ family
+log-transformed density. RTDR generalises to the \\T\_{c}\\ family
 
-``` math
-T_{c}[x] = \mathrm{sign}(c) \cdot x^{c} \quad (c > -1,\, c \neq 0),
-\qquad T_{0}[x] = \log x.
-```
+\\T\_{c}\[x\] = \mathrm{sign}(c) \cdot x^{c} \quad (c \> -1,\\ c \neq
+0), \qquad T\_{0}\[x\] = \log x.\\
 
-A density $`f`$ is *$`T_{c}`$-concave* if $`T_{c}[f]`$ is concave.
-Logarithmic concavity (the usual TDR setting) is the $`c = 0`$ special
-case. The package’s RTDR implementation uses $`c = -1/2`$ on the
-log-axis density for the $`\alpha < 1`$ branches because
-$`T_{-1/2}[x] = -x^{-1/2}`$ accommodates the slower decay of $`g(y)`$
-when the original $`f`$ has a boundary singularity at $`x = 0`$.
+A density \\f\\ is *\\T\_{c}\\-concave* if \\T\_{c}\[f\]\\ is concave.
+Logarithmic concavity (the usual TDR setting) is the \\c = 0\\ special
+case. The package’s RTDR implementation uses \\c = -1/2\\ on the
+log-axis density for the \\\alpha \< 1\\ branches because
+\\T\_{-1/2}\[x\] = -x^{-1/2}\\ accommodates the slower decay of \\g(y)\\
+when the original \\f\\ has a boundary singularity at \\x = 0\\.
 
-### Working on the log axis when $`\alpha < 1`$
+### Working on the log axis when \\\alpha \< 1\\
 
-When $`\alpha < 1`$ the density $`f(x \mid \alpha, \gamma)`$ on
-$`(0, \infty)`$ blows up at the left endpoint and is not amenable to
-direct envelope construction. The change of variable $`y = \log x`$
-yields
+When \\\alpha \< 1\\ the density \\f(x \mid \alpha, \gamma)\\ on \\(0,
+\infty)\\ blows up at the left endpoint and is not amenable to direct
+envelope construction. The change of variable \\y = \log x\\ yields
 
-``` math
-g(y \mid \alpha, \gamma)
- \;=\; \exp\!\big( \alpha y - e^{2y} + \gamma e^{y} \big),
-\qquad y \in \mathbb{R},
-```
+\\g(y \mid \alpha, \gamma) \\=\\ \exp\\\big( \alpha y - e^{2y} + \gamma
+e^{y} \big), \qquad y \in \mathbb{R},\\
 
 which is bounded and unimodal (Gao & Wang 2025, Lemma 3.3). RTDR
-operates on $`g`$ for $`\alpha < 1`$ and on $`f`$ directly for
-$`\alpha \geq 1`$.
+operates on \\g\\ for \\\alpha \< 1\\ and on \\f\\ directly for \\\alpha
+\geq 1\\.
 
 ### The four regions
 
-After scale normalisation $`\sqrt{\beta} X \to X`$ (so we may assume
-$`\beta = 1`$), the RTDR envelope construction splits into four regions
-based on $`(\alpha, \gamma)`$. The $`\gamma`$ in the table below is the
-normalised tilt $`\gamma_{\mathrm{norm}} = \gamma/\sqrt{\beta}`$; for a
-general $`\beta`$ the package’s `rmhn(method = "rtdr")` rescales
-internally and compares $`\gamma_{\mathrm{norm}}`$ against the boundary
-$`2(1 - \sqrt{1 - 2\alpha})`$.
+After scale normalisation \\\sqrt{\beta} X \to X\\ (so we may assume
+\\\beta = 1\\), the RTDR envelope construction splits into four regions
+based on \\(\alpha, \gamma)\\. The \\\gamma\\ in the table below is the
+normalised tilt \\\gamma\_{\mathrm{norm}} = \gamma/\sqrt{\beta}\\; for a
+general \\\beta\\ the package’s `rmhn(method = "rtdr")` rescales
+internally and compares \\\gamma\_{\mathrm{norm}}\\ against the boundary
+\\2(1 - \sqrt{1 - 2\alpha})\\.
 
-| Region | $`\alpha`$ | $`\gamma`$ | Envelope target | Reference |
+| Region | \\\alpha\\ | \\\gamma\\ | Envelope target | Reference |
 |:--:|----|----|----|----|
-| \(a\) | $`\geq 1`$ | any | $`f`$ log-concave | Gao & Wang (2025, Theorem 3.1) |
-| \(b\) | $`[1/2,\, 1)`$ | any | $`g`$$`T_{-1/2}`$-concave | Gao & Wang (2025, Corollary 3.1; Theorem 3.2) |
-| \(c\) | $`(0,\, 1/2)`$ | $`\leq 2(1 - \sqrt{1 - 2\alpha})`$ | $`g`$$`T_{-1/2}`$-concave | Gao & Wang (2025, Lemma 3.5; Theorem 3.2) |
-| \(d\) | $`(0,\, 1/2)`$ | $`> 2(1 - \sqrt{1 - 2\alpha})`$ | $`g`$ with inflection at $`y^{*} = \log(\gamma/4)`$ | Gao & Wang (2025, Theorem 4.4) |
+| \(a\) | \\\> 1\\ | any | \\f\\ log-concave | Gao & Wang (2025, Theorem 3.1) |
+| \(b\) | \\\[1/2,\\ 1\]\\ | any | \\g\\ log-concave if \\\gamma \leq 0\\, else \\T\_{-1/2}\\-concave | Gao & Wang (2025, Corollary 3.1; Theorem 3.2) |
+| \(c\) | \\(0,\\ 1/2)\\ | \\\leq 2(1 - \sqrt{1 - 2\alpha})\\ | \\g\\ log-concave if \\\gamma \leq 0\\, else \\T\_{-1/2}\\-concave | Gao & Wang (2025, Lemma 3.5; Theorem 3.2) |
+| \(d\) | \\(0,\\ 1/2)\\ | \\\> 2(1 - \sqrt{1 - 2\alpha})\\ | \\g\\ with inflection at \\y^{\*} = \log(\gamma/4)\\ | Gao & Wang (2025, Theorem 4.4) |
 
-Region (a) is the easiest: $`f`$ is log-concave, two tangent lines and a
-constant segment suffice. Regions (b) and (c) reuse the same
-$`T_{-1/2}`$ envelope on $`g`$, with only the validity argument
-differing. Region (d) is the hardest — $`g`$ has an inflection point and
-the envelope needs $`K`$ secant segments on the log-convex side, with
-$`K`$ growing logarithmically in $`\gamma`$.
+Region (a) is the easiest: \\f\\ is log-concave, two tangent lines and a
+constant segment suffice. The boundary \\\alpha = 1\\ is handled in
+region (b) rather than (a): \\f\\ is log-concave there too, but the
+envelope of region (a) is built around an interior mode in \\x\\, and at
+\\\alpha = 1\\ with \\\gamma \leq 0\\ there is none. The mode of \\g\\
+on the log axis is strictly positive for every \\\alpha \> 0\\, so the
+region (b) construction applies without a special case. Regions (b) and
+(c) share one construction on \\g\\; the sign of \\\gamma\\ picks the
+transform. Since \\\mathrm{d}^{2} \log g / \mathrm{d} y^{2} = \gamma
+e^{y} - 4 e^{2y}\\ is negative for every \\y\\ exactly when \\\gamma
+\leq 0\\, a \\T_0\\ log-tangent hat serves on that side, while for
+\\\gamma \> 0\\ only \\T\_{-1/2}\\-concavity survives and the hat
+switches to inverse-square pieces. Region (d) is the hardest — \\g\\ has
+an inflection point and the envelope needs \\K\\ secant segments on the
+log-convex side, with \\K\\ growing logarithmically in \\\gamma\\.
 
 ### Why “relaxed”
 
 The classical TDR construction asks for *optimal* tangent contact
 points, which generally have no closed form and must be found by Newton
 iteration. Gao & Wang (2025, Theorem 2.1) show that the acceptance bound
-$`\leq e \approx 2.719`$ (equivalently, acceptance probability
-$`\geq 1/e \approx 0.368`$) holds as long as the contact points lie
-*anywhere* inside a fixed interval — namely
+\\\leq e \approx 2.719\\ (equivalently, acceptance probability \\\geq
+1/e \approx 0.368\\) holds as long as the contact points lie *anywhere*
+inside a fixed interval — namely
 
-``` math
-\log\!\frac{f(m)}{f(t)} \in
- \begin{cases}
-   [0.46,\, 2.49] & f \text{ log-concave (region (a))}, \\
-   [0.93,\, 1.99] & g \text{ $T_{-1/2}$-concave (regions (b), (c))}.
- \end{cases}
-```
+\\\log\\\frac{f(m)}{f(t)} \in \begin{cases} \[0.46,\\ 2.49\] & f \text{
+log-concave (region (a))}, \\ \[0.46,\\ 2.49\] & g \text{ log-concave
+(regions (b), (c), } \gamma \leq 0), \\ \[0.93,\\ 1.99\] & g \text{
+\$T\_{-1/2}\$-concave (regions (b), (c), } \gamma \> 0). \end{cases}\\
 
 Setup is therefore a handful of cheap iterations that terminate as soon
 as the bracket is hit, with no need for a precise Newton solution. This
 is the main practical edge of RTDR over Algorithms 1 / 3 of Sun et
-al. (2023) in Gibbs-style workloads where $`(\alpha, \beta, \gamma)`$
+al. (2023) in Gibbs-style workloads where \\(\alpha, \beta, \gamma)\\
 changes every iteration: the setup cost is amortised over a single draw
 instead of many, and a cheap setup wins.
 
 Composing the bounds in Gao & Wang (2025, Theorems 3.1, 3.2, 4.4) yields
-the headline guarantee of RTDR: for **every**
-$`(\alpha, \beta, \gamma)`$ with $`\alpha > 0`$, $`\beta > 0`$,
-$`\gamma \in \mathbb{R}`$, the acceptance probability is at least
-$`1/e \approx 0.368`$. The three algorithms of Sun et al. (2023) only
-have parameter-dependent guarantees (and only on parts of the parameter
-space — see §5).
+the headline guarantee of RTDR: for **every** \\(\alpha, \beta,
+\gamma)\\ with \\\alpha \> 0\\, \\\beta \> 0\\, \\\gamma \in
+\mathbb{R}\\, the acceptance probability is at least \\1/e \approx
+0.368\\. The three algorithms of Sun et al. (2023) only have
+parameter-dependent guarantees (and only on parts of the parameter space
+— see §5).
 
 A quick sanity check that the RTDR sampler converges to the right
 distribution in all four regions — empirical means from RTDR vs
@@ -432,17 +411,20 @@ data.frame(cases,
 #> 4    (d)   0.3   5.0         2.3300           2.3221
 ```
 
-The four rows hit the right means to two-to-three decimal places — about
-the sampling tolerance at $`n = 5000`$.
+The four rows hit the right means to within about two Monte-Carlo
+standard errors — at \\n = 5000\\ those errors run from \\0.005\\ to
+\\0.011\\, so the gaps land in the second decimal place, not the third.
 
 ## The `rmhn(method = "auto")` dispatch
 
-`rmhn` exposes three values of `method`: `"sun"` (force the Sun
-Algorithm 1 / 3 path), `"rtdr"` (force the Gao & Wang RTDR path), and
-`"auto"` (default). The `"auto"` route is the package’s recommendation;
-it composes the four shortcuts above into one decision tree (this is the
-Step 3.7.3 final form, confirmed by the benchmarks under
-`inst/benchmarks/`):
+`rmhn` exposes three values of `method`: `"sun"` (the Sun Algorithm 1 /
+3 path), `"rtdr"` (the Gao & Wang RTDR path), and `"auto"` (default).
+The first two select the sampler used for the general case; the
+closed-form special cases below are taken first whatever `method` is set
+to, since they are exact and cheaper than any rejection scheme. The
+`"auto"` route is the package’s recommendation; it composes the four
+shortcuts above into one decision tree (this is the Step 3.7.3 final
+form, confirmed by the benchmarks under `inst/benchmarks/`):
 
                       rmhn(n, alpha, beta, gamma, method = "auto")
                                         │
@@ -460,55 +442,62 @@ Step 3.7.3 final form, confirmed by the benchmarks under
            │      →  Sun Algorithm 1                    (Sun et al. 2023, Theorems 1, 2)
            │
            └─ gamma < 0
-                  ├─ samples_per_setup ≥ 25  →  RTDR    (region (a))
-                  └─ samples_per_setup < 25  →  Sun Algorithm 3
+                  ├─ alpha ≥ 10                     →  Sun Algorithm 3
+                  ├─ samples_per_setup ≥ N*         →  RTDR    (regions (a)-(c))
+                  └─ samples_per_setup < N*         →  Sun Algorithm 3
+                     where N* = 25, raised to 100 for alpha < 0.1
 
-Write $`S`$ for the `samples_per_setup` quantity in the last branch,
+Write \\S\\ for the `samples_per_setup` quantity in the last branch,
 
-``` math
-S \;=\; \max\!\Big(1,\; \frac{n}{\max(L_{\alpha},\, L_{\beta},\, L_{\gamma})}\Big),
-```
+\\S \\=\\ \max\\\Big(1,\\ \frac{n}{\max(L\_{\alpha},\\ L\_{\beta},\\
+L\_{\gamma})}\Big),\\
 
-where $`L_{\alpha}`$, $`L_{\beta}`$, $`L_{\gamma}`$ are the recycled
+where \\L\_{\alpha}\\, \\L\_{\beta}\\, \\L\_{\gamma}\\ are the recycled
 lengths of the three parameter vectors. The intuition follows from
 decomposing the expected time per draw as
 
-``` math
-E[\text{time}/\text{draw}]
- \;=\; \frac{T_{\text{setup}}}{n}
-       \;+\; C_{\text{reject}} \times T_{\text{per-proposal}},
-```
+\\E\[\text{time}/\text{draw}\] \\=\\ \frac{T\_{\text{setup}}}{n} \\+\\
+C\_{\text{reject}} \times T\_{\text{per-proposal}},\\
 
-where $`T_{\text{setup}}`$ is the one-off cost of preparing the proposal
-(a single $`m_{\text{init}}`$ formula plus at most one Newton step for
-Sun Algorithm 3; an iterative contact-point search for RTDR),
-$`C_{\text{reject}} = 1/\text{acceptance}`$ is the expected number of
-proposals per accepted draw, and $`T_{\text{per-proposal}}`$ is the cost
-of one proposal cycle (sample plus acceptance log-ratio evaluation).
+where \\T\_{\text{setup}}\\ is the one-off cost of preparing the
+proposal (a single \\m\_{\text{init}}\\ formula plus at most one Newton
+step for Sun Algorithm 3; an iterative contact-point search for RTDR),
+\\C\_{\text{reject}} = 1/\text{acceptance}\\ is the expected number of
+proposals per accepted draw, and \\T\_{\text{per-proposal}}\\ is the
+cost of one proposal cycle (sample plus acceptance log-ratio
+evaluation).
 
-For $`\gamma < 0`$ the two samplers sit on opposite ends of this
+For \\\gamma \< 0\\ the two samplers sit on opposite ends of this
 trade-off:
 
-- **Sun Algorithm 3** has a *cheap setup* — $`m_{\text{init}}`$ has a
+- **Sun Algorithm 3** has a *cheap setup* — \\m\_{\text{init}}\\ has a
   closed form, and the optional Newton refinement uses one
   `boost::math::digamma` evaluation — but a *more expensive
   per-proposal*: every proposal calls `rgamma`, evaluates the fractional
-  power $`X = m \cdot T^{r}`$, and the acceptance log-ratio carries the
-  same $`(X/m)^{1/r}`$ term.
+  power \\X = m \cdot T^{r}\\, and the acceptance log-ratio carries the
+  same \\(X/m)^{1/r}\\ term.
 - **RTDR (region (a))** has a *more expensive setup*: each contact point
-  $`t_{l}`$, $`t_{r}`$ is found by an iterative search that terminates
-  as soon as $`\log f(m)/f(t)`$ lands in the bracket $`[0.46,\, 2.49]`$.
-  But the *per-proposal* is light: sampling from the piecewise envelope
-  is straight arithmetic plus a single `log`, and the acceptance ratio
-  adds only two more `log`s.
+  \\t\_{l}\\, \\t\_{r}\\ is found by an iterative search that terminates
+  as soon as \\\log f(m)/f(t)\\ lands in the bracket \\\[0.46,\\
+  2.49\]\\. But the *per-proposal* is light: sampling from the piecewise
+  envelope is straight arithmetic plus a single `log`, and the
+  acceptance ratio adds only two more `log`s.
 
-When $`S`$ is large the per-proposal term dominates and RTDR wins; when
-it is small — the Gibbs case where each iteration redraws
-$`(\alpha, \beta, \gamma)`$ — the setup term dominates and Sun Algorithm
-3 wins. The crossover at 25 is the round value chosen inside the
-empirical break-even window $`n \in [10,\, 25]`$ observed at every one
-of the 20 surveyed $`(\alpha, \gamma)`$ cells in
+When \\S\\ is large the per-proposal term dominates and RTDR wins; when
+it is small — the Gibbs case where each iteration redraws \\(\alpha,
+\beta, \gamma)\\ — the setup term dominates and Sun Algorithm 3 wins.
+The base crossover \\N^{\*} = 25\\ is the round value chosen inside the
+empirical break-even window \\n \in \[10,\\ 25\]\\ observed across the
+surveyed \\(\alpha, \gamma)\\ grid in
 [inst/benchmarks/auto_dispatch.R](https://github.com/t-momozaki/mhn/blob/main/inst/benchmarks/auto_dispatch.R).
+
+Two refinements sit on top of it. The crossover moves to larger batches
+as the shape shrinks — Algorithm 3’s setup gets relatively cheaper as
+the density spikes at the origin — so \\N^{\*}\\ is raised to 100 for
+\\\alpha \< 0.1\\. And for \\\alpha \ge 10\\ Algorithm 3’s per-proposal
+cost falls below RTDR’s, because RTDR builds a fuller envelope as the
+mode sharpens, so it wins in the batch regime too and is used there
+regardless of \\S\\.
 
 A small concrete demonstration: with `set.seed` aligned,
 `method = "auto"` and the *expected* forced method produce bit-identical

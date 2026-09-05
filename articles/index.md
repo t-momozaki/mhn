@@ -1,6 +1,6 @@
 # Articles
 
-### All vignettes
+### Articles
 
 - [Introduction to the mhn
   Package](https://t-momozaki.github.io/mhn/articles/introduction.md):

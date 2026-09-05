@@ -12,21 +12,18 @@ library(mhn)
 
 ## The MHN distribution
 
-The MHN($`\alpha`$, $`\beta`$, $`\gamma`$) distribution has support on
-$`(0, \infty)`$ and density
+The MHN(\\\alpha\\, \\\beta\\, \\\gamma\\) distribution has support on
+\\(0, \infty)\\ and density
 
-``` math
-f(x \mid \alpha, \beta, \gamma) =
-  \frac{2 \beta^{\alpha/2} \, x^{\alpha-1} \, \exp(-\beta x^2 + \gamma x)}
-       {\Psi[\alpha/2,\, \gamma/\sqrt{\beta}]},
-  \qquad x > 0,
-```
+\\f(x \mid \alpha, \beta, \gamma) = \frac{2 \beta^{\alpha/2} \\
+x^{\alpha-1} \\ \exp(-\beta x^2 + \gamma x)} {\Psi\[\alpha/2,\\
+\gamma/\sqrt{\beta}\]}, \qquad x \> 0,\\
 
-where $`\alpha > 0`$, $`\beta > 0`$, $`\gamma \in \mathbb{R}`$, and
-$`\Psi[a, z]`$ is the Fox–Wright $`{}_1\Psi_1`$ function used as the
+where \\\alpha \> 0\\, \\\beta \> 0\\, \\\gamma \in \mathbb{R}\\, and
+\\\Psi\[a, z\]\\ is the Fox–Wright \\{}\_1\Psi_1\\ function used as the
 normalising constant (Sun, Kong & Pal 2023). The three parameters
-control the polynomial factor $`x^{\alpha-1}`$, the Gaussian tail
-$`\exp(-\beta x^2)`$, and the exponential tilt $`\exp(\gamma x)`$
+control the polynomial factor \\x^{\alpha-1}\\, the Gaussian tail
+\\\exp(-\beta x^2)\\, and the exponential tilt \\\exp(\gamma x)\\
 respectively.
 
 ## Density: `dmhn()`
@@ -83,15 +80,15 @@ beyond the plot.
 ## Distribution function: `pmhn()`
 
 [`pmhn()`](https://t-momozaki.github.io/mhn/reference/pmhn.md) returns
-$`P(X \le q)`$ (or its complement / log-probability via `lower.tail` /
+\\P(X \le q)\\ (or its complement / log-probability via `lower.tail` /
 `log.p`). For the general case it evaluates the Sun et al. (2023) Lemma
-1b series in log space, truncated at the constructive bound
-$`K = \max\{K_1, K_2\}`$ from Sun et al. (2023, Supplementary Lemma
-10(d)). When the underlying double-precision cancellation in the
-alternating-sign accumulator for $`\gamma < 0`$ would exceed the user’s
+1b series in log space, truncated at the constructive bound \\K =
+\max\\K_1, K_2\\\\ from Sun et al. (2023, Supplementary Lemma 10(d)).
+When the underlying double-precision cancellation in the
+alternating-sign accumulator for \\\gamma \< 0\\ would exceed the user’s
 tolerance, the routine falls back to a peak-normalised Boost.Math
-quadrature (Gauss–Kronrod for $`\alpha \ge 1`$, tanh–sinh for
-$`\alpha < 1`$) of the unnormalised density.
+quadrature (Gauss–Kronrod for \\\alpha \ge 1\\, tanh–sinh for \\\alpha
+\< 1\\) of the unnormalised density.
 
 ``` r
 
@@ -129,9 +126,8 @@ Density and matching CDF for MHN(2, 1, 1).
 ## Quantile function: `qmhn()`
 
 [`qmhn()`](https://t-momozaki.github.io/mhn/reference/qmhn.md) inverts
-the CDF using a TOMS 748 root-finder bracketed by
-$`[\sqrt{\epsilon}, E(X) + 8 \sqrt{\mathrm{Var}(X)}]`$, expanded as
-required.
+the CDF using a TOMS 748 root-finder bracketed by \\\[\sqrt{\epsilon},
+E(X) + 8 \sqrt{\mathrm{Var}(X)}\]\\, expanded as required.
 
 ``` r
 
@@ -163,10 +159,11 @@ qmhn(log(0.05), 2, 1, 1, log.p = TRUE)         # same value, log-input
 
 `rmhn(n, alpha, beta, gamma)` draws `n` variates. The default
 `method = "auto"` chooses between the special-case shortcuts (sqrt-Gamma
-for $`\gamma = 0`$; truncated normal for $`\alpha = 1`$), Sun et al.
+for \\\gamma = 0\\; truncated normal for \\\alpha = 1\\), Sun et al.
 (2023) Algorithms 1 / 3, and the Gao & Wang (2025) Relaxed Transformed
-Density Rejection (RTDR) sampler. The user can force a single sampler
-via `method = "rtdr"` or `method = "sun"`.
+Density Rejection (RTDR) sampler. `method = "rtdr"` or `method = "sun"`
+selects which of the two general-case samplers is used; the special-case
+shortcuts are taken first in either case, being exact and cheaper.
 
 ``` r
 
@@ -193,7 +190,7 @@ overlaid.](introduction_files/figure-html/rmhn-overlay-1.png)
 10,000 draws from MHN(2, 1, 1) with the true density overlaid.
 
 Switching `method` is useful for benchmarking; for the same seed both
-forced paths produce statistically equivalent samples:
+selected paths produce statistically equivalent samples:
 
 ``` r
 
@@ -230,8 +227,8 @@ data.frame(
 #> 5            mode     mhn_mode 1.000000000
 ```
 
-When no interior mode exists (e.g. $`\alpha < 1`$ with
-$`\gamma \le 0`$),
+When no interior mode exists (e.g. \\\alpha \< 1\\ with \\\gamma \le
+0\\),
 [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md)
 returns `NA`:
 
@@ -247,9 +244,9 @@ The MHN family contains several familiar distributions:
 
 | Constraint | Reduction |
 |----|----|
-| $`\gamma = 0`$ | $`X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)`$ (sqrt-Gamma) |
-| $`\alpha = 1`$ | Truncated normal on $`(0, \infty)`$ |
-| $`\alpha = 1, \gamma = 0`$ | Half-normal $`|Z|, Z \sim N(0, 1/(2\beta))`$ |
+| \\\gamma = 0\\ | \\X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\\ (sqrt-Gamma) |
+| \\\alpha = 1\\ | Truncated normal on \\(0, \infty)\\ |
+| \\\alpha = 1, \gamma = 0\\ | Half-normal \\\|Z\|, Z \sim N(0, 1/(2\beta))\\ |
 
 The package detects each case (within `sqrt(.Machine$double.eps)`) and
 dispatches to the corresponding closed-form R primitive, so `dmhn` /
@@ -293,10 +290,11 @@ MHN(1, 1, 1) and the equivalent truncated normal density.
   [`?rmhn`](https://t-momozaki.github.io/mhn/reference/rmhn.md) for full
   argument documentation, including the recycling rules and the `method`
   argument of `rmhn`.
-- `citation("mhn")` lists the package and the two underlying papers.
+- `citation("mhn")` returns four entries: the package itself and the
+  three underlying papers.
 - Sun, Kong & Pal (2023) develop the parametric family and Algorithms 1
   and 3 used here. Gao & Wang (2025) introduce the RTDR sampler with
-  uniform $`1/e`$ acceptance.
+  uniform \\1/e\\ acceptance.
 
 ## References
 

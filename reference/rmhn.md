@@ -14,7 +14,10 @@ rmhn(n, alpha = 1, beta = 1, gamma = 0, method = c("auto", "rtdr", "sun"))
 - n:
 
   Non-negative integer giving the number of variates to draw. `n = 0`
-  returns `numeric(0)`.
+  returns `numeric(0)`. Following the base R convention of
+  [`rnorm()`](https://rdrr.io/r/stats/Normal.html) and
+  [`rgamma()`](https://rdrr.io/r/stats/GammaDist.html), if
+  `length(n) > 1` the number required is taken to be `length(n)`.
 
 - alpha:
 
@@ -68,23 +71,29 @@ The `method` argument selects the rejection sampler:
   occurs later. These thresholds were fixed by benchmarking (see
   `inst/benchmarks/auto_dispatch.R`).
 
-- `"rtdr"`: Force the Relaxed Transformed Density Rejection method of
-  Gao & Wang (2025). The acceptance probability is bounded below by
-  \\1/e \approx 0.368\\ uniformly over the parameter space. Note: Gao &
+- `"rtdr"`: Use the Relaxed Transformed Density Rejection method of Gao
+  & Wang (2025) for the general case. The acceptance probability is
+  bounded below by \\1/e \approx 0.368\\ uniformly over the parameter
+  space. The closed-form special cases are still taken first: a
+  negligible tilt draws from the square root of a Gamma, and \\\alpha
+  \approx 1\\ from a truncated normal. Both are exact and faster than
+  any rejection scheme, so no sampler choice overrides them. Note: Gao &
   Wang (2025) use the parameterization \\(\lambda, \alpha, \beta)\\ with
   density proportional to \\x^{\lambda - 1} \exp(-\alpha x^2 - \beta
   x)\\; the mapping to the Sun et al. parameterization used here is
   \\\lambda \leftrightarrow \alpha\\, \\\alpha \leftrightarrow \beta\\,
   \\\beta \leftrightarrow -\gamma\\ (sign flip on the linear term).
 
-- `"sun"`: Force the Sun et al. (2023) algorithms. Algorithm 1 is used
-  when \\\gamma \> 0\\ and \\\alpha \> 1\\; Algorithm 3 is used when
-  \\\gamma \le 0\\. The combination \\\alpha \< 1\\ with \\\gamma \> 0\\
-  is unsupported and triggers an error.
+- `"sun"`: Use the Sun et al. (2023) algorithms for the general case,
+  with the same closed-form special cases taken first. Algorithm 1 is
+  used when \\\gamma \> 0\\ and \\\alpha \> 1\\; Algorithm 3 is used
+  when \\\gamma \le 0\\. The combination \\\alpha \< 1\\ with \\\gamma
+  \> 0\\ is unsupported and triggers an error, unless a special case
+  answers it first.
 
-Vector parameters are recycled to length `n` following standard R rules.
-Trailing parameter elements beyond index `n - 1` are silently ignored,
-matching the convention of `rnorm`.
+Vector parameters are recycled to length `n` following standard R rules:
+only the first `n` elements of each parameter are used, and any further
+elements are silently ignored, matching the convention of `rnorm`.
 
 Internally the setup state of the chosen sampler is reused as long as
 consecutive \\(\alpha, \beta, \gamma)\\ triples are equal, so passing

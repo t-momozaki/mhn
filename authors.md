@@ -2,7 +2,8 @@
 
 ## Authors
 
-- **Tomotaka Momozaki**. Author, maintainer.
+- **[Tomotaka Momozaki](https://github.com/t-momozaki)**. Author,
+  maintainer.
 
 ## Citation
 

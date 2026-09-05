@@ -6,13 +6,21 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>The Modified Half-Normal Distribution • mhn</title>
-<script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<!-- mathjax math --><script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI=" crossorigin="anonymous"></script><script>
+  window.MathJax = {
+    chtml: {
+      fontURL: "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/output/chtml/fonts/woff-v2"
+    }
+  };
+</script><script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="The Modified Half-Normal Distribution">
-<meta name="description" content="Provides density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, along with moments, mode, and the Fox-Wright Psi function used as the normalizing constant. The MHN distribution arises as a conditional posterior in Bayesian Markov chain Monte Carlo and generalizes the half-normal, truncated normal, and square-root gamma distributions. Implements efficient sampling via the Sun, Kong &amp; Pal (2023) &lt;doi:10.1080/03610926.2021.1934700&gt; algorithms and the Gao &amp; Wang (2025) &lt;doi:10.1080/03610918.2025.2524551&gt; relaxed transformed density rejection method.">
-<meta property="og:description" content="Provides density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, along with moments, mode, and the Fox-Wright Psi function used as the normalizing constant. The MHN distribution arises as a conditional posterior in Bayesian Markov chain Monte Carlo and generalizes the half-normal, truncated normal, and square-root gamma distributions. Implements efficient sampling via the Sun, Kong &amp; Pal (2023) &lt;doi:10.1080/03610926.2021.1934700&gt; algorithms and the Gao &amp; Wang (2025) &lt;doi:10.1080/03610918.2025.2524551&gt; relaxed transformed density rejection method.">
+<meta name="description" content="Density, distribution, quantile and random generation for the modified half-normal distribution, with moments, mode, and the Fox-Wright Psi function that normalises it.
+">
+<meta property="og:description" content="Density, distribution, quantile and random generation for the modified half-normal distribution, with moments, mode, and the Fox-Wright Psi function that normalises it.
+">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -22,7 +30,7 @@
 
     <a class="navbar-brand me-2" href="index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,10 +70,10 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>The MHN(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>α</mi><annotation encoding="application/x-tex">\alpha</annotation></semantics></math>, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>β</mi><annotation encoding="application/x-tex">\beta</annotation></semantics></math>, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>γ</mi><annotation encoding="application/x-tex">\gamma</annotation></semantics></math>) distribution has support on <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mi>∞</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, \infty)</annotation></semantics></math> and density</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false" form="prefix">(</mo><mi>x</mi><mo>∣</mo><mi>α</mi><mo>,</mo><mi>β</mi><mo>,</mo><mi>γ</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.278em"></mspace><mo>∝</mo><mspace width="0.278em"></mspace><msup><mi>x</mi><mrow><mi>α</mi><mo>−</mo><mn>1</mn></mrow></msup><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>−</mi><mi>β</mi><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><mi>γ</mi><mi>x</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mi>x</mi><mo>&gt;</mo><mn>0</mn><mo>,</mo></mrow><annotation encoding="application/x-tex">f(x \mid \alpha, \beta, \gamma) \;\propto\;
-  x^{\alpha - 1} \exp(-\beta x^2 + \gamma x), \qquad x &gt; 0,</annotation></semantics></math></p>
-<p>where <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>,</mo><mi>β</mi><mo>&gt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\alpha, \beta &gt; 0</annotation></semantics></math> and <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>∈</mo><mi>ℝ</mi></mrow><annotation encoding="application/x-tex">\gamma \in \mathbb{R}</annotation></semantics></math>. It arises as a conditional posterior in Bayesian MCMC for several common models (skew-elliptical regression, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math>-shrinkage priors, log-concave likelihoods with a quadratic Bayesian penalty) and generalises a number of familiar one-sided distributions:</p>
+<p>The MHN(<span class="math inline">\(\alpha\)</span>, <span class="math inline">\(\beta\)</span>, <span class="math inline">\(\gamma\)</span>) distribution has support on <span class="math inline">\((0, \infty)\)</span> and density</p>
+<p><span class="math display">\[f(x \mid \alpha, \beta, \gamma) \;\propto\;
+  x^{\alpha - 1} \exp(-\beta x^2 + \gamma x), \qquad x &gt; 0,\]</span></p>
+<p>where <span class="math inline">\(\alpha, \beta &gt; 0\)</span> and <span class="math inline">\(\gamma \in \mathbb{R}\)</span>. It arises as a conditional posterior in Bayesian MCMC for several common models (skew-elliptical regression, <span class="math inline">\(t\)</span>-shrinkage priors, log-concave likelihoods with a quadratic Bayesian penalty) and generalises a number of familiar one-sided distributions:</p>
 <table class="table">
 <colgroup>
 <col width="39%">
@@ -77,25 +85,25 @@
 </tr></thead>
 <tbody>
 <tr>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\gamma = 0</annotation></semantics></math></td>
+<td><span class="math inline">\(\gamma = 0\)</span></td>
 <td>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msqrt><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow></msqrt><annotation encoding="application/x-tex">\sqrt{\mathrm{Gamma}}</annotation></semantics></math>: <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>X</mi><mn>2</mn></msup><mo>∼</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><mi>α</mi><mi>/</mi><mn>2</mn><mo>,</mo><mi>β</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)</annotation></semantics></math>
+<span class="math inline">\(\sqrt{\mathrm{Gamma}}\)</span>: <span class="math inline">\(X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\)</span>
 </td>
 </tr>
 <tr>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\alpha = 1</annotation></semantics></math></td>
-<td>Truncated normal on <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mi>∞</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, \infty)</annotation></semantics></math>, mean <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mi>/</mi><mo stretchy="false" form="prefix">(</mo><mn>2</mn><mi>β</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\gamma / (2\beta)</annotation></semantics></math>
+<td><span class="math inline">\(\alpha = 1\)</span></td>
+<td>Truncated normal on <span class="math inline">\((0, \infty)\)</span>, mean <span class="math inline">\(\gamma / (2\beta)\)</span>
 </td>
 </tr>
 <tr>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mn>1</mn><mo>,</mo><mspace width="0.278em"></mspace><mi>γ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\alpha = 1,\; \gamma = 0</annotation></semantics></math></td>
-<td>Half-normal with scale <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi>/</mi><msqrt><mrow><mn>2</mn><mi>β</mi></mrow></msqrt></mrow><annotation encoding="application/x-tex">1/\sqrt{2\beta}</annotation></semantics></math>
+<td><span class="math inline">\(\alpha = 1,\; \gamma = 0\)</span></td>
+<td>Half-normal with scale <span class="math inline">\(1/\sqrt{2\beta}\)</span>
 </td>
 </tr>
 <tr>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi><mo>→</mo><msup><mn>0</mn><mo>+</mo></msup><mo>,</mo><mspace width="0.278em"></mspace><mi>γ</mi><mo>&lt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\beta \to 0^+,\; \gamma &lt; 0</annotation></semantics></math></td>
+<td><span class="math inline">\(\beta \to 0^+,\; \gamma &lt; 0\)</span></td>
 <td>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><mi>α</mi><mo>,</mo><mi>−</mi><mi>γ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{Gamma}(\alpha, -\gamma)</annotation></semantics></math> (limit)</td>
+<span class="math inline">\(\mathrm{Gamma}(\alpha, -\gamma)\)</span> (limit)</td>
 </tr>
 </tbody>
 </table>
@@ -184,21 +192,21 @@
 <tr>
 <td><code><a href="reference/mhn_mean.html">mhn_mean()</a></code></td>
 <td>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi><mo stretchy="false" form="prefix">(</mo><mi>X</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi mathvariant="normal">Ψ</mi><mo stretchy="false" form="prefix">[</mo><mo stretchy="false" form="prefix">(</mo><mi>α</mi><mo>+</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.167em"></mspace><mi>z</mi><mo stretchy="false" form="postfix">]</mo><mspace width="0.167em"></mspace><mi>/</mi><mspace width="0.167em"></mspace><mo stretchy="false" form="prefix">(</mo><msqrt><mi>β</mi></msqrt><mspace width="0.167em"></mspace><mi mathvariant="normal">Ψ</mi><mo stretchy="false" form="prefix">[</mo><mi>α</mi><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.167em"></mspace><mi>z</mi><mo stretchy="false" form="postfix">]</mo><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])</annotation></semantics></math>, with <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi><mo>=</mo><mi>γ</mi><mi>/</mi><msqrt><mi>β</mi></msqrt></mrow><annotation encoding="application/x-tex">z = \gamma/\sqrt{\beta}</annotation></semantics></math>
+<span class="math inline">\(E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])\)</span>, with <span class="math inline">\(z = \gamma/\sqrt{\beta}\)</span>
 </td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_var.html">mhn_var()</a></code></td>
-<td>Variance from Sun et al. (2023, Lemma 2c)</td>
+<td>Variance, Sun et al. (2023, Lemma 2c) where that form is well conditioned</td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_skewness.html">mhn_skewness()</a></code></td>
-<td>Skewness <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>γ</mi><mn>1</mn></msub><annotation encoding="application/x-tex">\gamma_1</annotation></semantics></math>
+<td>Skewness <span class="math inline">\(\gamma_1\)</span>
 </td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_kurtosis.html">mhn_kurtosis()</a></code></td>
-<td>Excess kurtosis <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>γ</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\gamma_2</annotation></semantics></math>
+<td>Excess kurtosis <span class="math inline">\(\gamma_2\)</span>
 </td>
 </tr>
 <tr>
@@ -208,7 +216,7 @@
 </tbody>
 </table>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/mhn_mean.html">mhn_mean</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>       <span class="co"># 1.16...</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mhn_mean.html">mhn_mean</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>       <span class="co"># 1.1337...</span></span>
 <span><span class="fu"><a href="reference/mhn_skewness.html">mhn_skewness</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>   <span class="co"># positive (density right-skewed)</span></span>
 <span><span class="fu"><a href="reference/mhn_mode.html">mhn_mode</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">1</span>, <span class="op">-</span><span class="fl">1</span><span class="op">)</span>    <span class="co"># NA: monotone-decreasing density</span></span></code></pre></div>
 </div>
@@ -233,14 +241,20 @@ Region γ &gt; 0, α &gt; 1:
                                  closed-form optimal parameters)
 
 Region γ ≤ 0:
-  n-dependent (the crossover at 25 is benchmarked, not theoretical;
-  see vignette("theory") §7 for the cost-decomposition derivation):
-    samples per setup ≥ 25  -&gt; RTDR (lighter per-proposal cost)
-    samples per setup &lt;  25 -&gt; Sun Algorithm 3 (lighter setup cost)</code></pre>
-<p>Forcing a specific sampler:</p>
+  n-dependent (the crossover is benchmarked, not theoretical; see
+  vignette("theory") for the cost-decomposition derivation):
+    α ≥ 10                        -&gt; Sun Algorithm 3 (lower per-proposal
+                                     cost than RTDR once the mode sharpens)
+    samples per setup ≥ N*, α &lt; 10 -&gt; RTDR (lighter per-proposal cost)
+    samples per setup &lt;  N*        -&gt; Sun Algorithm 3 (lighter setup cost)
+  where N* = 25, raised to 100 for α &lt; 0.1: the crossover moves to larger
+  batches as the shape shrinks.</code></pre>
+<p>Choosing a specific sampler:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/rmhn.html">rmhn</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span>, method <span class="op">=</span> <span class="st">"rtdr"</span><span class="op">)</span>   <span class="co"># always RTDR</span></span>
-<span><span class="fu"><a href="reference/rmhn.html">rmhn</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span>, method <span class="op">=</span> <span class="st">"sun"</span><span class="op">)</span>    <span class="co"># always Sun (errors for α &lt; 1, γ &gt; 0)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/rmhn.html">rmhn</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span>, method <span class="op">=</span> <span class="st">"rtdr"</span><span class="op">)</span>   <span class="co"># RTDR for the general case</span></span>
+<span><span class="fu"><a href="reference/rmhn.html">rmhn</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span>, method <span class="op">=</span> <span class="st">"sun"</span><span class="op">)</span>    <span class="co"># Sun for the general case</span></span>
+<span>                                       <span class="co"># (errors for α &lt; 1, γ &gt; 0)</span></span></code></pre></div>
+<p><code>method</code> selects the sampler used for the general case. The closed-form special cases are taken first whatever it is set to: a negligible tilt draws from the square root of a Gamma, and α ≈ 1 from a truncated normal. Both are exact and cheaper than any rejection scheme.</p>
 </div>
 <div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
@@ -258,9 +272,9 @@ Region γ ≤ 0:
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<p>If you use this package in academic work, please cite both the package and the methodology papers (<code>citation("mhn")</code> prints all three):</p>
+<p>If you use this package in academic work, please cite both the package and the methodology papers (<code>citation("mhn")</code> prints all four):</p>
 <ul>
-<li>Momozaki, T. (2026). <em>mhn: The Modified Half-Normal Distribution.</em> R package version 0.1.0.</li>
+<li>Momozaki, T. (2026). <em>mhn: The Modified Half-Normal Distribution.</em> R package version 0.1.1.</li>
 <li>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution: Properties and an efficient sampling scheme. <em>Communications in Statistics — Theory and Methods</em>, 52(5), 1591–1613. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link uri">https://doi.org/10.1080/03610926.2021.1934700</a>
 </li>
 <li>Gao, F. &amp; Wang, H.-B. (2025). Generating modified-half-normal random variates by a relaxed transformed density rejection method. <em>Communications in Statistics — Simulation and Computation</em>. <a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link uri">https://doi.org/10.1080/03610918.2025.2524551</a>
@@ -308,26 +322,19 @@ Region γ ≤ 0:
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Tomotaka Momozaki <br><small class="roles"> Author, maintainer </small>   </li>
+<li>
+<a href="https://github.com/t-momozaki" class="external-link">Tomotaka Momozaki</a> <br><small class="roles"> Author, maintainer </small>   </li>
 </ul>
 </div>
 
-<div class="dev-status">
-<h2 data-toc-skip>Dev status</h2>
-<ul class="list-unstyled">
-<li><a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle: experimental"></a></li>
-<li><a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a></li>
-<li><a href="https://github.com/t-momozaki/mhn/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/t-momozaki/mhn/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
-<li><a href="https://github.com/t-momozaki/mhn/actions/workflows/pkgdown.yaml" class="external-link"><img src="https://github.com/t-momozaki/mhn/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a></li>
-</ul>
-</div>
+
 
   </aside>
 </div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Tomotaka Momozaki.</p>
+  <p>Developed by <a href="https://github.com/t-momozaki" class="external-link">Tomotaka Momozaki</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
