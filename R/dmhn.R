@@ -48,8 +48,8 @@
 #'
 #' When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the
 #' density is evaluated element-wise. The Fox-Wright \eqn{\Psi}
-#' normalizing constant is computed once per distinct triple in the
-#' present a different \eqn{(\alpha, \beta, \gamma)} triple, so passing
+#' normalizing constant is recomputed only when the recycling cycle
+#' presents a distinct \eqn{(\alpha, \beta, \gamma)} triple, so passing
 #' grouped parameters is significantly faster than calling \code{dmhn}
 #' inside an R loop.
 #'

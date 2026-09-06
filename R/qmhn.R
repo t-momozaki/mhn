@@ -27,7 +27,10 @@
 #'
 #' @return A numeric vector. The output length equals
 #'   \code{max(length(p), length(alpha), length(beta), length(gamma))}; each
-#'   input is recycled to that length following standard R recycling rules.
+#'   input is recycled to that length following standard R recycling rules,
+#'   with one exception: a zero-length \code{alpha}, \code{beta} or
+#'   \code{gamma} is an error rather than a \code{numeric(0)} result. Only a
+#'   zero-length \code{p} returns \code{numeric(0)}.
 #'   \code{qmhn(0) = 0} and \code{qmhn(1) = Inf}. Probabilities outside
 #'   \eqn{[0, 1]} yield \code{NaN}.
 #'

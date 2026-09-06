@@ -40,7 +40,10 @@
 #'
 #' @return A numeric vector. The output length equals
 #'   \code{max(length(q), length(alpha), length(beta), length(gamma))}; each
-#'   input is recycled to that length following standard R recycling rules.
+#'   input is recycled to that length following standard R recycling rules,
+#'   with one exception: a zero-length \code{alpha}, \code{beta} or
+#'   \code{gamma} is an error rather than a \code{numeric(0)} result. Only a
+#'   zero-length \code{q} returns \code{numeric(0)}.
 #'   For \code{q <= 0} the CDF is 0; for \code{q = Inf} it is 1.
 #'
 #' @details
@@ -52,8 +55,8 @@
 #'
 #' When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the CDF
 #' is evaluated element-wise.  The Fox-Wright \eqn{\Psi} normalizing
-#' constant is computed once per distinct triple in the recycling
-#' different \eqn{(\alpha, \beta, \gamma)} triple, so passing grouped
+#' constant is recomputed only when the recycling cycle presents a
+#' distinct \eqn{(\alpha, \beta, \gamma)} triple, so passing grouped
 #' parameters is significantly faster than calling \code{pmhn} inside an
 #' R loop.
 #'

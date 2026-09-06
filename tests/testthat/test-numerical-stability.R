@@ -100,12 +100,19 @@ test_that("pmhn stays bounded in cost and range for strongly negative gamma", {
   # The Lemma 10(d) truncation length grows like z^2, so the CDF series asked
   # for ~5e7 terms at gamma = -1e4.  Past a ceiling the series now defers to
   # quadrature, which answers in a bounded number of evaluations.
+  # Cost is asserted through the mechanism rather than the wall clock.  Past
+  # the ceiling the series returns its NaN sentinel, and that sentinel is what
+  # hands the call to quadrature; if the ceiling stopped firing the series
+  # would run its 5e7 terms again and this expectation would be the one to
+  # fail.  A wall-clock bound was the original guard and it failed under
+  # valgrind, which runs everything an order of magnitude slower -- and would
+  # be no less fragile on a loaded CRAN machine.
   for (gamma in c(-800, -2000, -10000, -1e5)) {
-    elapsed <- system.time(v <- pmhn(0.5, alpha = 2.5, beta = 1, gamma = gamma))[["elapsed"]]
+    v <- pmhn(0.5, alpha = 2.5, beta = 1, gamma = gamma)
     expect_true(is.finite(v))
     expect_gte(v, 0)
     expect_lte(v, 1)
-    expect_lt(elapsed, 5)
+    expect_true(is.nan(mhn:::.pmhn_force(0.5, 2.5, 1, gamma, "series")))
   }
   # For gamma < 0 the alternating series is cancellation-prone and returns the
   # NaN sentinel once it cannot meet tolerance, which is how it hands over to
@@ -874,39 +881,78 @@ test_that("the density vanishes at infinity on every path", {
                c(dmhn(1, 2, 1, 1), 0, 0))
 })
 
-test_that("an exhausted retry budget is reported once, and only then", {
+test_that("a steep tilt samples its Gaussian limit, and reports nothing", {
   skip_on_cran()
 
-  # rmhn's only user-visible failure signal.  The counter behind it was guarded
-  # by `ISNAN(x) && !Rcpp::NumericVector::is_na(x)`, and for doubles that second
-  # test is the first one negated, so the condition was never true and the
-  # sampler returned NaN draws in silence.  Nothing in the suite exercised the
-  # warning, because nothing in the suite reached a parameter set that exhausts
-  # the budget.
+  # This triple used to answer differently on different machines.  At
+  # alpha = 0.7 with beta = 1e-8 and gamma = 1e8 the standardised tilt
+  # gamma / sqrt(beta) is 1e12, and setup_region_bc read its contact drop out
+  # of a difference of two values of log g whose own size is
+  # gamma_norm^2 / 4 = 2.5e23.  ulp(2.5e23) is 3.4e7 against a target drop of
+  # log 4, so the drop came back as a small multiple of that ulp and the
+  # envelope was decided by the last bit of exp(): here it built a NaN-bounded
+  # envelope and returned 50 NaN with a retry-budget warning, while Linux and
+  # Windows tripped the p_l >= p_r guard and raised an error, from the same
+  # input.  The earlier version of this test asserted the NaN, which pinned one
+  # platform's rounding as the contract; the outcome was not even monotone in
+  # gamma, since gamma = 3e7 and 1e9 both drew normally.
   #
-  # This one does: at alpha = 0.7 with beta = 1e-8 and gamma = 1e8 the
-  # standardised tilt is 1e12, and no envelope proposes an acceptable draw
-  # inside the retry limit.  The contract is that the call still returns, one
-  # vector of NaN, with exactly one warning naming how many draws failed.
+  # There is nothing exotic about the density here: at this tilt it is
+  # Normal(mode, 1 / (2 beta)) to about 1e-34 relative, so the draws are
+  # checked against that.
+  mu <- mhn_mode(0.7, 1e-8, 1e8)      # 5e15
+  sigma <- 1 / sqrt(2 * 1e-8)         # 7071.07
   set.seed(2)
-  warnings_seen <- character(0)
-  draws <- withCallingHandlers(
-    rmhn(50, 0.7, 1e-8, 1e8),
-    warning = function(cnd) {
-      warnings_seen <<- c(warnings_seen, conditionMessage(cnd))
-      invokeRestart("muffleWarning")
-    })
-  expect_length(warnings_seen, 1L)
-  expect_match(warnings_seen[1], "exhausted its retry budget for 50 of 50")
+  draws <- expect_silent(rmhn(50, 0.7, 1e-8, 1e8))
   expect_length(draws, 50L)
-  expect_true(all(is.nan(draws)))
+  expect_true(all(is.finite(draws)))
+  expect_lt(abs(mean(draws) - mu), 5 * sigma / sqrt(50))
+  expect_gt(sd(draws) / sigma, 0.5)
+  expect_lt(sd(draws) / sigma, 2)
 
-  # And it stays quiet when the sampler is working, which is the other half of
-  # "reported once": a per-draw warning would fire fifty times here.
+  # The other half of the original test: a working sampler stays quiet.  A
+  # per-draw warning would fire fifty times here.
   set.seed(2)
   expect_silent(rmhn(50, 2, 1, 1))
   set.seed(2)
   expect_silent(rmhn(50, 0.3, 1, 100))
+})
+
+test_that("the region BC envelope stays well posed across the tilt range", {
+  skip_on_cran()
+
+  # The invariant that would have caught the above on the first run, rather
+  # than three platforms later.  Nothing in the suite looked at the envelope
+  # away from ordinary tilts, so a construction decided by rounding noise from
+  # gamma / sqrt(beta) ~ 1e8 upward went unseen; the single triple in the test
+  # above was the only steep tilt the suite ever sampled, and it was steep
+  # enough to fail outright rather than to fail quietly.
+  #
+  # Sweep the standardised tilt over the range region BC must handle and
+  # require, at each point, an ordered finite envelope with finite piece areas
+  # and draws consistent with the density's Gaussian limit.  None of these
+  # depends on libm rounding.  The ceiling is 1e13: past about 1e14 the contact
+  # offset falls below one ulp of the mode on the log axis, and the mode's
+  # neighbourhood is no longer representable at all.
+  for (log_tilt in seq(6, 13, by = 0.5)) {
+    for (beta in c(1e-8, 1)) {
+      gamma <- 10^log_tilt * sqrt(beta)
+      info <- sprintf("alpha = 0.7, beta = %g, gamma = %g", beta, gamma)
+      env <- mhn:::.dump_rtdr_envelope_cpp(0.7, beta, gamma)
+      expect_identical(env$region, 1L, info = info)
+      expect_true(is.finite(env$p_l) && is.finite(env$p_r), info = info)
+      expect_lt(env$p_l, env$p_r)
+      expect_true(all(is.finite(env$piece_log_area)), info = info)
+
+      set.seed(4)
+      draws <- rmhn(2000, 0.7, beta, gamma)
+      expect_true(all(is.finite(draws)), info = info)
+      mu <- mhn_mode(0.7, beta, gamma)
+      sigma <- 1 / sqrt(2 * beta)
+      expect_lt(abs(mean(draws) - mu) / (sigma / sqrt(2000)), 5)
+      expect_lt(abs(sd(draws) / sigma - 1), 0.15)
+    }
+  }
 })
 
 test_that("a non-finite shape or rate is refused, in the caller's vocabulary", {

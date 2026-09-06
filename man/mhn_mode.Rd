@@ -14,8 +14,10 @@ mhn_mode(alpha, beta, gamma)
 \item{gamma}{Location parameter (\eqn{\gamma \in R}).}
 }
 \value{
-A numeric scalar. Returns \code{NA} when no interior mode exists
-(density is monotonically decreasing on \eqn{(0, \infty)}).
+A numeric scalar. For \eqn{0 < \alpha < 1} with no interior mode
+(density monotonically decreasing on \eqn{(0, \infty)}) the result is
+\code{NA}; at \eqn{\alpha = 1} with \eqn{\gamma \leq 0} the mode sits on
+the boundary and 0 is returned. See Details.
 }
 \description{
 Computes the mode (most probable value) of the MHN distribution.

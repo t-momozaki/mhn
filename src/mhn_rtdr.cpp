@@ -415,15 +415,58 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
   const double m_g = std::log(u_mode);
   env.mode = m_g;
 
-  auto log_g = [alpha, gn](double y) -> double {
+  auto log_g_raw = [alpha, gn](double y) -> double {
     const double ey = std::exp(y);
     return alpha * y - ey * ey + gn * ey;
   };
-  auto dlog_g = [alpha, gn](double y) -> double {
+  auto dlog_g_raw = [alpha, gn](double y) -> double {
     const double ey = std::exp(y);
     return alpha - 2.0 * ey * ey + gn * ey;
   };
-  const double log_g_mode = log_g(m_g);
+  const double log_g_mode_raw = log_g_raw(m_g);
+
+  // Near the mode, -e^{2y} + gamma_norm e^y = gamma_norm^2/4 - (e^y -
+  // gamma_norm/2)^2, so every evaluation of log g carries the constant
+  // gamma_norm^2/4 -- 2.5e23 at gamma_norm = 1e12.  Everything the envelope
+  // reads out of log g is an O(1) *difference* of two such values: the contact
+  // drop (delta = log 4), the tangent gaps in om1/om3, the between-piece area
+  // ratios, and the accept/reject test.  Once ulp(log g(m_g)) approaches delta
+  // those differences carry no digits -- at gamma_norm = 1e12 they are
+  // quantised to multiples of 3.4e7 against a target of log 4 -- so t_l, om1
+  // and p_l are decided by the last bit of exp().  That is the whole of the
+  // platform split: the same triple built a NaN-bounded envelope on one libm
+  // and tripped the p_l >= p_r guard on another, non-monotonically in gamma.
+  //
+  // Past that point, measure the ordinate from the mode.  With d = y - m_g,
+  // E = expm1(d), and the mode equation 2 u_m^2 - gamma_norm u_m - alpha = 0,
+  //     log g(y) - log g(m_g) = -( u_m^2 E^2 + alpha (E - d) )
+  //     (log g)'(y)           = -E ( alpha + 2 u_m^2 e^d )
+  // Both only ever add same-signed terms, so the drop stays exact at any tilt.
+  // The switch is placed at ulp(log g(m_g)) = delta/100, i.e. gamma_norm
+  // ~ 1.6e7, which measurement puts just below the tilt at which the plain
+  // difference starts to bend the sampled distribution (a KS test of 2e5 draws
+  // against the exact Gaussian limit is clean at gamma_norm = 2.5e7,
+  // D = 0.0025, and fails at 4.0e7, D = 0.0054) and far above any ordinary
+  // tilt -- the package's own test grid reaches gamma_norm = 1e6.  Below the
+  // switch the arithmetic is untouched and the draw sequence is bit-identical.
+  const bool centred =
+      std::abs(log_g_mode_raw) * std::numeric_limits<double>::epsilon() >
+      0.01 * ((gn > 0.0) ? std::log(4.0) : 1.0);
+  const double um2 = u_mode * u_mode;
+  auto log_g = [&](double y) -> double {
+    if (!centred) return log_g_raw(y);
+    const double d = y - m_g;
+    const double E = std::expm1(d);
+    return -(um2 * E * E + alpha * (E - d));
+  };
+  auto dlog_g = [&](double y) -> double {
+    if (!centred) return dlog_g_raw(y);
+    const double d = y - m_g;
+    return -std::expm1(d) * (alpha + 2.0 * um2 * std::exp(d));
+  };
+  const double log_g_mode = centred ? 0.0 : log_g_mode_raw;
+  env.centred = centred;
+  env.u_mode = u_mode;
   env.log_dens_mode = log_g_mode;
   env.simplified = false;  // BC envelope is always 3-piece
 
@@ -477,7 +520,10 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
         make_tneghalf_right(env.t_r, env.slope_r / 2.0, log_g_tr, log_g_mode);
     env.p_l = left.b - left.aux;    // ppl - om1
     env.p_r = right.b + right.aux;  // ppr + om3
-    if (env.p_l >= env.p_r) {
+    // Written !(p_l < p_r) rather than p_l >= p_r so a non-finite endpoint is
+    // caught: `>=` is false for NaN, and a NaN p_l used to walk past this
+    // guard into the plateau's width and poison every piece area.
+    if (!(env.p_l < env.p_r)) {
       ::envelope_failure(env, "region BC intersection");
     }
     pieces.push_back(left);
@@ -487,7 +533,7 @@ void setup_region_bc(mhn::RtdrEnvelope& env) {
     // T_0 log-tangents (g log-concave for gamma_norm <= 0).
     env.p_l = env.t_l + (log_g_mode - log_g_tl) / env.slope_l;
     env.p_r = env.t_r + (log_g_mode - log_g_tr) / env.slope_r;
-    if (env.p_l >= env.p_r) {
+    if (!(env.p_l < env.p_r)) {
       ::envelope_failure(env, "region BC intersection");
     }
     pieces.push_back(make_exp_left(env.p_l, env.slope_l, log_g_mode));
@@ -726,6 +772,17 @@ double log_target_y(double y, double alpha, double gamma_norm) {
   return alpha * y - std::exp(2.0 * y) + gamma_norm * std::exp(y);
 }
 
+// The same target measured from the mode, for an envelope whose ordinate is
+// centred (see setup_region_bc).  Written this way the accept/reject test
+// compares two O(1) numbers; in the raw form both sides are gamma_norm^2/4, so
+// at a large tilt log_u + log_h == log_h exactly and the uniform draw stops
+// influencing acceptance at all.
+double log_target_y_centred(double y, double alpha, double m_g, double u_mode) {
+  const double d = y - m_g;
+  const double E = std::expm1(d);
+  return -(u_mode * u_mode * E * E + alpha * (E - d));
+}
+
 // ====================================================================
 // Fixtures used only by the contact-point unit test below.
 // ====================================================================
@@ -783,9 +840,10 @@ double sample_rtdr(const RtdrEnvelope& env, int* retries_out) {
     const int idx = ::select_piece(env);
     const double s = ::sample_within_piece(env.pieces[idx]);
     const double log_h = ::log_piece_at(env.pieces[idx], s);
-    const double log_target = y_space
-        ? ::log_target_y(s, env.alpha, env.gamma_norm)
-        : ::log_target_x(s, env.alpha, env.gamma_norm);
+    const double log_target =
+        env.centred ? ::log_target_y_centred(s, env.alpha, env.mode, env.u_mode)
+        : (y_space ? ::log_target_y(s, env.alpha, env.gamma_norm)
+                   : ::log_target_x(s, env.alpha, env.gamma_norm));
     const double log_u = std::log(R::runif(0.0, 1.0));
     if (log_u + log_h <= log_target) {
       const double x_norm = y_space ? std::exp(s) : s;
