@@ -462,10 +462,13 @@ log-transformed density. RTDR generalises to the <span class="math inline">\(T_{
 \qquad T_{0}[x] = \log x.\]</span></p>
 <p>A density <span class="math inline">\(f\)</span> is <em><span class="math inline">\(T_{c}\)</span>-concave</em> if <span class="math inline">\(T_{c}[f]\)</span> is concave. Logarithmic
 concavity (the usual TDR setting) is the <span class="math inline">\(c =
-0\)</span> special case. The package’s RTDR implementation uses <span class="math inline">\(c = -1/2\)</span> on the log-axis density for the
-<span class="math inline">\(\alpha &lt; 1\)</span> branches because
-<span class="math inline">\(T_{-1/2}[x] = -x^{-1/2}\)</span>
-accommodates the slower decay of <span class="math inline">\(g(y)\)</span> when the original <span class="math inline">\(f\)</span> has a boundary singularity at <span class="math inline">\(x = 0\)</span>.</p>
+0\)</span> special case. Which transform the package’s RTDR
+implementation uses on the log-axis density turns on the sign of the
+tilt, not on <span class="math inline">\(\alpha\)</span>: for <span class="math inline">\(\gamma &gt; 0\)</span> it takes <span class="math inline">\(c = -1/2\)</span>, because <span class="math inline">\(\log g\)</span> is then convex on <span class="math inline">\((-\infty, \log(\gamma/\sqrt{\beta}/4))\)</span>
+and a log-tangent hat would fail to dominate there, while <span class="math inline">\(T_{-1/2}[x] = -x^{-1/2}\)</span> still does. For
+<span class="math inline">\(\gamma \leq 0\)</span> the log-axis density
+is log-concave and the ordinary <span class="math inline">\(c =
+0\)</span> tangent hat is used.</p>
 </div>
 <div class="section level3">
 <h3 id="working-on-the-log-axis-when-alpha-1">Working on the log axis when <span class="math inline">\(\alpha &lt;
@@ -572,7 +575,7 @@ logarithmically in <span class="math inline">\(\gamma\)</span>.</p>
 contact points, which generally have no closed form and must be found by
 Newton iteration. Gao &amp; Wang (2025, Theorem 2.1) show that the
 acceptance bound <span class="math inline">\(\leq e \approx
-2.719\)</span> (equivalently, acceptance probability <span class="math inline">\(\geq 1/e \approx 0.368\)</span>) holds as long as
+2.718\)</span> (equivalently, acceptance probability <span class="math inline">\(\geq 1/e \approx 0.368\)</span>) holds as long as
 the contact points lie <em>anywhere</em> inside a fixed interval —
 namely</p>
 <p><span class="math display">\[\log\!\frac{f(m)}{f(t)} \in
@@ -635,9 +638,8 @@ first two select the sampler used for the general case; the closed-form
 special cases below are taken first whatever <code>method</code> is set
 to, since they are exact and cheaper than any rejection scheme. The
 <code>"auto"</code> route is the package’s recommendation; it composes
-the four shortcuts above into one decision tree (this is the Step 3.7.3
-final form, confirmed by the benchmarks under
-<code>inst/benchmarks/</code>):</p>
+the four shortcuts above into one decision tree, confirmed by the
+benchmarks under <code>inst/benchmarks/</code>:</p>
 <pre><code>                  rmhn(n, alpha, beta, gamma, method = "auto")
                                     │
                                     ▼

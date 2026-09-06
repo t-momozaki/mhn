@@ -45,9 +45,11 @@ qmhn(p, alpha = 1, beta = 1, gamma = 0, lower.tail = TRUE, log.p = FALSE)
 
 A numeric vector. The output length equals
 `max(length(p), length(alpha), length(beta), length(gamma))`; each input
-is recycled to that length following standard R recycling rules.
-`qmhn(0) = 0` and `qmhn(1) = Inf`. Probabilities outside \\\[0, 1\]\\
-yield `NaN`.
+is recycled to that length following standard R recycling rules, with
+one exception: a zero-length `alpha`, `beta` or `gamma` is an error
+rather than a `numeric(0)` result. Only a zero-length `p` returns
+`numeric(0)`. `qmhn(0) = 0` and `qmhn(1) = Inf`. Probabilities outside
+\\\[0, 1\]\\ yield `NaN`.
 
 ## Details
 

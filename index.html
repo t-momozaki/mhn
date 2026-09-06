@@ -92,7 +92,7 @@
 </tr>
 <tr>
 <td><span class="math inline">\(\alpha = 1\)</span></td>
-<td>Truncated normal on <span class="math inline">\((0, \infty)\)</span>, mean <span class="math inline">\(\gamma / (2\beta)\)</span>
+<td>Truncated normal on <span class="math inline">\((0, \infty)\)</span> with location <span class="math inline">\(\gamma / (2\beta)\)</span> and scale <span class="math inline">\(1/\sqrt{2\beta}\)</span>
 </td>
 </tr>
 <tr>
@@ -113,12 +113,11 @@
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Development version from GitHub:</span></span>
-<span><span class="co"># install.packages("remotes")</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"t-momozaki/mhn"</span><span class="op">)</span></span></code></pre></div>
-<p>Once the package is on CRAN it will also be installable with the usual</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"mhn"</span><span class="op">)</span></span></code></pre></div>
+<p>The development version is on GitHub:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"t-momozaki/mhn"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>

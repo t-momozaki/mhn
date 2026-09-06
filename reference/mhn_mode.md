@@ -24,8 +24,10 @@ mhn_mode(alpha, beta, gamma)
 
 ## Value
 
-A numeric scalar. Returns `NA` when no interior mode exists (density is
-monotonically decreasing on \\(0, \infty)\\).
+A numeric scalar. For \\0 \< \alpha \< 1\\ with no interior mode
+(density monotonically decreasing on \\(0, \infty)\\) the result is
+`NA`; at \\\alpha = 1\\ with \\\gamma \leq 0\\ the mode sits on the
+boundary and 0 is returned. See Details.
 
 ## Details
 

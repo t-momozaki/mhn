@@ -96,7 +96,10 @@ log scale. Default: <code>FALSE</code>.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A numeric vector. The output length equals
 <code>max(length(q), length(alpha), length(beta), length(gamma))</code>; each
-input is recycled to that length following standard R recycling rules.
+input is recycled to that length following standard R recycling rules,
+with one exception: a zero-length <code>alpha</code>, <code>beta</code> or
+<code>gamma</code> is an error rather than a <code>numeric(0)</code> result. Only a
+zero-length <code>q</code> returns <code>numeric(0)</code>.
 For <code>q &lt;= 0</code> the CDF is 0; for <code>q = Inf</code> it is 1.</p>
     </div>
     <div class="section level2">
@@ -123,8 +126,8 @@ numerical integration of the density on \([0, q]\).</p>
 <li><p>\(\alpha = 1\): truncated-normal CDF via <code>pnorm</code></p></li>
 </ul><p>When any of <code>alpha</code>, <code>beta</code>, <code>gamma</code> is a vector, the CDF
 is evaluated element-wise.  The Fox-Wright \(\Psi\) normalizing
-constant is computed once per distinct triple in the recycling
-different \((\alpha, \beta, \gamma)\) triple, so passing grouped
+constant is recomputed only when the recycling cycle presents a
+distinct \((\alpha, \beta, \gamma)\) triple, so passing grouped
 parameters is significantly faster than calling <code>pmhn</code> inside an
 R loop.</p>
     </div>

@@ -22,7 +22,7 @@ of familiar one-sided distributions:
 | Constraint | Reduction |
 |----|----|
 | \\\gamma = 0\\ | \\\sqrt{\mathrm{Gamma}}\\: \\X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\\ |
-| \\\alpha = 1\\ | Truncated normal on \\(0, \infty)\\, mean \\\gamma / (2\beta)\\ |
+| \\\alpha = 1\\ | Truncated normal on \\(0, \infty)\\ with location \\\gamma / (2\beta)\\ and scale \\1/\sqrt{2\beta}\\ |
 | \\\alpha = 1,\\ \gamma = 0\\ | Half-normal with scale \\1/\sqrt{2\beta}\\ |
 | \\\beta \to 0^+,\\ \gamma \< 0\\ | \\\mathrm{Gamma}(\alpha, -\gamma)\\ (limit) |
 
@@ -35,16 +35,15 @@ acceptance bound, and dispatches between them automatically.
 
 ``` r
 
-# Development version from GitHub:
-# install.packages("remotes")
-remotes::install_github("t-momozaki/mhn")
+install.packages("mhn")
 ```
 
-Once the package is on CRAN it will also be installable with the usual
+The development version is on GitHub:
 
 ``` r
 
-install.packages("mhn")
+# install.packages("remotes")
+remotes::install_github("t-momozaki/mhn")
 ```
 
 ## Quick start

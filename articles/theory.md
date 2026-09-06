@@ -303,10 +303,13 @@ log-transformed density. RTDR generalises to the \\T\_{c}\\ family
 
 A density \\f\\ is *\\T\_{c}\\-concave* if \\T\_{c}\[f\]\\ is concave.
 Logarithmic concavity (the usual TDR setting) is the \\c = 0\\ special
-case. The package’s RTDR implementation uses \\c = -1/2\\ on the
-log-axis density for the \\\alpha \< 1\\ branches because
-\\T\_{-1/2}\[x\] = -x^{-1/2}\\ accommodates the slower decay of \\g(y)\\
-when the original \\f\\ has a boundary singularity at \\x = 0\\.
+case. Which transform the package’s RTDR implementation uses on the
+log-axis density turns on the sign of the tilt, not on \\\alpha\\: for
+\\\gamma \> 0\\ it takes \\c = -1/2\\, because \\\log g\\ is then convex
+on \\(-\infty, \log(\gamma/\sqrt{\beta}/4))\\ and a log-tangent hat
+would fail to dominate there, while \\T\_{-1/2}\[x\] = -x^{-1/2}\\ still
+does. For \\\gamma \leq 0\\ the log-axis density is log-concave and the
+ordinary \\c = 0\\ tangent hat is used.
 
 ### Working on the log axis when \\\alpha \< 1\\
 
@@ -359,7 +362,7 @@ log-convex side, with \\K\\ growing logarithmically in \\\gamma\\.
 The classical TDR construction asks for *optimal* tangent contact
 points, which generally have no closed form and must be found by Newton
 iteration. Gao & Wang (2025, Theorem 2.1) show that the acceptance bound
-\\\leq e \approx 2.719\\ (equivalently, acceptance probability \\\geq
+\\\leq e \approx 2.718\\ (equivalently, acceptance probability \\\geq
 1/e \approx 0.368\\) holds as long as the contact points lie *anywhere*
 inside a fixed interval — namely
 
@@ -423,8 +426,8 @@ The first two select the sampler used for the general case; the
 closed-form special cases below are taken first whatever `method` is set
 to, since they are exact and cheaper than any rejection scheme. The
 `"auto"` route is the package’s recommendation; it composes the four
-shortcuts above into one decision tree (this is the Step 3.7.3 final
-form, confirmed by the benchmarks under `inst/benchmarks/`):
+shortcuts above into one decision tree, confirmed by the benchmarks
+under `inst/benchmarks/`:
 
                       rmhn(n, alpha, beta, gamma, method = "auto")
                                         │

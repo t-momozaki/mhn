@@ -45,8 +45,10 @@ pmhn(q, alpha = 1, beta = 1, gamma = 0, lower.tail = TRUE, log.p = FALSE)
 
 A numeric vector. The output length equals
 `max(length(q), length(alpha), length(beta), length(gamma))`; each input
-is recycled to that length following standard R recycling rules. For
-`q <= 0` the CDF is 0; for `q = Inf` it is 1.
+is recycled to that length following standard R recycling rules, with
+one exception: a zero-length `alpha`, `beta` or `gamma` is an error
+rather than a `numeric(0)` result. Only a zero-length `q` returns
+`numeric(0)`. For `q <= 0` the CDF is 0; for `q = Inf` it is 1.
 
 ## Details
 
@@ -73,8 +75,8 @@ Special cases are detected and dispatched to standard R primitives:
 - \\\alpha = 1\\: truncated-normal CDF via `pnorm`
 
 When any of `alpha`, `beta`, `gamma` is a vector, the CDF is evaluated
-element-wise. The Fox-Wright \\\Psi\\ normalizing constant is computed
-once per distinct triple in the recycling different \\(\alpha, \beta,
+element-wise. The Fox-Wright \\\Psi\\ normalizing constant is recomputed
+only when the recycling cycle presents a distinct \\(\alpha, \beta,
 \gamma)\\ triple, so passing grouped parameters is significantly faster
 than calling `pmhn` inside an R loop.
 

@@ -66,7 +66,7 @@ underflow/overflow.
 
 When any of `alpha`, `beta`, `gamma` is a vector, the density is
 evaluated element-wise. The Fox-Wright \\\Psi\\ normalizing constant is
-computed once per distinct triple in the present a different \\(\alpha,
+recomputed only when the recycling cycle presents a distinct \\(\alpha,
 \beta, \gamma)\\ triple, so passing grouped parameters is significantly
 faster than calling `dmhn` inside an R loop.
 

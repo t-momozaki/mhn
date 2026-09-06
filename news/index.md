@@ -62,10 +62,10 @@ reasons a sequence changes, and they matter differently:
 
 - `rmhn(method = "rtdr")`, and hence the default `method = "auto"` where
   it routes there, drew biased samples for `alpha < 1` and `gamma > 0`:
-  on the log axis the density is only \\T\_{-1/2}\\-concave in that
-  region, not log-concave, so the previous log-tangent envelope did not
-  dominate it and over-weighted large values. The envelope now follows
-  Gao & Wang (2025, Section 3.2 and Appendix B), using a \\T\_{-1/2}\\
+  on the log axis the density is only `T_{-1/2}`-concave in that region,
+  not log-concave, so the previous log-tangent envelope did not dominate
+  it and over-weighted large values. The envelope now follows Gao & Wang
+  (2025, Section 3.2 and Appendix B), using a `T_{-1/2}`
   (inverse-square) tangent hat when `gamma > 0` and the log-tangent hat
   only when `gamma <= 0`.
 
@@ -80,6 +80,26 @@ reasons a sequence changes, and they matter differently:
   [`pmhn()`](https://t-momozaki.github.io/mhn/reference/pmhn.md) gave
   `p = 1.2e-121`. Both the area and the inverse CDF now factor the
   dominant exponential out instead of forming it.
+
+- The RTDR envelope for `alpha <= 1` was decided by rounding once the
+  standardised tilt `gamma / sqrt(beta)` passed about 1e8, and answered
+  differently on different machines: at `(0.7, 1e-8, 1e8)` macOS
+  returned 50 `NaN` while Linux and Windows raised an error, from the
+  same input, and the outcome was not even monotone in `gamma`. Near the
+  mode the log-axis density carries the constant `gamma_norm^2 / 4` —
+  2.5e23 at that tilt — while every quantity the envelope reads out of
+  it is an `O(1)` difference of two such values, so the contact drop was
+  quantised to multiples of 3.4e7 against a target of `log 4`. Past a
+  conditioning threshold the ordinate is now measured from the mode
+  through an identity that only ever adds same-signed terms, and the
+  accept/reject test is measured the same way — without that second half
+  the sampler draws from its own hat. Draws below
+  `gamma / sqrt(beta) = 1.6e7` are unchanged; above 1e8 they change and
+  the new ones are the correct ones, with a Kolmogorov-Smirnov statistic
+  against the exact Gaussian limit of 0.0019 where it had reached 0.384
+  and a sample standard deviation within 0.07% of the truth where it had
+  been 21 times too large. Regions A and D carry the same defect at the
+  same tilts and are not fixed here.
 
 - `rmhn(200, 1.5, 0.01, 3162.3)` returned 200 `NaN`, behind 200 warnings
   that the Algorithm 1 sampler had exhausted its retry budget. Sun et
@@ -217,10 +237,13 @@ reasons a sequence changes, and they matter differently:
   than the answer.
 
 - [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md)
-  was 31% wrong by `gamma = 1e8`, differencing two `log Psi` values that
-  are each about `z^2/4` when their difference is about `log z`. Past
-  the point where that error would exceed the working tolerance it now
-  takes the quadrature mean.
+  was 31% wrong at `(2.5, 1, 1e8)`, differencing two `log Psi` values
+  that are each about `z^2/4` when their difference is about `log z`.
+  Nothing about that error is systematic: it is the last bits of a total
+  cancellation, so it lands at +31% for some shapes and -20% for others,
+  and by `gamma = 1e9` it reaches a factor of 1.6e5. Past the point
+  where the error would exceed the working tolerance the mean now comes
+  from quadrature.
 
 - `log Psi[1/2, z]` carried an absolute error of 0.73 at `z = -1e8`, in
   a quantity whose true value is -17.73: `z^2/4` and `log Phi(z/sqrt 2)`
@@ -360,7 +383,8 @@ reasons a sequence changes, and they matter differently:
 
 ### Tests
 
-- The suite grows from about 2,100 expectations to about 5,900, with a
+- The suite grows from about 2,100 expectations to about 6,300, of which
+  6,066 run under `R CMD check` and 37 blocks are skipped there, with a
   regression block for each defect above at the parameter values that
   failed. New coverage: non-unit `beta` throughout the sampler grids and
   a direct check of scale equivariance; the contact-point search in
