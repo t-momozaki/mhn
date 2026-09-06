@@ -11,62 +11,59 @@ failed.
 
 ## Test environments
 
-<!-- ACTION REQUIRED BEFORE SUBMISSION -------------------------------------
-The win-builder, GitHub Actions and R-hub results recorded below were obtained
-on the earlier 0.1.1 tarball, before the numerical fixes below changed the C++
-sources.  They do not describe the tarball this file accompanies.  Re-run all
-three on the current tarball and replace the three bullets below with the new
-results before submitting.  Delete this comment once that is done.
--------------------------------------------------------------------------- -->
+All of the results below were obtained on the tarball this file accompanies.
 
-* local macOS 26.3.1 (Darwin), aarch64-apple-darwin20, R 4.5.1 (2025-06-13)
-  — Apple clang 17.0.0. `R CMD check --as-cran` run this session on the
-  built `mhn_0.1.1.tar.gz`. Result below.
+* local macOS 26.5.2 (Darwin 25.5.0), aarch64-apple-darwin20, R 4.5.1
+  (2025-06-13) — Apple clang 17.0.0. `R CMD check --as-cran` on the built
+  `mhn_0.1.1.tar.gz`. Result below.
 
-* win-builder, run on the 0.1.1 tarball via `devtools::check_win_devel()`,
-  `check_win_release()` and `check_win_oldrelease()` — **all three
-  Status: OK** (0 errors, 0 warnings, 0 notes):
-    * R-devel   — R Under development (unstable) (2026-07-23 r90295 ucrt)
+* win-builder, via `devtools::check_win_devel()`, `check_win_release()` and
+  `check_win_oldrelease()` — **all three Status: OK** (0 errors, 0 warnings,
+  0 notes):
+    * R-devel   — R Under development (unstable) (2026-09-04 r90492 ucrt)
     * R-release — R 4.6.1 (2026-06-24 ucrt)
     * R-oldrel  — R 4.5.3 (2026-03-11 ucrt)
 
-The 0.1.1 tarball was additionally checked on GitHub Actions:
-
 * GitHub Actions R-CMD-check matrix: ubuntu-latest (R-devel, R-release,
   R-oldrel-1), macos-latest (R-release), windows-latest (R-release) — **all
-  green** (0 errors, 0 warnings, 0 notes).
-* R-hub v2 on `linux` (R-devel), `windows` (R-devel), `macos-arm64`
-  (R-devel), `clang-asan`, `valgrind` and `rchk`: **five of the six platforms
-  pass** (linux, windows, macos-arm64, clang-asan, valgrind). As in 0.1.0,
-  only `rchk` reports a problem, and it is the long-known Rcpp `Shield<T>`
-  RAII false positive — `[PB]`/`[UP]` against `Rcpp::Rcpp_protect` /
-  `Rcpp::Rcpp_unprotect` in `Rcpp/include/Rcpp/protection/Shield.h:25`/`:31`
-  — accompanied only by rchk's own "address taken, results will be
-  incomplete" limitation notes on the Rcpp-generated wrappers and "too many
-  states" abstraction errors on R's own internals (`strptime_internal`,
-  `bcEval_loop`, `RunGenCollect`). No mhn-side function is flagged with a
-  protection bug.
+  five green**. Worth noting because it is a stricter run than the others:
+  r-lib's workflow sets `NOT_CRAN=true`, so the 38 `skip_on_cran()` blocks
+  execute there as well and the full suite runs: 6533 expectations pass with
+  none skipped.
+
+* R-hub v2 on `linux` (R-devel), `windows` (R-devel), `macos-arm64` (R-devel),
+  `clang-asan`, `valgrind` and `rchk`: **five of the six pass** — linux,
+  windows, macos-arm64, clang-asan and valgrind. Valgrind's own report is
+  clean: `ERROR SUMMARY: 0 errors from 0 contexts`, `definitely lost: 0 bytes
+  in 0 blocks`.
+
+  As in 0.1.0, only `rchk` reports a problem, and it is the long-known Rcpp
+  `Shield<T>` RAII false positive: the only `[PB]`/`[UP]` findings are against
+  `Rcpp/include/Rcpp/protection/Shield.h:25` and `:31` ("has possible
+  protection stack imbalance", "unsupported form of unprotect with a
+  variable"), accompanied by rchk's own "address taken, results will be
+  incomplete" limitation notes on the Rcpp-generated wrappers. **No mhn
+  function is flagged with a protection bug** — the count of mhn-side
+  protection findings in the run log is zero.
 
 ## R CMD check results
-
-On win-builder the package is fully clean — **0 errors | 0 warnings | 0
-notes** on R-devel, R-release and R-oldrelease (see Test environments above).
 
 Local `R CMD check --as-cran` on R 4.5.1 (macOS) on the submitted tarball
 reports
 
   0 errors | 0 warnings | 1 note
 
-`checking CRAN incoming feasibility` is OK locally, and the examples, tests,
-and vignette rebuild all pass. The note is local tooling only and does not
-appear on win-builder or on CRAN's own check infrastructure. A second note,
-`checking for future file timestamps`, appears on runs where the machine
-cannot reach the remote clock service; it did not appear on this run.
+On win-builder the package is fully clean on all three R versions — 0 errors,
+0 warnings and 0 notes — so the note below is local tooling only.
 
-### NOTE — `checking HTML version of manual ... 'tidy' doesn't look like recent enough HTML Tidy` / `package 'V8' unavailable`
+### NOTE — `checking HTML version of manual`
 
-The local machine lacks a recent HTML Tidy and the `V8` package; CRAN's
-machines have both. This is a local-tooling note only.
+`'tidy' doesn't look like recent enough HTML Tidy` and `package 'V8'
+unavailable`. The local machine lacks a recent HTML Tidy and the `V8` package;
+CRAN's machines have both, and win-builder does not raise this note.
+
+A second note, `checking for future file timestamps`, appears on runs where the
+machine cannot reach the remote clock service; it did not appear on this run.
 
 ### Possible `checking CRAN incoming feasibility` note on the update
 
@@ -96,16 +93,26 @@ what a reviewer or user would notice.
   correcting a constant in a rejection sampler's envelope changes which variates
   are proposed and accepted. `NEWS.md` gives the measured breakdown.
 
+* **The sampler's envelope no longer depends on the platform at a steep tilt.**
+  For `alpha <= 1` above a standardised tilt `gamma / sqrt(beta)` of about 1e8,
+  the envelope construction was decided by the last bit of `exp()`, and the
+  same input gave different answers on different operating systems. Draws below
+  `gamma / sqrt(beta) = 1.6e7` are bit-identical to 0.1.0 --- which covers the
+  whole of the 330-cell grid above, whose largest tilt is 1e7 --- and above 1e8
+  they change, with the new ones matching the distribution's exact Gaussian
+  limit (Kolmogorov-Smirnov statistic 0.0019 where the old code reached 0.384).
+
 * **The density, distribution, quantile and moment functions return corrected
   values at extreme parameters.** `dmhn()` and `pmhn()` returned 0 for `alpha`
-  near 2 with a large tilt; `pmhn()` returned 0 at its own mode for `gamma`
-  above 3e4 and exactly 0 in the upper tail below 1e-16; `qmhn()` was wrong by
-  36 orders of magnitude for small `alpha`; `mhn_kurtosis()` returned a value
-  below its theoretical minimum. Values also move slightly inside the ordinary
-  range --- 30 of 130 grid cells with `|gamma|/sqrt(beta)` at most 10, by at
-  most 7.9e-6 relative --- because the Lemma 2c variance already cancels
-  measurably there. In every case checked against an arbitrary-precision
-  reference the new value is the accurate one.
+  near 2 with a large tilt; for `gamma > 0` past a moderate tilt `pmhn()`
+  raised a series-truncation error rather than answering, on parameter sets as
+  ordinary as `(2.5, 1e-4, 20)`; `pmhn()` returned exactly 0 in the upper tail
+  below 1e-16; `qmhn()` was wrong by 23 orders of magnitude for small `alpha`;
+  `mhn_kurtosis()` returned a value below its theoretical minimum. Values also
+  move slightly inside the ordinary range --- 30 of 130 grid cells with
+  `|gamma|/sqrt(beta)` at most 10, by at most 7.9e-6 relative --- because the
+  Lemma 2c variance already cancels measurably there. In every case checked
+  against an arbitrary-precision reference the new value is the accurate one.
 
 * **Three interface behaviours now match base R.** `dmhn()`/`pmhn()` returned
   `NA` for a `NaN` input where the `d`/`p`/`q` family returns `NaN`; `rmhn()`
@@ -123,30 +130,33 @@ what a reviewer or user would notice.
 
 No exported function gains or loses an argument, and no default changes. The
 `inst/` benchmark, example and audit scripts are not run during `R CMD check`,
-need no network, and do not materially affect the installed size.
+need no network, and do not materially affect the installed size: the tarball
+is 343 KB and the installed package 1.5 MB.
 
 ## Downstream dependencies
 
-There are no reverse dependencies. Verified 2026-07-24 against the CRAN
-package database with `tools::package_dependencies("mhn", reverse = TRUE)`
-(across `Depends`, `Imports`, `LinkingTo`, and `Suggests`), which returns
-none. Because there are no reverse dependencies, the corrected `rmhn()` output
-cannot affect any downstream CRAN package.
+There are no reverse dependencies. Verified 2026-09-06 against the CRAN
+package database (24858 packages) with
+`tools::package_dependencies("mhn", reverse = TRUE)` across `Depends`,
+`Imports`, `LinkingTo` and `Suggests`, which returns none. Because there are
+no reverse dependencies, the corrected `rmhn()` output cannot affect any
+downstream CRAN package.
 
 ## Notes on tests and vignettes
 
 * The default test suite (`tests/testthat/`) completes well within the CRAN
   budget. This session, inside `R CMD check --as-cran` on the submitted
-  tarball: 6066 pass / 0 fail / 0 warn / 37 skip.
-* The 37 skips are heavier goodness-of-fit (Kolmogorov-Smirnov) and
+  tarball: 6066 pass / 0 fail / 0 warn / 38 skip.
+* The 38 skips are heavier goodness-of-fit (Kolmogorov-Smirnov) and
   large-`n` regression blocks in `tests/testthat/test-rmhn.R`,
   `test-rmhn-sun.R`, `test-rmhn-rtdr-regions.R` and
-  `test-numerical-stability.R`, guarded with
-  `skip_on_cran()` so they exercise the package fully in local development
-  and on CI while keeping CRAN check time low. The remaining (non-skipped)
-  tests still cover the public API, special cases, vectorisation, NA
-  propagation, the Sun et al. (2023) and Gao & Wang (2025) algorithm
-  dispatch, and the input-validation contract.
+  `test-numerical-stability.R`, guarded with `skip_on_cran()` so they
+  exercise the package fully in local development and on CI while keeping
+  CRAN check time low. They are not untested: the GitHub Actions matrix
+  above runs with `NOT_CRAN=true`, so all five of its platforms execute
+  them. The remaining (non-skipped) tests still cover the public API,
+  special cases, vectorisation, NA propagation, the Sun et al. (2023) and
+  Gao & Wang (2025) algorithm dispatch, and the input-validation contract.
 * The two vignettes (`introduction.Rmd`, `theory.Rmd`) build in well under
   one minute combined; both are static knitr/rmarkdown documents with no
   network access, no random external data, and seeded RNG calls.
