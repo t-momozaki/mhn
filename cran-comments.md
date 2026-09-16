@@ -20,15 +20,15 @@ All of the results below were obtained on the tarball this file accompanies.
 * win-builder, via `devtools::check_win_devel()`, `check_win_release()` and
   `check_win_oldrelease()` — **all three Status: OK** (0 errors, 0 warnings,
   0 notes):
-    * R-devel   — R Under development (unstable) (2026-09-04 r90492 ucrt)
+    * R-devel   — R Under development (unstable) (2026-09-15 r90540 ucrt)
     * R-release — R 4.6.1 (2026-06-24 ucrt)
     * R-oldrel  — R 4.5.3 (2026-03-11 ucrt)
 
 * GitHub Actions R-CMD-check matrix: ubuntu-latest (R-devel, R-release,
   R-oldrel-1), macos-latest (R-release), windows-latest (R-release) — **all
   five green**. Worth noting because it is a stricter run than the others:
-  r-lib's workflow sets `NOT_CRAN=true`, so the 38 `skip_on_cran()` blocks
-  execute there as well and the full suite runs: 6533 expectations pass with
+  r-lib's workflow sets `NOT_CRAN=true`, so the 40 `skip_on_cran()` blocks
+  execute there as well and the full suite runs: 9268 expectations pass with
   none skipped.
 
 * R-hub v2 on `linux` (R-devel), `windows` (R-devel), `macos-arm64` (R-devel),
@@ -94,13 +94,18 @@ what a reviewer or user would notice.
   are proposed and accepted. `NEWS.md` gives the measured breakdown.
 
 * **The sampler's envelope no longer depends on the platform at a steep tilt.**
-  For `alpha <= 1` above a standardised tilt `gamma / sqrt(beta)` of about 1e8,
-  the envelope construction was decided by the last bit of `exp()`, and the
-  same input gave different answers on different operating systems. Draws below
-  `gamma / sqrt(beta) = 1.6e7` are bit-identical to 0.1.0 --- which covers the
-  whole of the 330-cell grid above, whose largest tilt is 1e7 --- and above 1e8
-  they change, with the new ones matching the distribution's exact Gaussian
-  limit (Kolmogorov-Smirnov statistic 0.0019 where the old code reached 0.384).
+  Above a standardised tilt `gamma / sqrt(beta)` of about 1e8 the envelope
+  construction was decided by the last bit of `exp()`, and the same input gave
+  different answers on different operating systems. All three envelope regions
+  carried it, including the one the default path uses for `alpha < 1/2` with a
+  positive tilt. Draws below `gamma / sqrt(beta) = 5e6` are bit-identical to
+  0.1.0 --- which covers the whole of the 330-cell grid above, whose largest
+  tilt is 1e7 --- and above it they change, with the new ones matching the
+  distribution's exact Gaussian limit: the Kolmogorov-Smirnov statistic is
+  0.004 where the old code reached 1.000, and the sample standard deviation is
+  within 0.5% of the truth where it had been 1593 times too large. The
+  acceptance rate, which Gao & Wang bound below by `1/e`, is now flat at 0.85
+  to 0.88 across the range, where it had fallen to 0.001.
 
 * **The density, distribution, quantile and moment functions return corrected
   values at extreme parameters.** `dmhn()` and `pmhn()` returned 0 for `alpha`
@@ -131,12 +136,12 @@ what a reviewer or user would notice.
 No exported function gains or loses an argument, and no default changes. The
 `inst/` benchmark, example and audit scripts are not run during `R CMD check`,
 need no network, and do not materially affect the installed size: the tarball
-is 343 KB and the installed package 1.5 MB.
+is 352 KB and the installed package 1.5 MB.
 
 ## Downstream dependencies
 
-There are no reverse dependencies. Verified 2026-09-06 against the CRAN
-package database (24858 packages) with
+There are no reverse dependencies. Verified 2026-09-16 against the CRAN
+package database (25028 packages) with
 `tools::package_dependencies("mhn", reverse = TRUE)` across `Depends`,
 `Imports`, `LinkingTo` and `Suggests`, which returns none. Because there are
 no reverse dependencies, the corrected `rmhn()` output cannot affect any
@@ -146,8 +151,8 @@ downstream CRAN package.
 
 * The default test suite (`tests/testthat/`) completes well within the CRAN
   budget. This session, inside `R CMD check --as-cran` on the submitted
-  tarball: 6066 pass / 0 fail / 0 warn / 38 skip.
-* The 38 skips are heavier goodness-of-fit (Kolmogorov-Smirnov) and
+  tarball: 6071 pass / 0 fail / 0 warn / 40 skip.
+* The 40 skips are heavier goodness-of-fit (Kolmogorov-Smirnov) and
   large-`n` regression blocks in `tests/testthat/test-rmhn.R`,
   `test-rmhn-sun.R`, `test-rmhn-rtdr-regions.R` and
   `test-numerical-stability.R`, guarded with `skip_on_cran()` so they
