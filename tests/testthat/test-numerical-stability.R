@@ -955,6 +955,172 @@ test_that("the region BC envelope stays well posed across the tilt range", {
   }
 })
 
+test_that("the region A envelope stays well posed across the tilt range", {
+  skip_on_cran()
+
+  # Region BC's invariant, applied to region A, which carried the same defect
+  # and was left out of the fix for it.  Region A works on f(x) in x rather
+  # than on the log axis, and log f(x) = (alpha-1) log x - x^2 + gamma_norm x
+  # is gamma_norm^2/4 - (x - gamma_norm/2)^2 up to the power term, so every
+  # value of it carries gamma_norm^2/4 -- 2.5e19 at gamma_norm = 1e10, one ulp
+  # of which is 5.5e3 -- while the contact drop, the two intersections, the
+  # piece areas and the accept test are all O(1) differences of two such
+  # values.  Unfixed, this returned draws whose standard deviation was 12x the
+  # truth, and at some triples no draws at all.
+  #
+  # The two assertions that are not in the BC block are the ones that catch the
+  # second defect, which the mode-centred ordinate exposes rather than cures:
+  # the contact search starting a fixed fraction of the mode away from it needs
+  # log2(m/2) Newton steps against a budget of 30, so past gamma_norm ~ 2e9 it
+  # returned a contact whose drop was hundreds instead of one.  The draws stay
+  # correctly distributed -- any tangent of a concave log-density dominates --
+  # so neither the KS test nor the moments see it.  Only the width of the
+  # plateau and the acceptance rate do, and the acceptance rate is the quantity
+  # Gao & Wang (2025) bound below by 1/e.
+  #
+  # gamma > 0 with alpha > 1 is dispatched to Sun's Algorithm 1, so region A
+  # has to be asked for by name here.  The ceiling is 1e13: one ulp of the mode
+  # is 1.57e-16 * gamma_norm standard deviations in this coordinate, so past
+  # about 1e14 the draws fall on a visible lattice and no sampler working in x
+  # can do better.
+  for (log_tilt in seq(6, 13, by = 0.5)) {
+    for (beta in c(1e-8, 1)) {
+      for (alpha in c(1.5, 2, 10)) {
+        gamma <- 10^log_tilt * sqrt(beta)
+        info <- sprintf("alpha = %g, beta = %g, gamma = %g", alpha, beta, gamma)
+        env <- mhn:::.dump_rtdr_envelope_cpp(alpha, beta, gamma)
+        expect_identical(env$region, 0L, info = info)
+        expect_true(is.finite(env$p_l) && is.finite(env$p_r), info = info)
+        expect_gt(env$p_l, 0)
+        expect_lt(env$p_l, env$p_r)
+        expect_lt(env$t_l, env$mode)
+        expect_gt(env$t_r, env$mode)
+        expect_true(all(is.finite(env$piece_log_area)), info = info)
+
+        # The envelope is built in the beta = 1 coordinate, where the limiting
+        # standard deviation is 1/sqrt(2).  An unconverged contact search shows
+        # up here and nowhere else: this was 1646 at gamma_norm = 1e13.
+        expect_lt((env$p_r - env$p_l) / 2 * sqrt(2), 20)
+
+        set.seed(4)
+        draws <- rmhn(2000, alpha, beta, gamma, method = "rtdr")
+        expect_true(all(is.finite(draws)), info = info)
+        mu <- mhn_mode(alpha, beta, gamma)
+        sigma <- 1 / sqrt(2 * beta)
+        expect_lt(abs(mean(draws) - mu) / (sigma / sqrt(2000)), 5)
+        expect_lt(abs(sd(draws) / sigma - 1), 0.15)
+        expect_lt(suppressWarnings(
+          stats::ks.test((draws - mu) / sigma, "pnorm")$statistic), 0.05)
+
+        # Acceptance stays above the 1/e floor of Gao & Wang (2025).  This is
+        # the invariant that the wrong contact point violates: it fell to
+        # 0.0076 at gamma_norm = 1e12 and 0.0010 at 1e14.
+        set.seed(4)
+        d2 <- mhn:::.rmhn_rtdr_cpp(2000L, alpha, beta, gamma)
+        expect_gt(2000 / (2000 + attr(d2, "rtdr_retries")), 1 / exp(1))
+      }
+    }
+  }
+})
+
+test_that("the region D envelope stays well posed across the tilt range", {
+  skip_on_cran()
+
+  # The same invariant for region D, which is on the *default* path: rmhn's
+  # auto dispatch sends every alpha < 1 with gamma > 0 to RTDR, and
+  # classify_region sends alpha < 1/2 above the gamma_d threshold to region D.
+  # So every failure this block asserts against was reachable from a plain
+  # rmhn(n, 0.3, 1, 1e8).
+  #
+  # Region D is the inflection-point envelope on the T_{-1/2}-transformed
+  # g(y) = exp(alpha y - e^{2y} + gamma_norm e^y): a secant chain over the
+  # convex half, a tangent over the concave half, a plateau, and a right tail.
+  # It carried the region BC ordinate defect verbatim, plus three of its own --
+  # a contact search that could not converge from its start, a dual point and a
+  # rho written as differences of gamma_norm-sized values, and a secant count
+  # ceil(rho) narrowed into an int, which is undefined behaviour past
+  # gamma_norm ~ 1.8e9 and saturates one way on arm64 and the other on x86-64.
+  # Together they produced, at gamma_norm = 1e10, a plateau whose right edge
+  # lay to the left of its left edge; the piece was then dropped without any
+  # error and the sampler's support no longer contained the mode.
+  #
+  # The ceiling is 1e12.  Past that one ulp of the mode on the log axis
+  # approaches the mode's own width there, about 1.4/gamma_norm, and the
+  # neighbourhood the envelope needs stops being representable.
+  for (log_tilt in seq(6, 12, by = 0.5)) {
+    for (beta in c(1e-8, 1)) {
+      for (alpha in c(0.05, 0.3, 0.49)) {
+        gamma <- 10^log_tilt * sqrt(beta)
+        info <- sprintf("alpha = %g, beta = %g, gamma = %g", alpha, beta, gamma)
+        env <- mhn:::.dump_rtdr_envelope_cpp(alpha, beta, gamma)
+        expect_identical(env$region, 2L, info = info)
+        expect_false(env$fell_back_to_bc, info = info)
+        expect_gte(env$K_eff, 1L)
+        expect_true(is.finite(env$p_l) && is.finite(env$p_r), info = info)
+        expect_lt(env$p_l, env$p_r)
+        expect_true(all(is.finite(env$y_break)), info = info)
+        expect_true(all(is.finite(env$log_dens_break)), info = info)
+        expect_true(all(is.finite(env$alpha_k)), info = info)
+        expect_true(all(is.finite(env$piece_log_area)), info = info)
+
+        # rho is v (gamma_norm - v) with v <= gamma_norm/2, so it is positive
+        # and below gamma_norm^2/4; it was 41 times its true value at
+        # gamma_norm = 1e10 and 6e5 times it at 1e14.
+        gn <- gamma / sqrt(beta)
+        expect_gt(env$rho, 0)
+        expect_lt(env$rho, gn * gn / 4)
+
+        # Exactly one plateau piece, spanning the mode.  Dropping it silently
+        # is how the mode left the support.
+        types <- vapply(env$pieces, function(p) p$type, integer(1))
+        expect_identical(sum(types == 0L), 1L, info = info)
+        expect_lt(env$p_l, env$mode)
+        expect_gt(env$p_r, env$mode)
+
+        # Plateau half-width against the log-axis standard deviation,
+        # 1/sqrt(-L''(m_g)) with -L''(m_g) = u_mode (4 u_mode - gamma_norm).
+        u_m <- exp(env$mode)
+        sd_y <- 1 / sqrt(u_m * (4 * u_m - gn))
+        expect_lt((env$p_r - env$p_l) / 2 / sd_y, 20)
+
+        set.seed(4)
+        draws <- rmhn(2000, alpha, beta, gamma)
+        expect_true(all(is.finite(draws)), info = info)
+        mu <- mhn_mode(alpha, beta, gamma)
+        sigma <- 1 / sqrt(2 * beta)
+        expect_lt(abs(mean(draws) - mu) / (sigma / sqrt(2000)), 5)
+        expect_lt(abs(sd(draws) / sigma - 1), 0.15)
+        expect_lt(suppressWarnings(
+          stats::ks.test((draws - mu) / sigma, "pnorm")$statistic), 0.05)
+
+        set.seed(4)
+        d2 <- mhn:::.rmhn_rtdr_cpp(2000L, alpha, beta, gamma)
+        expect_gt(2000 / (2000 + attr(d2, "rtdr_retries")), 1 / exp(1))
+      }
+    }
+  }
+})
+
+test_that("a tilt past the representable range is refused in the user's terms", {
+  # Both regions stop above their own ceiling, where the whole contact
+  # structure falls inside one ulp of the mode.  Before this the region A
+  # corner returned a vector that was 99.9% NaN and region D returned finite
+  # draws whose standard deviation was 2.6 million times the truth, which is
+  # worse than an error because nothing says so.  The message must not tell
+  # the user they have found a defect: they have found the edge of double
+  # precision, and the normal limit is the answer there.
+  expect_error(rmhn(10, 2, 1, 1e16, method = "rtdr"),
+               "narrower than the spacing of the double")
+  expect_error(rmhn(10, 0.3, 1, 1e16), "narrower than the spacing of the double")
+  expect_error(rmhn(10, 1e33, 1, 1, method = "rtdr"),
+               "narrower than the spacing of the double")
+  # And just below each ceiling it still samples, with no NaN.
+  set.seed(1)
+  expect_true(all(is.finite(rmhn(200, 2, 1, 1e14, method = "rtdr"))))
+  set.seed(1)
+  expect_true(all(is.finite(rmhn(200, 0.3, 1, 1e12))))
+})
+
 test_that("a non-finite shape or rate is refused, in the caller's vocabulary", {
   # alpha > 0 is true of Inf, so an infinite shape passed validation and reached
   # the series, where a truncation length computed from it overflowed the

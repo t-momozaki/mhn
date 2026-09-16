@@ -75,7 +75,7 @@ struct RtdrEnvelope {
   // Common envelope quantities, filled by the region-specific setups.
   double mode = 0.0;
   double log_dens_mode = 0.0;
-  // Region BC only.  When the raw log-density at the mode is so large that an
+  // Regions A, BC and D.  When the raw log-density at the mode is so large that an
   // O(1) difference of two of its values has no significant digits left, the
   // setup measures the ordinate from the mode instead: log_dens_mode is then 0
   // and every base_log_dens / log_area is relative to the peak.  sample_rtdr

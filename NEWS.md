@@ -66,24 +66,42 @@ and they matter differently:
   and the inverse CDF now factor the dominant exponential out instead of
   forming it.
 
-* The RTDR envelope for `alpha <= 1` was decided by rounding once the
-  standardised tilt `gamma / sqrt(beta)` passed about 1e8, and answered
-  differently on different machines: at `(0.7, 1e-8, 1e8)` macOS returned 50
-  `NaN` while Linux and Windows raised an error, from the same input, and the
-  outcome was not even monotone in `gamma`. Near the mode the log-axis density
-  carries the constant `gamma_norm^2 / 4` --- 2.5e23 at that tilt --- while
-  every quantity the envelope reads out of it is an `O(1)` difference of two
-  such values, so the contact drop was quantised to multiples of 3.4e7 against
-  a target of `log 4`. Past a conditioning threshold the ordinate is now
-  measured from the mode through an identity that only ever adds same-signed
-  terms, and the accept/reject test is measured the same way --- without that
-  second half the sampler draws from its own hat. Draws below
-  `gamma / sqrt(beta) = 1.6e7` are unchanged; above 1e8 they change and the
-  new ones are the correct ones, with a Kolmogorov-Smirnov statistic against
-  the exact Gaussian limit of 0.0019 where it had reached 0.384 and a sample
-  standard deviation within 0.07% of the truth where it had been 21 times too
-  large. Regions A and D carry the same defect at the same tilts and are not
-  fixed here.
+* The RTDR envelope was decided by rounding once the standardised tilt
+  `gamma / sqrt(beta)` passed about 1e8, and answered differently on different
+  machines: at `(0.7, 1e-8, 1e8)` macOS returned 50 `NaN` while Linux and
+  Windows raised an error, from the same input, and the outcome was not even
+  monotone in `gamma`. Near the mode the density carries the constant
+  `gamma_norm^2 / 4` --- 2.5e23 at that tilt --- while every quantity the
+  envelope reads out of it is an `O(1)` difference of two such values, so the
+  contact drop was quantised to multiples of 3.4e7 against a target of
+  `log 4`. All three envelope regions carried it. The ordinate is now measured
+  from the mode, past a conditioning threshold, through an identity that only
+  ever adds same-signed terms, and the accept/reject test is measured the same
+  way --- without that second half the sampler draws from its own hat.
+
+  Fixing the arithmetic exposed three further defects that it does not itself
+  cure. The contact searches started a fixed distance from the mode and needed
+  more Newton steps than their budget allowed --- 31 against 30 at
+  `gamma / sqrt(beta) = 1e10` --- so they returned a contact point whose drop
+  was hundreds instead of one; they now start where Gao & Wang (2025, Eq. 8)
+  recommend. The secant count `ceil(rho)` was narrowed into an `int`, which is
+  undefined behaviour past a tilt of about 1.8e9. And the plateau piece was
+  dropped without complaint whenever its edges crossed, which is how the
+  sampler's support came to exclude the mode.
+
+  Draws below `gamma / sqrt(beta) = 5e6` are unchanged. Above it they change,
+  and the new ones are the correct ones: against the distribution's exact
+  Gaussian limit the Kolmogorov-Smirnov statistic is 0.004 where it had
+  reached 1.000, and the sample standard deviation is within 0.5% of the truth
+  where it had been 1593 times too large. The acceptance rate --- which Gao &
+  Wang bound below by `1/e` and which no goodness-of-fit test can see, because
+  an envelope that is merely too wide still samples the right law --- is now
+  flat at 0.85 to 0.88 across the whole range, where it had fallen to 0.001.
+
+  Past a tilt of about 1e13, or a shape past about 1e31, the whole contact
+  structure falls inside one ulp of the mode and no sampler working in these
+  coordinates can proceed; `rmhn()` now says so instead of returning draws
+  that are mostly `NaN` or silently wrong.
 
 * `rmhn(200, 1.5, 0.01, 3162.3)` returned 200 `NaN`, behind 200 warnings that
   the Algorithm 1 sampler had exhausted its retry budget. Sun et al. (2023)
