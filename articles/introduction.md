@@ -64,11 +64,11 @@ legend("topright", bty = "n",
 ```
 
 ![MHN densities for three parameter triples; the steelblue curve sits in
-the alpha \< 1, gamma \>\> 0 regime where the density combines a
-boundary divergence at x to 0+ with an interior local maximum near x =
-1.8 (Sun et al. 2023, Lemma 3c). The y-axis is clipped at 1; the
-divergent left tails of the tomato and steelblue curves continue upward
-beyond the plot.](introduction_files/figure-html/dmhn-plot-1.png)
+the alpha \> 0 regime where the density combines a boundary divergence
+at x to 0+ with an interior local maximum near x = 1.8 (Sun et al. 2023,
+Lemma 3c). The y-axis is clipped at 1; the divergent left tails of the
+tomato and steelblue curves continue upward beyond the
+plot.](introduction_files/figure-html/dmhn-plot-1.png)
 
 MHN densities for three parameter triples; the steelblue curve sits in
 the alpha \< 1, gamma \>\> 0 regime where the density combines a
