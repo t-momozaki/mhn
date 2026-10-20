@@ -17,7 +17,7 @@ beta, and gamma."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,51 +73,174 @@ Default: 1.</p></dd>
 
 
 <dt id="arg-beta">beta<a class="anchor" aria-label="anchor" href="#arg-beta"></a></dt>
-<dd><p>Scale parameter (\(\beta &gt; 0\)). Scalar or numeric vector.
-Default: 1.</p></dd>
+<dd><p>Rate-type parameter (\(\beta &gt; 0\)), the coefficient of
+the Gaussian tail \(\exp(-\beta x^2)\); larger values
+pull mass toward zero. Scalar or numeric vector. Default: 1.</p></dd>
 
 
 <dt id="arg-gamma">gamma<a class="anchor" aria-label="anchor" href="#arg-gamma"></a></dt>
-<dd><p>Location parameter (\(\gamma \in R\)). Scalar or numeric
-vector. Default: 0.</p></dd>
+<dd><p>Tilt parameter (\(\gamma \in R\)), the
+coefficient of the exponential tilt \(\exp(\gamma x)\).
+Scalar or numeric vector. Default: 0.</p></dd>
 
 
 <dt id="arg-lower-tail">lower.tail<a class="anchor" aria-label="anchor" href="#arg-lower-tail"></a></dt>
 <dd><p>Logical; if <code>TRUE</code> (default), probabilities are
-\(P(X \le q)\), otherwise \(P(X &gt; q)\).</p></dd>
+\(P(X \le x)\), otherwise \(P(X &gt; x)\), \(x\) being the
+quantile returned.</p></dd>
 
 
 <dt id="arg-log-p">log.p<a class="anchor" aria-label="anchor" href="#arg-log-p"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, probabilities are provided on the
-log scale. Default: <code>FALSE</code>.</p></dd>
+log scale. Default: <code>FALSE</code>. Both flags are read with
+<code><a href="https://rdrr.io/r/base/logical.html" class="external-link">as.logical()</a></code>, so that 1 is <code>TRUE</code>; a value that gives
+<code>NA</code> is an error.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A numeric vector. The output length equals
-<code>max(length(p), length(alpha), length(beta), length(gamma))</code>; each
-input is recycled to that length following standard R recycling rules,
-with one exception: a zero-length <code>alpha</code>, <code>beta</code> or
-<code>gamma</code> is an error rather than a <code>numeric(0)</code> result. Only a
-zero-length <code>p</code> returns <code>numeric(0)</code>.
+<code>max(length(p), length(alpha), length(beta), length(gamma))</code>, or 0
+if any of them has length zero; each input is recycled to that length
+following standard R recycling rules.
+As in <code><a href="https://rdrr.io/r/stats/GammaDist.html" class="external-link">qgamma</a></code>, an element whose parameters lie
+outside the parameter space (<code>alpha</code> or <code>beta</code> not positive
+and finite, or <code>gamma</code> not finite) is <code>NaN</code>, with a warning,
+and an element with an <code>NA</code> or <code>NaN</code> among its inputs is
+<code>NA</code> or <code>NaN</code> (<code>NA</code> if any of them is <code>NA</code>),
+without one; the other elements are unaffected.  The arguments must be
+numeric (double, integer or logical): a factor, a character string, a
+complex number, a list or <code>NULL</code> is an error, as in
+<code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">qnorm</a></code>.
 <code>qmhn(0) = 0</code> and <code>qmhn(1) = Inf</code>. Probabilities outside
-\([0, 1]\) yield <code>NaN</code>.</p>
+\([0, 1]\) (log probabilities above 0 when <code>log.p = TRUE</code>)
+yield <code>NaN</code>, with a warning as in <code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">qnorm</a></code>.  If
+the distribution function cannot be evaluated where the root is sought,
+a warning is issued and <code>NA</code> is returned for that element.  The
+attributes of <code>p</code> (names, <code>dim</code>, <code>dimnames</code>) are kept
+when the result has the length of <code>p</code>; a classed <code>p</code>, such
+as a Date, is taken as its numbers and gives a plain vector.
+Unlike <code>qnorm</code>, attributes of a longer parameter vector are not
+carried over.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>For the general case, \(q = F^{-1}(p)\) is obtained by a TOMS 748
-root-finder applied to the series CDF (Sun et al., 2023, Lemma 1b).
-The initial bracket is \([\sqrt{\epsilon},\; E(X) + 8 \sqrt{\mathrm{Var}(X)}]\)
-and is doubled on the right (up to 30 times) until it brackets the
-target probability.</p>
-<p>Special cases are detected and dispatched to standard R primitives:</p><ul><li><p>\(\gamma = 0\): <code>sqrt(qgamma(p, alpha/2, scale = 1/beta))</code></p></li>
-<li><p>\(\alpha = 1\): truncated-normal inverse via <code>qnorm</code></p></li>
+    <p>For the general case, \(q = F^{-1}(p)\) is obtained by a
+TOMS 748 root-finder applied to the distribution function computed as in
+<code><a href="pmhn.html">pmhn</a></code>, or for <code>lower.tail = FALSE</code> to the logarithm of
+its directly computed upper tail.  Near 1 that logarithm is about
+\(-(1 - p)\), and its error, set by the size of the terms it
+is assembled from (see <code>pmhn</code>), is a relative error in
+\(1 - p\).  Where that could pass \(10^{-9}\), within
+about \(3 \times 10^{-6}\) of 1 at the least and further out for
+a large shape, tilt or \(|\log\beta|\), the distribution
+function is solved for one minus the probability instead, which is exact.
+Where <code>pmhn</code> takes that distribution function from the series of Sun
+et al. (2023), which can cost far more than the upper tail
+(\(\alpha &lt; 1\) with \(|z|\) up to about 830, and
+\(\alpha \le 100\) with \(|z| \le 20\),
+\(z = \gamma/\sqrt{\beta}\)), the root of the
+upper tail is refined instead by Newton steps on the logarithm of the
+distribution function (taken as in <code>pmhn</code> for the log upper tail).
+A lower-tail <code>p</code> there is solved on the series itself, and for
+\(\alpha &lt; 1\) with \(|z|\) from about 100 one
+quantile can take from a tenth of a second to seconds (about 1 s at
+\(\alpha = 0.8\), \(z = 829\) and
+\(p = 0.5\)); where \(1 - p\) is known exactly,
+<code>lower.tail = FALSE</code> gives the same quantile at once.
+Within \(10^{-7}\) of 1, where the upper tail may not resolve
+one minus the probability at all, that root is taken for a probability
+it does resolve where needed, and the steps start from it.  Likewise
+a lower-tail <code>p</code> close to 1 (within \(10^{-7}\) of 1 at
+least; see <strong>Range</strong>), where the
+distribution function is resolved only to the rounding of 1, is solved
+on the logarithm of the upper tail for one minus it, which is exact.  A
+lower-tail <code>log.p</code> probability below
+<code>log(.Machine$double.xmin)</code>, about -708.4, whose exponential is no
+longer a normal double, is solved on the logarithm of the distribution
+function.  The initial bracket is
+\([s\sqrt{\epsilon},\; s]\) with
+\(s = E(X) + 8 \sqrt{\mathrm{Var}(X)}\),
+which scales with the distribution.  Its left end is halved (down to the
+smallest positive double) and its right end doubled (up to the largest
+double) until it brackets the target probability, each step keeping the
+bracket a factor of two wide.  Where the root-finder does not reach its
+tolerance on that bracket, as for a tiny lower-tail <code>p</code> with a
+large \(\alpha\), the equation is solved again for \(\log q\)
+on the logarithm of the distribution function, and where that fails too,
+or the bracket lies near the largest double, the bracket is bisected.
+The root is found to a relative \(2^{-46}\), and where
+<code>pmhn</code> measures the law from its peak (see there) also to within
+\(2^{-46}\) of the law's standard deviation, which can be
+narrower.  A quantile below
+<code>.Machine$double.xmin</code> is resolved to the spacing of the subnormal
+doubles there, about \(4.9 \times 10^{-324}\), and one below
+that spacing is returned as 0, as <code><a href="https://rdrr.io/r/stats/GammaDist.html" class="external-link">qgamma</a></code> returns a
+quantile that underflows; a quantile beyond the largest double is
+returned as <code>Inf</code>, as <code>qgamma</code> returns one that overflows.</p>
+<p><strong>Range.</strong>  The quantile inverts <code><a href="pmhn.html">pmhn</a></code>, whose range of
+accuracy it inherits: for \(\alpha \le 10^{15}\),
+\(|z| \le 10^{15}\) and \(\beta\) in
+\([10^{-300}, 10^{300}]\) it is the root, to the
+tolerance above or to the spacing of the doubles near it, whichever is
+larger, of an equation that resolves the smaller of the two tail
+probabilities to about \(2 \times 10^{-9}\) of itself or better
+(see there), which places it within about that many of the law's
+standard deviations.  Next to the origin, where
+\(F(x)\) is about a multiple of \(x^\alpha\), its
+relative error is that of the smaller tail probability divided by about
+\(\alpha\).  A lower-tail
+<code>p</code> close to 1 is solved on the upper tail, as the root of
+\(P(X &gt; x) = 1 - p\) with \(1 - p\) formed
+exactly, wherever the error of \(F\) near 1 could pass
+\(10^{-9}\) of \(1 - p\) and the upper tail resolves it
+more accurately: \(F\) is resolved there only to the rounding of 1, and
+for a small shape, where it is close to 1 over most of the range, to the
+error of the lower tail (see
+<code><a href="pmhn.html">pmhn</a></code>).  At parameters of order one that is so within about
+\(10^{-5}\) of 1, and farther for a small or large shape, a
+large tilt or an extreme \(\beta\).  Where the law
+is narrower than the spacing of the doubles (for \(z\) above about
+\(10^{16}\), or \(\alpha\) above about
+\(10^{31}\)) its distribution function is a step between two
+adjacent doubles, and the quantile of every <code>p</code> strictly inside
+\((0, 1)\) is the one of the two nearer to the true quantile, placed
+from the exact offset of the law's peak.  Where <code>pmhn</code> is <code>NA</code>
+(see there), so is the quantile, with a warning.  Where the log upper
+tail of <code>pmhn</code> is <code>-Inf</code> in place of a finite value
+(\(\beta\) and the tilt both close to the largest double, see
+there), the quantile of a <code>log.p</code> probability beyond that point is
+the point at which it turns <code>-Inf</code>, without a warning.</p>
+<p>At \(\gamma = 0\) and at \(\alpha = 1\)
+exactly the quantile is computed from the law it reduces to; a shape or a
+tilt merely close to those values is a different law, and is computed as
+in the general case:</p><ul><li><p>\(\gamma = 0\): \(q = \sqrt{y / \beta}\),
+where \(P(\alpha/2, y) = p\) for the regularized incomplete gamma
+function \(P\) (Sun et al. 2023, Lemma 6a); \(y\) is taken from
+<code>qgamma</code>, or from the leading term of \(P\) where it is below
+the smallest normal double; for \(\alpha \le 10^6\).
+Above it \(\gamma = 0\) is solved on the distribution
+function measured from the peak, as for any other tilt (see
+<code><a href="pmhn.html">pmhn</a></code>).</p></li>
+<li><p>\(\alpha = 1\): the truncated-normal inverse (Sun et al. 2023,
+Lemma 6b), by <code>qnorm</code>, refined by one Newton step on the scaled
+complementary error function where the truncation point 0 lies three
+or more standard deviations above the mean
+\(\gamma/(2\beta)\) of the untruncated normal,
+\(-\gamma/\sqrt{2\beta} \ge 3\), and
+by Newton's method on that function alone where it lies more than 30
+standard deviations above it.  Near
+the truncation point it is solved by Halley's method on a short
+series, so that the quantile of a small lower-tail probability keeps
+its relative accuracy.  Where \(-\gamma/\sqrt{2\beta}\) overflows the law is Exponential with rate
+\(|\gamma|\), and its quantile is that one's.</p></li>
 </ul><p>When any of <code>alpha</code>, <code>beta</code>, <code>gamma</code> is a vector, the
 quantile is evaluated element-wise.  The Fox-Wright \(\Psi\)
-normalizing constant and moments \(E(X)\), \(\mathrm{Var}(X)\)
-(used to size the root-finder bracket) are recomputed only when
-the recycling cycle presents a distinct \((\alpha, \beta, \gamma)\)
-triple.</p>
+normalizing constant and moments \(E(X)\),
+\(\mathrm{Var}(X)\) (used to size the root-finder bracket) are
+computed once for each position of the recycling cycle while that cycle
+is at most 256 long, and otherwise once for each run of consecutive
+elements that share the \((\alpha, \beta, \gamma)\) triple.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

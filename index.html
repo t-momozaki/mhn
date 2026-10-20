@@ -17,9 +17,9 @@
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="The Modified Half-Normal Distribution">
-<meta name="description" content="Density, distribution, quantile and random generation for the modified half-normal distribution, with moments, mode, and the Fox-Wright Psi function that normalises it.
+<meta name="description" content="Density, distribution, quantile and random generation for the modified half-normal distribution, whose normalising constant is a Fox-Wright Psi function, with helpers for its moments and mode.
 ">
-<meta property="og:description" content="Density, distribution, quantile and random generation for the modified half-normal distribution, with moments, mode, and the Fox-Wright Psi function that normalises it.
+<meta property="og:description" content="Density, distribution, quantile and random generation for the modified half-normal distribution, whose normalising constant is a Fox-Wright Psi function, with helpers for its moments and mode.
 ">
 </head>
 <body>
@@ -30,7 +30,7 @@
 
     <a class="navbar-brand me-2" href="index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,14 +66,14 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>An R package providing density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, together with closed-form / recurrence-based helpers for its moments and mode.</p>
+<p>An R package providing density, distribution, quantile, and random generation functions for the Modified Half-Normal (MHN) distribution, together with deterministic helpers for its moments and mode.</p>
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
 <p>The MHN(<span class="math inline">\(\alpha\)</span>, <span class="math inline">\(\beta\)</span>, <span class="math inline">\(\gamma\)</span>) distribution has support on <span class="math inline">\((0, \infty)\)</span> and density</p>
 <p><span class="math display">\[f(x \mid \alpha, \beta, \gamma) \;\propto\;
   x^{\alpha - 1} \exp(-\beta x^2 + \gamma x), \qquad x &gt; 0,\]</span></p>
-<p>where <span class="math inline">\(\alpha, \beta &gt; 0\)</span> and <span class="math inline">\(\gamma \in \mathbb{R}\)</span>. It arises as a conditional posterior in Bayesian MCMC for several common models (skew-elliptical regression, <span class="math inline">\(t\)</span>-shrinkage priors, log-concave likelihoods with a quadratic Bayesian penalty) and generalises a number of familiar one-sided distributions:</p>
+<p>where <span class="math inline">\(\alpha, \beta &gt; 0\)</span> and <span class="math inline">\(\gamma \in \mathbb{R}\)</span>. It arises as a full conditional in Bayesian MCMC samplers for a range of models (Sun et al. 2023, Section 2; Gao &amp; Wang 2025, Section 1): for example, the extra scalar of the sandwich algorithm for binary regression with a <span class="math inline">\(t\)</span> link, the latent radius of the projected normal distribution, the concentration parameter of the von Mises-Fisher distribution, the latent scales of robust Bayesian graphical models, and shrinkage priors such as the Bayesian elastic net. It also generalises a number of familiar one-sided distributions:</p>
 <table class="table">
 <colgroup>
 <col width="39%">
@@ -87,7 +87,7 @@
 <tr>
 <td><span class="math inline">\(\gamma = 0\)</span></td>
 <td>
-<span class="math inline">\(\sqrt{\mathrm{Gamma}}\)</span>: <span class="math inline">\(X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\)</span>
+<span class="math inline">\(\sqrt{\mathrm{Gamma}}\)</span>: <span class="math inline">\(X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\)</span>, rate <span class="math inline">\(\beta\)</span>
 </td>
 </tr>
 <tr>
@@ -107,7 +107,7 @@
 </tr>
 </tbody>
 </table>
-<p>The package implements the efficient samplers of <strong>Sun, Kong &amp; Pal (2023)</strong> (Algorithms 1 / 3) and the <strong>Gao &amp; Wang (2025)</strong> Relaxed Transformed Density Rejection (RTDR) method with a uniform 1/<em>e</em> acceptance bound, and dispatches between them automatically.</p>
+<p>The package implements the efficient samplers of <strong>Sun, Kong &amp; Pal (2023)</strong> (Algorithms 1 / 3) and the <strong>Gao &amp; Wang (2025)</strong> Relaxed Transformed Density Rejection (RTDR) method, whose acceptance Gao &amp; Wang bound below by 1/<em>e</em> where its contact points lie in their band (see <code><a href="reference/rmhn.html">?rmhn</a></code>), and dispatches between them automatically.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -160,7 +160,7 @@
 </tr>
 <tr>
 <td><code><a href="reference/qmhn.html">qmhn()</a></code></td>
-<td>Quantile function via TOMS 748 root-finder</td>
+<td>Quantile function (TOMS 748 root-finder in the general case)</td>
 </tr>
 <tr>
 <td><code><a href="reference/rmhn.html">rmhn()</a></code></td>
@@ -191,26 +191,23 @@
 <tr>
 <td><code><a href="reference/mhn_mean.html">mhn_mean()</a></code></td>
 <td>
-<span class="math inline">\(E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])\)</span>, with <span class="math inline">\(z = \gamma/\sqrt{\beta}\)</span>
-</td>
+<span class="math inline">\(E(X) = \Psi[(\alpha+1)/2,\, z] \,/\, (\sqrt{\beta}\, \Psi[\alpha/2,\, z])\)</span>, with <span class="math inline">\(z = \gamma/\sqrt{\beta}\)</span>; by quadrature where that ratio loses accuracy</td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_var.html">mhn_var()</a></code></td>
-<td>Variance, Sun et al. (2023, Lemma 2c) where that form is well conditioned</td>
+<td>Variance, Sun et al. (2023, Lemma 2c) where that form is well conditioned, quadrature elsewhere</td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_skewness.html">mhn_skewness()</a></code></td>
-<td>Skewness <span class="math inline">\(\gamma_1\)</span>
-</td>
+<td>Skewness <span class="math inline">\(\gamma_1\)</span>, by quadrature of the central moments</td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_kurtosis.html">mhn_kurtosis()</a></code></td>
-<td>Excess kurtosis <span class="math inline">\(\gamma_2\)</span>
-</td>
+<td>Excess kurtosis <span class="math inline">\(\gamma_2\)</span>, by quadrature of the central moments</td>
 </tr>
 <tr>
 <td><code><a href="reference/mhn_mode.html">mhn_mode()</a></code></td>
-<td>Mode (returns <code>NA</code> when no interior mode exists)</td>
+<td>Mode (<code>NA</code> for α &lt; 1 without an interior local maximum)</td>
 </tr>
 </tbody>
 </table>
@@ -224,36 +221,61 @@
 <h2 id="algorithm-dispatch-for-rmhnmethod--auto">Algorithm dispatch for <code>rmhn(method = "auto")</code>
 <a class="anchor" aria-label="anchor" href="#algorithm-dispatch-for-rmhnmethod--auto"></a>
 </h2>
-<p>The default method routes each parameter triple to the cheapest sampler that is provably correct in that region. The decision rules are benchmarked in <code>inst/benchmarks/auto_dispatch.R</code>:</p>
+<p>The default method routes each parameter triple to one of the exact samplers below. Its ordinary decision rules are benchmarked, not theoretical: they come from two paired timing races of the two samplers, over α from 0.01 to 10^4 and from 1.5 to 10^14 (the second also timing single draws within one vectorised call), and three runs of <code>inst/benchmarks/auto_dispatch.R</code> (α ≥ 0.3), all on an Apple M1 Ultra (the races are not shipped with the package), and <code><a href="articles/theory.html">vignette("theory")</a></code> gives the cost decomposition behind them. The rules change only the speed: every sampler draws the exact law, and the crossings move from machine to machine. Because the choice depends on the number of draws, the default method’s stream under one seed can change with <code>n</code>; <code>method = "rtdr"</code> or <code>"sun"</code> keeps one stream (see <code><a href="reference/rmhn.html">?rmhn</a></code>). The overrides at the end rest on the limits of double precision instead.</p>
 <pre><code>Closed-form shortcuts:
   α = 1, γ = 0    -&gt; half-normal via |rnorm|
-  γ = 0           -&gt; sqrt(rgamma(...))
+  γ = 0           -&gt; sqrt(rgamma(...)), up to α = 2^60 (beyond, the
+                     Normal proposal of Sun et al. (2023, Algorithm 1))
   α = 1           -&gt; truncated normal
 
 Region α &lt; 1, γ &gt; 0:
   Gao &amp; Wang (2025) RTDR  (Sun et al. (2023) Algorithm 2 is
-                           intentionally not implemented; RTDR is
-                           uniformly faster here)
+                           intentionally not implemented; RTDR was
+                           the faster in every such cell that
+                           Gao &amp; Wang (2025, Tables 1-2) timed)
 
-Region γ &gt; 0, α &gt; 1:
-  Sun et al. (2023, Algorithm 1) (Normal or sqrt-Gamma proposal,
-                                 closed-form optimal parameters)
+Region γ &gt; 0, α &gt; 1 (z = γ/√β):
+  z ≤ 2√α and samples per setup ≥ N+
+                          -&gt; RTDR (lighter per-proposal cost: at mild
+                             tilts Algorithm 1 draws a Gamma variate per
+                             proposal, or accepts less often)
+  otherwise               -&gt; Sun et al. (2023, Algorithm 1) (closed-form
+                             setup; it wins single draws, and from about
+                             z = 2.5-3√α nearly every batch)
+  where N+, for z ≤ √α / for √α &lt; z ≤ 2√α, is
+       5 / 25    for α &lt; 10           50 / 100   for 10^3 ≤ α &lt; 10^8
+      25 / 50    for 10 ≤ α &lt; 10^3   100 / 1000  for α ≥ 10^8
+  and 5 / 25 where RTDR's setup starts next to the mode (see below).
+  Above α = 2^59: Algorithm 1 at any batch size.
 
-Region γ ≤ 0:
-  n-dependent (the crossover is benchmarked, not theoretical; see
-  vignette("theory") for the cost-decomposition derivation):
-    α ≥ 10                        -&gt; Sun Algorithm 3 (lower per-proposal
-                                     cost than RTDR once the mode sharpens)
-    samples per setup ≥ N*, α &lt; 10 -&gt; RTDR (lighter per-proposal cost)
-    samples per setup &lt;  N*        -&gt; Sun Algorithm 3 (lighter setup cost)
-  where N* = 25, raised to 100 for α &lt; 0.1: the crossover moves to larger
-  batches as the shape shrinks.</code></pre>
+Region γ &lt; 0:
+  samples per setup ≥ N*  -&gt; RTDR (lighter per-proposal cost)
+  samples per setup &lt;  N* -&gt; Sun Algorithm 3 (lighter setup cost)
+  where N* = 25 for α &lt; 0.1, 5 for 0.1 ≤ α &lt; 1, 1 for 1 &lt; α &lt; 10^3,
+  10 for 10^3 ≤ α &lt; 10^5, 25 for 10^5 ≤ α &lt; 10^8 and 50 above, and
+  N* = 1 wherever RTDR's setup starts next to the mode.  Above α = 1
+  Algorithm 3 finds its matching point by bisection and Newton steps,
+  and RTDR won every batch size timed from α = 1.5 to 100.  From
+  α = 10^3, though, RTDR's setup walks its two contact points in from
+  m/2 and m + max(1, m/2) (m the mode of √β·X), which costs more than
+  Algorithm 3's setup; it starts them next to the mode only at very
+  large shapes, from about 2.4e12 to 3.1e12 at moderate tilts, 2.3e13
+  near a tilt of -α/e and 4.5e13 at any tilt, and for z &lt; -1e10·√α.
+  Overriding these at the limits of double precision, in this order and
+  whatever the batch size:
+    α &gt; 2^59                      -&gt; RTDR (R's rgamma, which Algorithm 3
+                                     draws from, is too coarse there)
+    -γ/√β &gt; 1e150                 -&gt; Sun Algorithm 3 (it proposes the
+                                     Gamma(α, -γ) limit of the law)
+    α &lt; 2.5e-324·(-γ/√β)          -&gt; Sun Algorithm 3 (RTDR cannot place
+                                     the log-axis mode, which rounds
+                                     to 0)</code></pre>
 <p>Choosing a specific sampler:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/rmhn.html">rmhn</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span>, method <span class="op">=</span> <span class="st">"rtdr"</span><span class="op">)</span>   <span class="co"># RTDR for the general case</span></span>
 <span><span class="fu"><a href="reference/rmhn.html">rmhn</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span>, method <span class="op">=</span> <span class="st">"sun"</span><span class="op">)</span>    <span class="co"># Sun for the general case</span></span>
 <span>                                       <span class="co"># (errors for α &lt; 1, γ &gt; 0)</span></span></code></pre></div>
-<p><code>method</code> selects the sampler used for the general case. The closed-form special cases are taken first whatever it is set to: a negligible tilt draws from the square root of a Gamma, and α ≈ 1 from a truncated normal. Both are exact and cheaper than any rejection scheme.</p>
+<p><code>method</code> selects the sampler used for the general case. The closed-form special cases are taken first whatever it is set to: a negligible tilt draws from the square root of a Gamma (up to α = 2^60), and α ≈ 1 from a truncated normal. Both are exact samplers of their special-case law, which next to γ = 0 or α = 1 is within a total variation distance of 8.6e-9 of the law requested, and need next to no setup.</p>
 </div>
 <div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
@@ -262,6 +284,8 @@ Region γ ≤ 0:
 <ul>
 <li>
 <code><a href="articles/introduction.html">vignette("introduction", package = "mhn")</a></code> — a 5-minute tour of every exported function with worked examples.</li>
+<li>
+<code><a href="articles/theory.html">vignette("theory", package = "mhn")</a></code> — the mathematics behind the family, its normalising constant and the samplers, and how <code>method = "auto"</code> chooses between them.</li>
 <li>
 <code><a href="reference/dmhn.html">?dmhn</a></code>, <code><a href="reference/pmhn.html">?pmhn</a></code>, <code><a href="reference/qmhn.html">?qmhn</a></code>, <code><a href="reference/rmhn.html">?rmhn</a></code> — full argument documentation including the recycling rules and the <code>method</code> argument.</li>
 <li>
@@ -273,10 +297,10 @@ Region γ ≤ 0:
 </h2>
 <p>If you use this package in academic work, please cite both the package and the methodology papers (<code>citation("mhn")</code> prints all four):</p>
 <ul>
-<li>Momozaki, T. (2026). <em>mhn: The Modified Half-Normal Distribution.</em> R package version 0.1.1.</li>
-<li>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution: Properties and an efficient sampling scheme. <em>Communications in Statistics — Theory and Methods</em>, 52(5), 1591–1613. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link uri">https://doi.org/10.1080/03610926.2021.1934700</a>
+<li>Momozaki, T. (2026). <em>mhn: The Modified Half-Normal Distribution.</em> R package version 0.1.2.</li>
+<li>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution: Properties and an efficient sampling scheme. <em>Communications in Statistics - Theory and Methods</em>, 52(5), 1591–1613. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link uri">https://doi.org/10.1080/03610926.2021.1934700</a>
 </li>
-<li>Gao, F. &amp; Wang, H.-B. (2025). Generating modified-half-normal random variates by a relaxed transformed density rejection method. <em>Communications in Statistics — Simulation and Computation</em>. <a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link uri">https://doi.org/10.1080/03610918.2025.2524551</a>
+<li>Gao, F., &amp; Wang, H.-B. (2025). Generating modified-half-normal random variates by a relaxed transformed density rejection method. <em>Communications in Statistics - Simulation and Computation</em>, 1–25. Advance online publication. <a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link uri">https://doi.org/10.1080/03610918.2025.2524551</a>
 </li>
 </ul>
 </div>
@@ -284,7 +308,7 @@ Region γ ≤ 0:
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
 </h2>
 <ul>
-<li>Robert, C. P. (1995). Simulation of truncated normal variables. <em>Statistics and Computing</em>, 5(2), 121–125. (Used by the <em>α</em> = 1 truncated-normal special case of <code>rmhn</code>.)</li>
+<li>Robert, C. P. (1995). Simulation of truncated normal variables. <em>Statistics and Computing</em>, 5(2), 121–125. <a href="https://doi.org/10.1007/BF00143942" class="external-link uri">https://doi.org/10.1007/BF00143942</a> (Used by the <em>α</em> = 1 truncated-normal special case of <code>rmhn</code>.)</li>
 </ul>
 </div>
 <div class="section level2">
@@ -322,7 +346,7 @@ Region γ ≤ 0:
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
 <li>
-<a href="https://github.com/t-momozaki" class="external-link">Tomotaka Momozaki</a> <br><small class="roles"> Author, maintainer </small>   </li>
+<a href="https://github.com/t-momozaki" class="external-link">Tomotaka Momozaki</a> <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0001-6735-0804" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 </ul>
 </div>
 

@@ -15,7 +15,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,15 +61,19 @@
 
 
 <dl><dt id="arg-alpha">alpha<a class="anchor" aria-label="anchor" href="#arg-alpha"></a></dt>
-<dd><p>Shape parameter (\(\alpha &gt; 0\)).</p></dd>
+<dd><p>Shape parameter (\(\alpha &gt; 0\)), a single number.</p></dd>
 
 
 <dt id="arg-beta">beta<a class="anchor" aria-label="anchor" href="#arg-beta"></a></dt>
-<dd><p>Scale parameter (\(\beta &gt; 0\)).</p></dd>
+<dd><p>Rate-type parameter (\(\beta &gt; 0\)), the coefficient of the
+Gaussian tail \(\exp(-\beta x^2)\); larger values pull
+mass toward zero. A single number.</p></dd>
 
 
 <dt id="arg-gamma">gamma<a class="anchor" aria-label="anchor" href="#arg-gamma"></a></dt>
-<dd><p>Location parameter (\(\gamma \in R\)).</p></dd>
+<dd><p>Tilt parameter (\(\gamma \in R\)), the
+coefficient of the exponential tilt \(\exp(\gamma x)\).
+A single number.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -78,18 +82,34 @@
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Uses the formula (Sun et al., 2023, Lemma 2c):
+    <p>Uses the formula (Sun et al. 2023, Lemma 2c)
 $$\mathrm{Var}(X) = \frac{\alpha}{2\beta} +
-  E(X)\left(\frac{\gamma}{2\beta} - E(X)\right)$$</p>
-<p>For \(\alpha \geq 1\), the variance satisfies
-\(\mathrm{Var}(X) \leq 1/(2\beta)\) (Sun et al., 2023, Lemma 4c).</p>
+  E(X)\left(\frac{\gamma}{2\beta} - E(X)\right)$$
+where it is accurate. Its terms cancel under a strong tilt
+\(z = \gamma/\sqrt{\beta}\) of either sign, where
+it also magnifies any error in \(E(X)\) by about \(z^2/2\), and it
+magnifies that error by about \(4\alpha\) at a large
+\(\alpha\). Wherever the combined
+error would exceed about \(10^{-8}\) of the result, the second
+central moment is instead obtained by numerical integration of the
+unnormalised density about its peak (or, where the density decreases from
+the origin, on a logarithmic scale); so it is for \(z &gt; 12\), where the
+mean itself is obtained by numerical integration (see
+<code><a href="mhn_mean.html">mhn_mean</a></code>), for \(z &lt; -30\), and for
+\(\alpha \ge 1000\) unless \(\gamma = 0\).</p>
+<p>For \(\alpha \ge 1\), the variance satisfies
+\(\mathrm{Var}(X) \le 1/(2\beta)\) (Sun et al.,
+2023, Lemma 4c).</p>
+<p>The function is not vectorised in its parameters: <code>alpha</code>,
+<code>beta</code> and <code>gamma</code> must each be a single number. To evaluate
+several parameter triples, use <code><a href="https://rdrr.io/r/base/mapply.html" class="external-link">mapply</a></code>, as in the examples.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
 <em>Communications in Statistics - Theory and Methods</em>, 52(5),
-1591–1613. (Lemma 2c)</p>
+1591–1613. (Lemmas 2c and 4c)</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -100,6 +120,8 @@ distribution: Properties and an efficient sampling scheme.
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">mhn_var</span><span class="op">(</span>alpha <span class="op">=</span> <span class="fl">2</span>, beta <span class="op">=</span> <span class="fl">1</span>, gamma <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.2146018</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/mapply.html" class="external-link">mapply</a></span><span class="op">(</span><span class="va">mhn_var</span>, alpha <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>, beta <span class="op">=</span> <span class="fl">1</span>, gamma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.07828276 0.21460184 0.35382586</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

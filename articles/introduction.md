@@ -81,14 +81,49 @@ beyond the plot.
 
 [`pmhn()`](https://t-momozaki.github.io/mhn/reference/pmhn.md) returns
 \\P(X \le q)\\ (or its complement / log-probability via `lower.tail` /
-`log.p`). For the general case it evaluates the Sun et al. (2023) Lemma
-1b series in log space, truncated at the constructive bound \\K =
-\max\\K_1, K_2\\\\ from Sun et al. (2023, Supplementary Lemma 10(d)).
-When the underlying double-precision cancellation in the
-alternating-sign accumulator for \\\gamma \< 0\\ would exceed the user’s
-tolerance, the routine falls back to a peak-normalised Boost.Math
-quadrature (Gauss–Kronrod for \\\alpha \ge 1\\, tanh–sinh for \\\alpha
-\< 1\\) of the unnormalised density.
+`log.p`). In the general case each tail is computed directly on its own
+side of the peak of the density of \\\log X\\, which lies at or above
+the median.
+
+Below that peak the lower tail comes from one of two routes, chosen by
+measuring their cost and accuracy. One is the Sun et al. (2023) Lemma 1b
+series, summed in log space and truncated at an upper bound on the
+length \\K = \max\\K_1, K_2\\\\ of their Supplementary Lemma 10(d), from
+the geometric decay of the terms that Lemma 10(a, b) establish. The
+other is a Boost.Math quadrature of the unnormalised density:
+Gauss–Kronrod, and for \\\alpha \< 1\\, where the density is unbounded
+at the origin, a closed form next to the origin, then tanh–sinh up to
+\\q\\ or up to the interior peak that a positive tilt can give the
+density, whichever comes first, and Gauss–Kronrod past that peak. The
+series is tried first for \\\alpha \< 1\\ up to \\\gamma/\sqrt{\beta} =
+10^3\\, where the quadrature misses the working tolerance
+`sqrt(.Machine$double.eps)` at scattered points, and for \\\alpha \ge
+1\\ while \\\|\gamma\|/\sqrt{\beta} \le 20\\ and \\\alpha \le 100\\.
+Where it is tried, the quadrature still replaces it when, for \\\gamma
+\< 0\\, the cancellation between its alternating terms could push its
+error past that tolerance, when it would need more than \\10^6\\ terms,
+and when \\\beta q^2\\ is below the smallest normal double. Elsewhere
+the quadrature is used directly: there it is the faster of the two, and
+within the tolerance.
+
+The upper tail \\P(X \> q)\\ is computed directly as well, by quadrature
+on a logarithmic axis, rather than as \\1 - F\\, which would round to 0
+once it falls below about \\10^{-16}\\; above the peak, where it is the
+smaller tail, the lower tail is returned as one minus it. With
+`log.p = TRUE` both tails stay on the log scale, with two exceptions. At
+or below the median, where \\F \le 1/2\\, \\\log P(X \> q)\\ is about
+\\-F\\, and the logarithm of the quadrature carries an absolute error of
+about \\\epsilon\\ times the size of the terms it is assembled from.
+Wherever that could pass \\10^{-9}\\ of \\F\\, below \\F\\ of about
+\\10^{-5}\\ for parameters of order one, \\\log P(X \> q)\\ is formed
+instead as \\\log(1 - F)\\ from \\\log F\\, which keeps the relative
+accuracy of a small \\F\\. Likewise, below the peak of a small shape,
+where \\F\\ is close to 1 and \\\log F\\ is about \\-P(X \> q)\\, \\\log
+F\\ is formed as \\\log(1 - P(X \> q))\\ from the upper tail wherever
+that is the more accurate; without that switch its error would pass
+\\10^{-9}\\ for a shape below about \\10^{-6}\\ under a small tilt. At a
+very large shape or tilt both tails are measured from the peak instead
+(see [`?pmhn`](https://t-momozaki.github.io/mhn/reference/pmhn.md)).
 
 ``` r
 
@@ -126,8 +161,36 @@ Density and matching CDF for MHN(2, 1, 1).
 ## Quantile function: `qmhn()`
 
 [`qmhn()`](https://t-momozaki.github.io/mhn/reference/qmhn.md) inverts
-the CDF using a TOMS 748 root-finder bracketed by \\\[\sqrt{\epsilon},
-E(X) + 8 \sqrt{\mathrm{Var}(X)}\]\\, expanded as required.
+the CDF. Write \\p\_\ell\\ and \\p_u = 1 - p\_\ell\\ for the lower- and
+upper-tail probabilities: the argument `p` (its logarithm with
+`log.p = TRUE`) is \\p\_\ell\\ with `lower.tail = TRUE` and \\p_u\\ with
+`lower.tail = FALSE`, and the other one is formed from it without
+cancellation where it is needed. In the general case a TOMS 748
+root-finder solves \\F(x) = p\_\ell\\, or \\\log P(X \> x) = \log p_u\\
+on the directly computed upper tail where that tail resolves the
+probability better: for an upper-tail `p` whose \\p\_\ell\\ that
+logarithm resolves to \\10^{-9}\\ of itself (at least \\3 \times
+10^{-6}\\ or so from 1, more for a large shape, tilt or
+\\\|\log\beta\|\\), and for a lower-tail `p` close enough to 1 that
+\\F\\ no longer resolves \\p_u\\ to \\10^{-9}\\ of itself (within about
+\\10^{-5}\\ of 1 for parameters of order one, farther for a small or
+large shape, a large tilt or an extreme \\\beta\\; see
+[`?qmhn`](https://t-momozaki.github.io/mhn/reference/qmhn.md)). Closer
+to 1 an upper-tail `p` is solved as \\F(x) = p\_\ell\\, or, where \\F\\
+comes from the series and costs far more, its upper-tail root is refined
+by Newton steps on \\\log F\\; within \\10^{-7}\\ of 1 that root is
+taken, where needed, for a \\p\_\ell\\ the upper tail still resolves.
+With `log.p = TRUE`, a lower-tail probability whose logarithm is below
+`log(.Machine$double.xmin)`, about \\-708.4\\, is solved as \\\log F(x)
+= \log p\_\ell\\ instead. The initial bracket is \\\[s\sqrt{\epsilon},\\
+s\]\\ with \\s = E(X) + 8 \sqrt{\mathrm{Var}(X)}\\ and \\\epsilon\\ the
+machine epsilon; its left end is halved and its right end doubled until
+it brackets the target. Where the root-finder does not reach its
+tolerance on that bracket, as for a tiny lower-tail `p` at a large
+shape, it solves for \\\log x\\ instead, on \\\log F\\ for a lower-tail
+equation, and failing that the bracket is bisected. The special cases
+invert the laws they reduce to (see
+[`?qmhn`](https://t-momozaki.github.io/mhn/reference/qmhn.md)).
 
 ``` r
 
@@ -162,17 +225,25 @@ qmhn(log(0.05), 2, 1, 1, log.p = TRUE)         # same value, log-input
 for \\\gamma = 0\\; truncated normal for \\\alpha = 1\\), Sun et al.
 (2023) Algorithms 1 / 3, and the Gao & Wang (2025) Relaxed Transformed
 Density Rejection (RTDR) sampler. `method = "rtdr"` or `method = "sun"`
-selects which of the two general-case samplers is used; the special-case
-shortcuts are taken first in either case, being exact and cheaper.
+selects which of the two general-case samplers is used (with a few
+exceptions at the limits of double precision, listed in
+[`?rmhn`](https://t-momozaki.github.io/mhn/reference/rmhn.md)); the
+special-case shortcuts are taken first in either case, being exact and
+needing next to no setup. The default method chooses its sampler from
+the number of variates per setup, so under one seed its stream can
+change with `n` where that choice does (at `(2, 1, 1)` the first four
+draws of `rmhn(100, ...)` are not those of `rmhn(4, ...)`);
+`method = "rtdr"` or `"sun"` keeps one stream whatever `n` (see
+[`?rmhn`](https://t-momozaki.github.io/mhn/reference/rmhn.md)).
 
 ``` r
 
 rmhn(5, alpha = 2, beta = 1, gamma = 1)
-#> [1] 0.3705190 1.1166586 0.9019525 1.3946419 1.1552967
+#> [1] 0.5497233 1.9097224 0.3042778 1.0601083 1.1484879
 
 # Vector parameters are recycled to length n.
 rmhn(5, alpha = c(1, 2, 3, 4, 5))
-#> [1] 0.2046802 0.5574992 0.9775332 0.7787843 1.8248242
+#> [1] 0.5649849 0.1332783 1.1693196 1.3508566 0.9682530
 ```
 
 ``` r
@@ -189,21 +260,30 @@ overlaid.](introduction_files/figure-html/rmhn-overlay-1.png)
 
 10,000 draws from MHN(2, 1, 1) with the true density overlaid.
 
-Switching `method` is useful for benchmarking; for the same seed both
-selected paths produce statistically equivalent samples:
+Switching `method` is useful for benchmarking. Both samplers draw the
+exact law, so a sample from either is consistent with it; here two
+samples, drawn one after the other from a single seed, are each compared
+with the distribution function by a one-sample Kolmogorov-Smirnov test:
 
 ``` r
 
-set.seed(1); s_rtdr <- rmhn(5000, 2, 1, 1, method = "rtdr")
-set.seed(1); s_sun  <- rmhn(5000, 2, 1, 1, method = "sun")
-ks.test(s_rtdr, s_sun)$p.value
-#> [1] 0.3274975
+set.seed(1)
+s_rtdr <- rmhn(5000, 2, 1, 1, method = "rtdr")
+s_sun  <- rmhn(5000, 2, 1, 1, method = "sun")
+F <- function(q) pmhn(q, 2, 1, 1)
+c(rtdr = ks.test(s_rtdr, F)$p.value, sun = ks.test(s_sun, F)$p.value)
+#>      rtdr       sun 
+#> 0.3785647 0.6279249
 ```
 
 ## Moments and mode
 
-The package provides closed-form / recurrence-based helpers for the
-common summary statistics (all from Sun et al. 2023, Lemmas 2 and 3):
+The package provides helpers for the common summary statistics. The mean
+is the Fox–Wright ratio of Sun et al. (2023, Lemma 2a) and the variance
+follows from it by their Lemma 2c wherever these closed forms are
+accurate; elsewhere, and for the skewness and kurtosis, the moments are
+integrated numerically against the density. The mode is the closed form
+of Sun et al. (2023, Lemma 3).
 
 ``` r
 
@@ -227,15 +307,18 @@ data.frame(
 #> 5            mode     mhn_mode 1.000000000
 ```
 
-When no interior mode exists (e.g. \\\alpha \< 1\\ with \\\gamma \le
-0\\),
+For \\\alpha \< 1\\ without an interior local maximum (for instance with
+\\\gamma \le 0\\),
 [`mhn_mode()`](https://t-momozaki.github.io/mhn/reference/mhn_mode.md)
-returns `NA`:
+returns `NA`; at \\\alpha = 1\\ with \\\gamma \le 0\\ it returns the
+boundary mode 0:
 
 ``` r
 
 mhn_mode(0.5, 1, -1)
 #> [1] NA
+mhn_mode(1, 1, -1)
+#> [1] 0
 ```
 
 ## Special cases
@@ -244,13 +327,21 @@ The MHN family contains several familiar distributions:
 
 | Constraint | Reduction |
 |----|----|
-| \\\gamma = 0\\ | \\X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\\ (sqrt-Gamma) |
+| \\\gamma = 0\\ | \\X^2 \sim \mathrm{Gamma}(\alpha/2, \beta)\\, rate \\\beta\\ (sqrt-Gamma) |
 | \\\alpha = 1\\ | Truncated normal on \\(0, \infty)\\ |
 | \\\alpha = 1, \gamma = 0\\ | Half-normal \\\|Z\|, Z \sim N(0, 1/(2\beta))\\ |
 
-The package detects each case (within `sqrt(.Machine$double.eps)`) and
-dispatches to the corresponding closed-form R primitive, so `dmhn` /
-`pmhn` / `qmhn` / `rmhn` are exact in those regimes:
+At \\\gamma = 0\\ and at \\\alpha = 1\\ exactly, `dmhn` / `pmhn` /
+`qmhn` work through the corresponding closed form, the Gamma law of
+\\\beta X^2\\ or the truncated normal, rather than the general series; a
+shape or a tilt merely close to those values is a different law, and
+goes through the general route, which keeps its accuracy there. `rmhn`
+draws from the closed forms also for \\\|\alpha - 1\|\\ or
+\\\|\gamma\|/\sqrt{\beta}\\ below `sqrt(.Machine$double.eps)`, a law
+within a total variation distance of \\8.6 \times 10^{-9}\\ of the one
+requested. A zero tilt goes through the general route above a shape of
+\\10^6\\ (\\2^{60}\\ for `rmhn`), where the Gamma law is too narrow for
+the rounding of \\\beta x^2\\ or of `rgamma`.
 
 ``` r
 
@@ -293,18 +384,23 @@ MHN(1, 1, 1) and the equivalent truncated normal density.
 - `citation("mhn")` returns four entries: the package itself and the
   three underlying papers.
 - Sun, Kong & Pal (2023) develop the parametric family and Algorithms 1
-  and 3 used here. Gao & Wang (2025) introduce the RTDR sampler with
-  uniform \\1/e\\ acceptance.
+  and 3 used here. Gao & Wang (2025) introduce the RTDR sampler, whose
+  acceptance they bound below by \\1/e\\ where its contact points lie in
+  a band they give.
 
 ## References
 
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics – Theory and Methods*, 52(5), 1591–1613.
+*Communications in Statistics - Theory and Methods*, 52(5), 1591–1613.
+<https://doi.org/10.1080/03610926.2021.1934700>
 
-Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
+Gao, F., & Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.
-*Communications in Statistics – Simulation and Computation*.
+*Communications in Statistics - Simulation and Computation*, 1–25.
+Advance online publication.
+<https://doi.org/10.1080/03610918.2025.2524551>
 
 Robert, C. P. (1995). Simulation of truncated normal variables.
 *Statistics and Computing*, 5(2), 121–125.
+<https://doi.org/10.1007/BF00143942>

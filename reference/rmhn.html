@@ -15,7 +15,7 @@ with parameters alpha, beta, and gamma."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,10 +61,12 @@ with parameters <code>alpha</code>, <code>beta</code>, and <code>gamma</code>.</
 
 
 <dl><dt id="arg-n">n<a class="anchor" aria-label="anchor" href="#arg-n"></a></dt>
-<dd><p>Non-negative integer giving the number of variates to draw.
+<dd><p>Number of variates to draw: a non-negative number no larger than
+<code>.Machine$integer.max</code>, truncated to an integer, so that
 <code>n = 0</code> returns <code>numeric(0)</code>. Following the base R convention
-of <code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm()</a></code> and <code><a href="https://rdrr.io/r/stats/GammaDist.html" class="external-link">rgamma()</a></code>, if <code>length(n) &gt; 1</code> the
-number required is taken to be <code>length(n)</code>.</p></dd>
+of <code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm()</a></code> and <code><a href="https://rdrr.io/r/stats/GammaDist.html" class="external-link">rgamma()</a></code>, if <code>length(n)</code> is not 1 the
+number required is taken to be <code>length(n)</code>, so that a zero-length
+<code>n</code> also returns <code>numeric(0)</code>; <code>NULL</code> is an error.</p></dd>
 
 
 <dt id="arg-alpha">alpha<a class="anchor" aria-label="anchor" href="#arg-alpha"></a></dt>
@@ -73,13 +75,15 @@ Default: 1.</p></dd>
 
 
 <dt id="arg-beta">beta<a class="anchor" aria-label="anchor" href="#arg-beta"></a></dt>
-<dd><p>Scale parameter (\(\beta &gt; 0\)). Scalar or numeric vector.
-Default: 1.</p></dd>
+<dd><p>Rate-type parameter (\(\beta &gt; 0\)), the coefficient of the
+Gaussian tail \(\exp(-\beta x^2)\); larger values pull
+mass toward zero. Scalar or numeric vector. Default: 1.</p></dd>
 
 
 <dt id="arg-gamma">gamma<a class="anchor" aria-label="anchor" href="#arg-gamma"></a></dt>
-<dd><p>Location parameter (\(\gamma \in R\)). Scalar or numeric
-vector. Default: 0.</p></dd>
+<dd><p>Tilt parameter (\(\gamma \in R\)), the
+coefficient of the exponential tilt \(\exp(\gamma x)\).
+Scalar or numeric vector. Default: 0.</p></dd>
 
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
@@ -89,10 +93,24 @@ vector. Default: 0.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A numeric vector of length <code>n</code>. If any of <code>alpha</code>,
-<code>beta</code>, <code>gamma</code> (after recycling to length <code>n</code>) is
-<code>NA</code> or non-finite (<code>Inf</code>, <code>-Inf</code>, <code>NaN</code>), the
-corresponding output element is <code>NA</code>.</p>
+    <p>A numeric vector of length <code>n</code>. As in
+<code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></code>, an element whose parameters (after
+recycling to length <code>n</code>) are <code>NA</code> or <code>NaN</code>, or lie
+outside the parameter space (<code>alpha</code> or <code>beta</code> not positive
+and finite, or <code>gamma</code> not finite), is <code>NaN</code>, with a single
+warning "NAs produced", and draws no random numbers.  A zero-length
+<code>alpha</code>, <code>beta</code> or <code>gamma</code> makes every element
+<code>NA</code>, with the same warning.  The parameters must be numeric
+(double, integer or logical): a factor, a character string, a complex
+number, a list or <code>NULL</code> is an error.  If a rejection sampler
+accepts none of 1000 proposals for an element (for a subnormal shape,
+none of 1000 draws of the proxy below, each of up to 1000 proposals),
+that element is <code>NaN</code>, and a single warning reports how many draws
+were affected;
+the acceptance rates of the samplers make this vanishingly unlikely.
+Where the distribution lies beyond the largest double precision number,
+and at some other extreme values, <code>rmhn</code> instead stops with an
+error for the whole call (see Details).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -101,62 +119,271 @@ $$f(x \mid \alpha, \beta, \gamma) =
   \frac{2 \beta^{\alpha/2} x^{\alpha-1}
   \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}
   \quad (x &gt; 0)$$
-where \(\Psi[a, z]\) is the Fox-Wright Psi function. <code>rmhn</code> does
-not evaluate \(\Psi\); the rejection-sampling kernels cancel it out.</p>
+where \(\Psi[a, z] = \sum_{n \ge 0} \Gamma(a + n/2) z^n / n!\) is the Fox-Wright function
+\({}_1\Psi_1[(a, 1/2); (1, 0); z]\).
+<code>rmhn</code> does not evaluate \(\Psi\); the rejection-sampling kernels
+cancel it out.  The one exception is the weight of the origin,
+\(1 / (1 + w)\), that it draws for a subnormal shape (see Subnormal
+shapes below).</p>
 <p>The default parameters <code>alpha = 1, beta = 1, gamma = 0</code> correspond
 to the half-normal distribution \(\mathrm{HN}(1/\sqrt{2})\).</p>
+<div class="section">
+<h3 id="choice-of-sampler">Choice of sampler<a class="anchor" aria-label="anchor" href="#choice-of-sampler"></a></h3>
 <p>The <code>method</code> argument selects the rejection sampler:</p><ul><li><p><code>"auto"</code> (default): Uses closed-form special cases when
 applicable (\(\gamma \approx 0\) -&gt; sqrt-Gamma,
-\(\alpha \approx 1\) -&gt; truncated normal). Otherwise it selects the
-fastest provably correct sampler for the parameter region and the
-number of variates drawn per setup: for \(\gamma &gt; 0\) it uses Sun
-et al. (2023) Algorithm 1 when \(\alpha &gt; 1\) and RTDR (Gao &amp; Wang,
-2025) when \(\alpha &lt; 1\); for \(\gamma &lt; 0\) it uses Sun et al.
-Algorithm 3 for small batches and for \(\alpha \ge 10\), and RTDR
-for larger batches with \(\alpha &lt; 10\). A batch counts as large at
-25 variates per setup, raised to 100 for \(\alpha &lt; 0.1\) where the
-crossover between the two samplers occurs later. These thresholds were
-fixed by benchmarking (see <code>inst/benchmarks/auto_dispatch.R</code>).</p></li>
+\(\alpha \approx 1\) -&gt; truncated normal, where
+\(\approx\) means within <code>sqrt(.Machine$double.eps)</code>, for
+the tilt on \(|\gamma|/\sqrt{\beta}\); away
+from \(\gamma = 0\) and \(\alpha = 1\)
+themselves the law drawn is then within a total variation distance of
+\(8.6 \times 10^{-9}\) of the one requested). Otherwise it
+selects the faster of the provably correct samplers, as measured by
+timing them against each other on an Apple M1 Ultra, for the parameter
+region and the number of variates drawn per setup.  The choice changes
+only the speed, not the law drawn, and the crossings move from machine
+to machine. For \(\gamma &gt; 0\) it uses RTDR
+(Gao &amp; Wang 2025) when \(\alpha &lt; 1\). When \(\alpha &gt; 1\) it
+uses RTDR if \(\alpha \le 2^{59}\), the tilt
+\(z = \gamma/\sqrt{\beta}\) is at most
+\(2\sqrt{\alpha}\) and enough variates share a
+setup, and Sun et al. (2023) Algorithm 1 otherwise. Enough means 5,
+25, 50 or 100 variates for \(z \le \sqrt{\alpha}\),
+and 25, 50, 100 or 1000 above it, for \(\alpha &lt; 10\),
+\(10 \le \alpha &lt; 1000\),
+\(1000 \le \alpha &lt; 10^8\) and
+\(\alpha \ge 10^8\) respectively, and 5 or 25 where
+RTDR's setup starts next to the mode (see below). For
+\(\gamma &lt; 0\) it uses RTDR above \(\alpha = 2^{59}\)
+(see below). Up to that shape it uses Sun et al. Algorithm 3 when
+fewer than 25 (\(\alpha &lt; 0.1\)), 5
+(\(0.1 \le \alpha &lt; 1\)), 10
+(\(1000 \le \alpha &lt; 10^5\)), 25
+(\(10^5 \le \alpha &lt; 10^8\)) or 50
+(\(\alpha \ge 10^8\)) variates share a setup,
+for \(-\gamma/\sqrt{\beta} &gt; 10^{150}\)
+and where RTDR cannot place the distribution (see below), and RTDR
+otherwise, which for \(1 &lt; \alpha &lt; 1000\), and
+wherever RTDR's setup starts next to the mode, means at any number of
+variates per setup. For \(\alpha &gt; 1\) that setup searches for the
+two contact points of RTDR's envelope. It starts the search next to
+the mode \(m\) of \(\sqrt{\beta}X\) at very large
+shapes, where it builds the envelope relative to the mode (from about
+\(2.4 \times 10^{12}\) to
+\(3.1 \times 10^{12}\) at moderate tilts, from about
+\(2.3 \times 10^{13}\) near a tilt of
+\(-\alpha/e\), and from about
+\(4.5 \times 10^{13}\) at any tilt), and under a very
+strong negative tilt,
+\(z &lt; -10^{10}\sqrt{\alpha}\); the default
+method decides this with the setup's own test. Elsewhere the search
+walks the two points in from \(m/2\) and
+\(m + \max(1, m/2)\), and from a
+shape of about 1000 on that makes RTDR's setup dearer than
+Algorithm 3's. The number of variates per setup is counted as <code>n</code>
+for scalar parameters, and as <code>n</code> divided by the least common
+multiple of the lengths of <code>alpha</code>, <code>beta</code> and
+<code>gamma</code>, the period after which the recycled triples repeat,
+rounded down, where a setup is kept for each position within that
+period (see below). Otherwise
+it is 1: parameters given as vectors of length <code>n</code> count one per
+setup, as in a Gibbs sampler, even when equal triples are grouped
+into runs, and such a call draws what the loop of single draws would.
+A long run of one triple is drawn fastest by its own scalar call.</p></li>
 <li><p><code>"rtdr"</code>: Use the Relaxed Transformed Density Rejection
-method of Gao &amp; Wang (2025) for the general case. The acceptance
-probability is bounded below by \(1/e \approx 0.368\) uniformly over
-the parameter space. The closed-form special cases are still taken
-first: a negligible tilt draws from the square root of a Gamma, and
-\(\alpha \approx 1\) from a truncated normal. Both are exact and
-faster than any rejection scheme, so no sampler choice overrides them.
-Note: Gao &amp; Wang (2025) use the parameterization
+method of Gao &amp; Wang (2025) for the general case. Gao &amp; Wang bound the
+acceptance probability below by \(1/e \approx 0.368\)
+uniformly over the parameter space where the contact points of the
+envelope lie in their band (their Eq. (7)); the search for them does
+not always reach that band, and the acceptance measured stays above
+the bound there too. The closed-form special cases are
+still taken first: a negligible tilt draws from the square root of a
+Gamma, and \(\alpha \approx 1\) from a truncated normal.
+Both are exact samplers of their special-case law, which next to
+\(\gamma = 0\) or \(\alpha = 1\) is within a
+total variation distance of \(8.6 \times 10^{-9}\) of the
+law requested, and faster than any rejection scheme, so no sampler
+choice overrides them, except that a negligible tilt above
+\(\alpha = 2^{60}\) is drawn by RTDR (see below).
+Where RTDR cannot place a law of tiny shape under a strong negative
+tilt, Sun et al. Algorithm 3 is used instead (see below). Note:
+Gao &amp; Wang (2025) use the parameterization
 \((\lambda, \alpha, \beta)\) with density proportional to
-\(x^{\lambda - 1} \exp(-\alpha x^2 - \beta x)\); the mapping to
-the Sun et al. parameterization used here is
+\(x^{\lambda - 1} \exp(-\alpha x^2 - \beta x)\); the mapping to the Sun et al.
+parameterization used here is
 \(\lambda \leftrightarrow \alpha\),
 \(\alpha \leftrightarrow \beta\),
-\(\beta \leftrightarrow -\gamma\) (sign flip on the linear term).</p></li>
+\(\beta \leftrightarrow -\gamma\) (sign flip on
+the linear term).</p></li>
 <li><p><code>"sun"</code>: Use the Sun et al. (2023) algorithms for the general
 case, with the same closed-form special cases taken first.
 Algorithm 1 is used when \(\gamma &gt; 0\) and \(\alpha &gt; 1\);
-Algorithm 3 is used when \(\gamma \le 0\). The combination
-\(\alpha &lt; 1\) with \(\gamma &gt; 0\) is unsupported and triggers
-an error, unless a special case answers it first.</p></li>
-</ul><p>Vector parameters are recycled to length <code>n</code> following standard R
+Algorithm 3 is used when \(\gamma \le 0\), up to
+\(\alpha = 2^{59}\), beyond which the call stops with
+an error (see below). The combination \(\alpha &lt; 1\) with
+\(\gamma &gt; 0\) is unsupported and triggers an error, unless a
+special case answers it first.</p></li>
+</ul></div>
+
+<div class="section">
+<h3 id="vector-parameters-and-setups">Vector parameters and setups<a class="anchor" aria-label="anchor" href="#vector-parameters-and-setups"></a></h3>
+<p>Vector parameters are recycled to length <code>n</code> following standard R
 rules: only the first <code>n</code> elements of each parameter are used, and any
 further elements are silently ignored, matching the convention of
 <code>rnorm</code>.</p>
-<p>Internally the setup state of the chosen sampler is reused as long as
-consecutive \((\alpha, \beta, \gamma)\) triples are equal, so passing
-parameters grouped by triple is faster than calling <code>rmhn</code> inside
-an R loop.</p>
+<p>Internally the setup of the chosen sampler is built once for each run of
+equal consecutive \((\alpha, \beta, \gamma)\) triples and, when short
+parameter vectors whose triples repeat after a period of at most 256
+draws are recycled over at least four such periods, at most once for each
+position within that period, so passing parameters grouped by triple, or
+as short recycled vectors, is faster than calling <code>rmhn</code> inside an R
+loop. Grouping saves setups but does not change the number of variates
+per setup counted above, and so not the choice of sampler.</p>
+</div>
+
+<div class="section">
+<h3 id="reproducibility">Reproducibility<a class="anchor" aria-label="anchor" href="#reproducibility"></a></h3>
+<p>Under one seed, <code>method = "rtdr"</code> and <code>method = "sun"</code> draw one
+stream whatever <code>n</code>: the first <code>k</code> draws of <code>rmhn(n, ...)</code>
+are those of <code>rmhn(k, ...)</code>, and draws split over several calls are
+those of one call.  The default method does not keep this, as it chooses
+its sampler from the number of variates per setup (see above):
+<code>rmhn(4, 5, 1, 2)</code> and the first four draws of
+<code>rmhn(100, 5, 1, 2)</code> come from different samplers.  Its stream
+therefore changes with <code>n</code>, with how the parameters are arranged,
+and with a version of the package that moves a threshold, although the law
+drawn does not.  Where the draws must not depend on <code>n</code>, as when a
+pilot run is compared with the main one, set <code>method = "rtdr"</code> or
+<code>method = "sun"</code>.</p>
+</div>
+
+<div class="section">
+<h3 id="limits-of-double-precision">Limits of double precision<a class="anchor" aria-label="anchor" href="#limits-of-double-precision"></a></h3>
+<p>Double precision limits which laws can be sampled, and how finely. Every
+sampler draws from the exact law and rounds the draw to double precision,
+and a draw below the smallest positive double is returned as 0. As
+\(\alpha\) or \(\gamma/\sqrt{\beta}\) grows, the
+distribution narrows around its mode relative to the mode itself, and a
+rounding error that moved every draw alike, such as that of a computed
+mode, would become a visible part of its standard deviation. Wherever such
+a shift could exceed a few times \(10^{-7}\) of a standard
+deviation, the draws are placed from the mode computed to about twice
+double precision, so that each is the exact draw rounded once. R's
+<code><a href="https://rdrr.io/r/stats/GammaDist.html" class="external-link">rgamma</a></code>, which the square-root-Gamma closed form and
+Sun et al. Algorithm 3 draw from, rounds \(\sqrt{a - 1/2}\)
+and the scale, and so shifts every variate of shape \(a\) alike by up
+to about \(3 \times 2^{-53}\sqrt{a}\) standard
+deviations, \(2.5 \times 10^{-7}\) at
+\(a = 2^{59}\). Algorithm 3's own setup, which rounds the
+shape, power and rate of its Gamma proposal, adds a shift of the same
+kind, and its draws were measured to shift by up to about
+\(4.5 \times 2^{-53}\sqrt{\alpha}\)
+standard deviations in all (\(3.8 \times 10^{-7}\) at
+\(\alpha = 2^{59}\)). Both are used only up to a Gamma
+shape of \(2^{59}\) (about \(5.8 \times 10^{17}\)),
+at \(\alpha\) up to \(2^{60}\) and \(2^{59}\)
+respectively. Above
+\(\alpha = 2^{60}\) a negligible tilt of either sign is
+drawn by the Normal proposal of Algorithm 1 centred at the mode (by RTDR
+under <code>method = "rtdr"</code>): Sun et al. (2023) state Algorithm 1 for
+\(\gamma &gt; 0\) and Theorem 1 for \(\gamma \ge 0\), but
+centred at the mode the Normal envelope holds for either sign. Above
+\(\alpha = 2^{59}\) a negative tilt that is not
+negligible is drawn by RTDR under the default method, while
+<code>method = "sun"</code> stops with an error.</p>
+<p>The RTDR sampler stops with an error for the whole call once the standard
+deviation is no larger than the spacing of the double precision numbers
+at the mode: from \(\gamma/\sqrt{\beta}\) of about
+\(9 \times 10^{15}\)
+(\(2^{53}\) at \(\beta = 1\)),
+and, for \(\gamma \le 0\), from \(\alpha\) between
+\(2^{103}\) and \(2^{106}\)
+(\(1.0 \times 10^{31}\) to \(8.1 \times 10^{31}\)).
+The standard deviation of the law over its mode \(m\) is about
+\(1/\sqrt{2\alpha}\) at \(\gamma = 0\)
+and \(1/\sqrt{\alpha}\) under a strong negative tilt,
+where the law is close to the Gamma distribution with shape \(\alpha\)
+and rate \(-\gamma\), and the doubles at \(m\) are between
+\(2^{-53} m\) and \(2^{-52} m\) apart; so the stop
+comes between \(2^{103}\) and \(2^{105}\)
+(\(4.1 \times 10^{31}\)) at \(\gamma = 0\) and
+between \(2^{104}\) and \(2^{106}\) under a strong
+negative tilt, depending on where \(m\) falls between two powers of two.
+There the law is normal to far below double precision, with mean
+\(m\) = <code>mhn_mode(alpha, beta, gamma)</code> and variance
+\(1/((\alpha - 1)/m^2 + 2\beta)\), and
+can be drawn from directly. Sun et al. Algorithm 1, which the default
+method uses for such laws with \(\gamma &gt; 0\) and \(\alpha &gt; 1\)
+(up to \(\alpha = 2^{59}\) their tilt exceeds
+\(2\sqrt{\alpha}\), and above that shape Algorithm 1
+serves at any tilt), and the truncated normal of
+\(\alpha \approx 1\) do not stop there: their draws
+are placed at the mode to within a few units in the last place, so that
+they take only a few distinct values near it. For a strongly negative
+tilt the law approaches the Gamma distribution with shape \(\alpha\) and
+rate \(-\gamma\), which Algorithm 3 draws at any tilt up to its
+shape limit. RTDR works with \(\sqrt{\beta}\,x\), or for
+\(\alpha \le 1\) with its logarithm
+\(y = \log(\sqrt{\beta}\,x)\), and cannot
+place the law in three cases. The first is where
+\(-\gamma/\sqrt{\beta}\) passes the largest double.
+The second is for \(\alpha \le 1\) and a finite
+\(-\gamma/\sqrt{\beta}\): the mode of
+\(\log(\sqrt{\beta}X)\) is the logarithm of about
+\(\alpha\sqrt{\beta}/|\gamma|\), and where
+\(\alpha\) is below about \(2.5 \times 10^{-324}\) (half
+the smallest positive double) times
+\(-\gamma/\sqrt{\beta}\), which needs
+\(\alpha\) below \(4.4 \times 10^{-16}\), that number
+rounds to 0; almost all the mass of \(X\) then lies below the smallest
+positive double. The third is for a shape of a few, where
+\(-\gamma/\sqrt{\beta}\) comes within a small factor
+of the largest double. In the second case, and in the first for
+\(\alpha &lt; 10^{-15}\), but for a subnormal shape (see
+below), <code>method = "rtdr"</code> draws from
+Algorithm 3, which samples the law exactly there; otherwise it stops and
+names that Gamma law. The default method uses Algorithm 3 in all three
+cases, except where \(-\gamma/\sqrt{\beta}\) passes
+the largest double at a shape above \(2^{59}\); there it stops as
+RTDR does. Where the distribution lies beyond the largest double precision
+number, no draw can represent it, and every sampler, the closed forms
+included, stops with an error.</p>
+</div>
+
+<div class="section">
+<h3 id="subnormal-shapes">Subnormal shapes<a class="anchor" aria-label="anchor" href="#subnormal-shapes"></a></h3>
+<p>A subnormal shape, below the smallest normal double
+\(2.2 \times 10^{-308}\), is drawn as the mixture its law is
+(see the Details of <code><a href="dmhn.html">dmhn</a></code>): 0 with probability
+\(1 / (1 + w)\), the probability of a value below the smallest positive
+double, and otherwise from the peak, as the law of the shape
+\(2^{-60}\) above \(\sqrt{\beta} x = 1\),
+which has the peak's density there to within a relative
+\(4 \times 10^{-18}\), by the sampler <code>method</code> selects
+for that shape.  The choice between 0 and the peak compares one uniform
+variate with \(1 / (1 + w)\), and so has the resolution of the
+generator, \(2^{-32}\) for R's default.  Where
+\(1 / (1 + w)\) is 1 in double precision, below a tilt of about 52 (53
+at the smallest shapes), every draw is 0 and uses no random number; a
+shape from \(2^{-1022}\) up is drawn by the samplers above,
+which use random numbers there too, so that the stream after the draws
+moves as the shape crosses \(2^{-1022}\) although every draw
+is 0 on either side.  A refusal names the shape asked for.</p>
+</div>
+
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
 <em>Communications in Statistics - Theory and Methods</em>, 52(5),
-1591–1613.</p>
-<p>Gao, F. &amp; Wang, H.-B. (2025). Generating modified-half-normal random
+1591–1613. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link">doi:10.1080/03610926.2021.1934700</a></p>
+<p>Gao, F., &amp; Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.
-<em>Communications in Statistics - Simulation and Computation</em>.</p>
+<em>Communications in Statistics - Simulation and Computation</em>, 1–25.
+Advance online publication. <a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link">doi:10.1080/03610918.2025.2524551</a></p>
 <p>Robert, C. P. (1995). Simulation of truncated normal variables.
-<em>Statistics and Computing</em>, 5(2), 121–125.</p>
+<em>Statistics and Computing</em>, 5(2), 121–125.
+<a href="https://doi.org/10.1007/BF00143942" class="external-link">doi:10.1007/BF00143942</a></p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -167,8 +394,8 @@ variates by a relaxed transformed density rejection method.
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">rmhn</span><span class="op">(</span><span class="fl">10</span>, alpha <span class="op">=</span> <span class="fl">2</span>, beta <span class="op">=</span> <span class="fl">1</span>, gamma <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] 0.3277054 0.9876283 0.2750659 0.7977315 1.2334905 1.0218017 0.6370495</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [8] 0.5679219 0.2958218 1.9631443</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] 0.4882149 1.7209460 0.2702322 0.5039321 1.0199839 0.8549756 0.5065696</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  [8] 1.1410072 0.7866116 1.0854880</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Vector parameters are recycled to length n.</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>

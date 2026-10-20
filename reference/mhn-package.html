@@ -19,7 +19,7 @@ Modified Half-Normal (MHN) distribution."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,9 @@ Modified Half-Normal (MHN) distribution.</p>
 $$f(x \mid \alpha, \beta, \gamma) =
   \frac{2\beta^{\alpha/2} x^{\alpha-1}
   \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}$$
-for \(x &gt; 0\), where \(\Psi[a, z]\) is the Fox-Wright Psi function.</p>
+for \(x &gt; 0\), where
+\(\Psi[a, z] = \sum_{n \ge 0} \Gamma(a + n/2) z^n / n!\) is the Fox-Wright function
+\({}_1\Psi_1[(a, 1/2); (1, 0); z]\).</p>
     </div>
     <div class="section level2">
     <h2 id="parameters">Parameters<a class="anchor" aria-label="anchor" href="#parameters"></a></h2>
@@ -77,12 +79,15 @@ for \(x &gt; 0\), where \(\Psi[a, z]\) is the Fox-Wright Psi function.</p>
 Controls the \(x^{\alpha-1}\) term.</p></dd>
 
 <dt><code>beta</code></dt>
-<dd><p>Scale (rate) parameter (\(\beta &gt; 0\)).
-Controls the \(\exp(-\beta x^2)\) term.</p></dd>
+<dd><p>Rate-type parameter (\(\beta &gt; 0\)).
+Controls the Gaussian tail \(\exp(-\beta x^2)\);
+larger values pull mass toward zero.</p></dd>
 
 <dt><code>gamma</code></dt>
-<dd><p>Location (skewness) parameter (\(\gamma \in R\)).
-Controls the \(\exp(\gamma x)\) term.</p></dd>
+<dd><p>Tilt parameter (\(\gamma \in R\)).
+Controls the exponential tilt \(\exp(\gamma x)\);
+larger values move mass away from zero, but \(\gamma\) does not
+translate the law, whose support stays \((0, \infty)\).</p></dd>
 
 
 </dl></div>
@@ -92,33 +97,37 @@ Controls the \(\exp(\gamma x)\) term.</p></dd>
 
 <dl><dt>\(\gamma = 0\)</dt>
 <dd><p>Square-root Gamma distribution
-(\(X^2 \sim \textrm{Gamma}(\alpha/2, \beta)\))
-(Sun et al., 2023, Lemma 6a).</p></dd>
+(\(X^2 \sim
+    \textrm{Gamma}(\alpha/2, \beta)\), with rate
+\(\beta\))
+(Sun et al. 2023, Lemma 6a).</p></dd>
 
 <dt>\(\alpha = 1\)</dt>
 <dd><p>Truncated normal distribution
-\(\textrm{TN}(\gamma/(2\beta), 1/\sqrt{2\beta}, 0, \infty)\)
-(Sun et al., 2023, Lemma 6b).</p></dd>
+\(\textrm{TN}(\gamma/(2\beta),
+    1/\sqrt{2\beta}, 0, \infty)\)
+(Sun et al. 2023, Lemma 6b).</p></dd>
 
 <dt>\(\alpha = 1, \gamma = 0\)</dt>
 <dd><p>Half-normal distribution
 \(\textrm{HN}(1/\sqrt{2\beta})\)
-(Sun et al., 2023, Lemma 6c).</p></dd>
+(Sun et al. 2023, Lemma 6c).</p></dd>
 
 
 </dl></div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
-
-
-<p>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution:
+    <p>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal distribution:
 Properties and an efficient sampling scheme.
-<em>Communications in Statistics - Theory and Methods</em>, 52(5), 1591-1613.
-<a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link">doi:10.1080/03610926.2021.1934700</a></p>
-<p>Gao, F. &amp; Wang, H.-B. (2025). Generating modified-half-normal random
+<em>Communications in Statistics - Theory and Methods</em>, 52(5),
+1591–1613. <a href="https://doi.org/10.1080/03610926.2021.1934700" class="external-link">doi:10.1080/03610926.2021.1934700</a></p>
+<p>Gao, F., &amp; Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.
-<em>Communications in Statistics - Simulation and Computation</em>.
-<a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link">doi:10.1080/03610918.2025.2524551</a></p>
+<em>Communications in Statistics - Simulation and Computation</em>, 1–25.
+Advance online publication. <a href="https://doi.org/10.1080/03610918.2025.2524551" class="external-link">doi:10.1080/03610918.2025.2524551</a></p>
+<p>Robert, C. P. (1995). Simulation of truncated normal variables.
+<em>Statistics and Computing</em>, 5(2), 121–125.
+<a href="https://doi.org/10.1007/BF00143942" class="external-link">doi:10.1007/BF00143942</a></p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -129,7 +138,7 @@ variates by a relaxed transformed density rejection method.
     </div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>
-    <p><strong>Maintainer</strong>: Tomotaka Momozaki <a href="mailto:momozaki.stat@gmail.com">momozaki.stat@gmail.com</a></p>
+    <p><strong>Maintainer</strong>: Tomotaka Momozaki <a href="mailto:momozaki.stat@gmail.com">momozaki.stat@gmail.com</a> (<a href="https://orcid.org/0000-0001-6735-0804" class="external-link">ORCID</a>)</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

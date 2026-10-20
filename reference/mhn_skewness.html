@@ -5,9 +5,13 @@
       fontURL: "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/output/chtml/fonts/woff-v2"
     }
   };
-</script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Skewness of the Modified Half-Normal Distribution — mhn_skewness"><meta name="description" content="Computes the skewness \(\gamma_1 = E[(X - \mu)^3] / \sigma^3\)
-for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\)."><meta property="og:description" content="Computes the skewness \(\gamma_1 = E[(X - \mu)^3] / \sigma^3\)
-for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\)."></head><body>
+</script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Skewness of the Modified Half-Normal Distribution — mhn_skewness"><meta name="description" content="Computes the skewness
+\(\gamma_1 = E[(X - \mu)^3] / \sigma^3\)
+for
+\(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\)."><meta property="og:description" content="Computes the skewness
+\(\gamma_1 = E[(X - \mu)^3] / \sigma^3\)
+for
+\(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\)."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -15,7 +19,7 @@ for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\)."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -47,8 +51,10 @@ for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\)."></head><body>
     </div>
 
     <div class="ref-description section level2">
-    <p>Computes the skewness \(\gamma_1 = E[(X - \mu)^3] / \sigma^3\)
-for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\).</p>
+    <p>Computes the skewness
+\(\gamma_1 = E[(X - \mu)^3] / \sigma^3\)
+for
+\(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\).</p>
     </div>
 
     <div class="section level2">
@@ -61,15 +67,19 @@ for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\).</p>
 
 
 <dl><dt id="arg-alpha">alpha<a class="anchor" aria-label="anchor" href="#arg-alpha"></a></dt>
-<dd><p>Shape parameter (\(\alpha &gt; 0\)).</p></dd>
+<dd><p>Shape parameter (\(\alpha &gt; 0\)), a single number.</p></dd>
 
 
 <dt id="arg-beta">beta<a class="anchor" aria-label="anchor" href="#arg-beta"></a></dt>
-<dd><p>Scale parameter (\(\beta &gt; 0\)).</p></dd>
+<dd><p>Rate-type parameter (\(\beta &gt; 0\)), the coefficient of the
+Gaussian tail \(\exp(-\beta x^2)\); larger values pull
+mass toward zero. A single number.</p></dd>
 
 
 <dt id="arg-gamma">gamma<a class="anchor" aria-label="anchor" href="#arg-gamma"></a></dt>
-<dd><p>Location parameter (\(\gamma \in R\)).</p></dd>
+<dd><p>Tilt parameter (\(\gamma \in R\)), the
+coefficient of the exponential tilt \(\exp(\gamma x)\).
+A single number.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -78,19 +88,40 @@ for \(X \sim \mathrm{MHN}(\alpha, \beta, \gamma)\).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Integrates the third central moment against the unnormalised kernel,
-in the variable centred on its peak. Building it from raw moments by
-the Lemma 2b recurrence is exact algebra but cancels once the standard
-deviation is small next to the mean, which is what a large tilt
-produces; that expansion is kept only for the parameter values where
-the integration window cannot be established.</p>
+    <p>The central moments are obtained by numerical integration against the
+unnormalised density, in a variable centred on its peak (or, where the
+density decreases from the origin, on a logarithmic scale), so no
+normalising constant is needed. Building them from raw moments by the
+Lemma 2b recurrence from the mean of Lemma 2a is exact algebra but
+cancels once the standard deviation is small next to the mean, which is
+what a large tilt produces; that expansion is used only where the
+integration cannot be set up.</p>
+<p>Against independent quadratures, for shapes from 1 to 60 and tilts
+\(\gamma / \sqrt{\beta}\) from -20 to 12, the
+absolute error stayed below 1e-9; the largest found, 3e-10, is for a shape
+between 2 and 3 under a positive tilt.</p>
+<p>For a subnormal shape, below the smallest normal double 2.2e-308, the
+moments are taken from forms in which the shape only multiplies (see the
+Details of <code><a href="dmhn.html">dmhn</a></code>).  While the mass at the peak is small
+against the mass by the origin (\(w\) well below 1, up to a tilt
+\(z = \gamma / \sqrt{\beta}\) of about 53 at
+the largest subnormal shape and 54.5 at the smallest), the skewness then
+grows like \(1 / \sqrt{\alpha}\) as the shape falls,
+by a factor that depends on the tilt: 1.25 at \(z = 0\) and
+\(2.8 \times 10^{-8}\) at \(z = 12\).  It turns negative
+where \(w\) is about 1 (\(z\) from about 53.3 to 54.7), and
+past the tilt where the forms hand over (55 to 56.3) it no longer depends
+on \(\alpha\).</p>
+<p>The function is not vectorised in its parameters: <code>alpha</code>,
+<code>beta</code> and <code>gamma</code> must each be a single number. To evaluate
+several parameter triples, use <code><a href="https://rdrr.io/r/base/mapply.html" class="external-link">mapply</a></code>, as in the examples.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Sun, J., Kong, M., &amp; Pal, S. (2023). The Modified-Half-Normal
 distribution: Properties and an efficient sampling scheme.
 <em>Communications in Statistics - Theory and Methods</em>, 52(5),
-1591–1613. (Lemma 2b)</p>
+1591–1613. (Lemmas 2a and 2b)</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -101,6 +132,8 @@ distribution: Properties and an efficient sampling scheme.
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">mhn_skewness</span><span class="op">(</span>alpha <span class="op">=</span> <span class="fl">2</span>, beta <span class="op">=</span> <span class="fl">1</span>, gamma <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.6311107</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/mapply.html" class="external-link">mapply</a></span><span class="op">(</span><span class="va">mhn_skewness</span>, alpha <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>, beta <span class="op">=</span> <span class="fl">1</span>, gamma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.8814298 0.6311107 0.1579617</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

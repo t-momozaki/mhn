@@ -3,22 +3,24 @@
 ## Authors
 
 - **[Tomotaka Momozaki](https://github.com/t-momozaki)**. Author,
-  maintainer.
+  maintainer. [](https://orcid.org/0000-0001-6735-0804)
 
 ## Citation
 
 Source:
 [`inst/CITATION`](https://github.com/t-momozaki/mhn/blob/main/inst/CITATION)
 
-Momozaki T (2026). *mhn: The Modified Half-Normal Distribution*. R
-package version 0.1.1, <https://github.com/t-momozaki/mhn>.
+Momozaki T (2026). *mhn: The Modified Half-Normal Distribution*.
+[doi:10.32614/CRAN.package.mhn](https://doi.org/10.32614/CRAN.package.mhn).
+R package version 0.1.2, <https://CRAN.R-project.org/package=mhn>.
 
     @Manual{,
       title = {mhn: The Modified Half-Normal Distribution},
       author = {Tomotaka Momozaki},
       year = {2026},
-      note = {R package version 0.1.1},
-      url = {https://github.com/t-momozaki/mhn},
+      note = {R package version 0.1.2},
+      url = {https://CRAN.R-project.org/package=mhn},
+      doi = {10.32614/CRAN.package.mhn},
     }
 
 Sun J, Kong M, Pal S (2023). “The Modified-Half-Normal distribution:
@@ -53,8 +55,8 @@ Advance online publication.
       doi = {10.1080/03610918.2025.2524551},
     }
 
-Robert C (1995). “Simulation of truncated normal variables.” *Statistics
-and Computing*, **5**(2), 121–125.
+Robert CP (1995). “Simulation of truncated normal variables.”
+*Statistics and Computing*, **5**(2), 121–125.
 [doi:10.1007/BF00143942](https://doi.org/10.1007/BF00143942).
 
     @Article{,

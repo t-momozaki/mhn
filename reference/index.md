@@ -18,8 +18,10 @@ recycling rule.
 
 ## Summary statistics
 
-Closed-form summaries of a single MHN(alpha, beta, gamma) law. These
-take one parameter triple rather than recycling vectors.
+Mean, variance, skewness, excess kurtosis and mode of a single
+MHN(alpha, beta, gamma) law, from closed forms where these are accurate
+and from quadrature otherwise. These take one parameter triple rather
+than recycling vectors.
 
 - [`mhn_mean()`](https://t-momozaki.github.io/mhn/reference/mhn_mean.md)
   : Mean of the Modified Half-Normal Distribution

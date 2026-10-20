@@ -17,7 +17,7 @@ beta, and gamma."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mhn</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,51 +73,180 @@ Default: 1.</p></dd>
 
 
 <dt id="arg-beta">beta<a class="anchor" aria-label="anchor" href="#arg-beta"></a></dt>
-<dd><p>Scale parameter (\(\beta &gt; 0\)). Scalar or numeric vector.
-Default: 1.</p></dd>
+<dd><p>Rate-type parameter (\(\beta &gt; 0\)), the coefficient of
+the Gaussian tail \(\exp(-\beta x^2)\); larger values
+pull mass toward zero. Scalar or numeric vector. Default: 1.</p></dd>
 
 
 <dt id="arg-gamma">gamma<a class="anchor" aria-label="anchor" href="#arg-gamma"></a></dt>
-<dd><p>Location parameter (\(\gamma \in R\)). Scalar or numeric
-vector. Default: 0.</p></dd>
+<dd><p>Tilt parameter (\(\gamma \in R\)), the
+coefficient of the exponential tilt \(\exp(\gamma x)\).
+Scalar or numeric vector. Default: 0.</p></dd>
 
 
 <dt id="arg-log">log<a class="anchor" aria-label="anchor" href="#arg-log"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, log-density is returned. Default:
-<code>FALSE</code>.</p></dd>
+<code>FALSE</code>. Read with <code><a href="https://rdrr.io/r/base/logical.html" class="external-link">as.logical()</a></code>, so that 1 is <code>TRUE</code>;
+a value that gives <code>NA</code> is an error.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A numeric vector. The output length equals
-<code>max(length(x), length(alpha), length(beta), length(gamma))</code>; each
-input is recycled to that length following standard R recycling rules,
-with one exception: a zero-length <code>alpha</code>, <code>beta</code> or
-<code>gamma</code> is an error rather than a <code>numeric(0)</code> result. Only a
-zero-length <code>x</code> returns <code>numeric(0)</code>.
-For <code>x &lt; 0</code>, the density is 0 (<code>-Inf</code> if <code>log = TRUE</code>).</p>
+<code>max(length(x), length(alpha), length(beta), length(gamma))</code>, or 0
+if any of them has length zero; each input is recycled to that length
+following standard R recycling rules.
+For <code>x &lt; 0</code>, the density is 0 (<code>-Inf</code> if <code>log = TRUE</code>).
+At <code>x = 0</code> it is <code>Inf</code> for <code>alpha &lt; 1</code>, the truncated
+normal density at 0 for <code>alpha = 1</code> (\(2\sqrt{\beta/\pi}\) at <code>gamma = 0</code>), and 0 for <code>alpha &gt; 1</code>.
+As in <code><a href="https://rdrr.io/r/stats/GammaDist.html" class="external-link">dgamma</a></code>, an element whose parameters lie
+outside the parameter space (<code>alpha</code> or <code>beta</code> not positive
+and finite, or <code>gamma</code> not finite) is <code>NaN</code>, with a warning,
+and an element with an <code>NA</code> or <code>NaN</code> among its inputs is
+<code>NA</code> or <code>NaN</code> (<code>NA</code> if any of them is <code>NA</code>),
+without one; the other elements are unaffected.  The arguments must be
+numeric (double, integer or logical): a factor, a character string, a
+complex number, a list or <code>NULL</code> is an error, as in
+<code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">dnorm</a></code>.
+As with <code><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">dnorm</a></code>, the attributes of <code>x</code> (names,
+<code>dim</code>, <code>dimnames</code>) are kept when the result has the length of
+<code>x</code>; a classed <code>x</code>, such as a Date, is taken as its numbers
+and gives a plain vector.
+Unlike <code>dnorm</code>, attributes of a longer parameter vector are not
+carried over.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The MHN density is
+    <p>The MHN density (Sun et al. 2023, Lemma 1a) is
 $$f(x \mid \alpha, \beta, \gamma) =
   \frac{2 \beta^{\alpha/2} x^{\alpha-1}
   \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}
   \quad (x &gt; 0)$$
-where \(\Psi[a, z]\) is the Fox-Wright Psi function
-(Sun et al., 2023, Lemma 1a).</p>
+where \(\Psi[a, z] = \sum_{n \ge 0} \Gamma(a + n/2) z^n / n!\) is the Fox-Wright function
+\({}_1\Psi_1[(a, 1/2); (1, 0); z]\)
+(Sun et al. 2023, Supplementary Eq. (1)).</p>
 <p>The default parameters <code>alpha = 1, beta = 1, gamma = 0</code> correspond
-to the half-normal distribution \(\mathrm{HN}(1/\sqrt{2})\).</p>
-<p>Special cases are detected and dispatched to closed-form solutions:</p><ul><li><p>\(\gamma = 0\): sqrt-Gamma distribution</p></li>
-<li><p>\(\alpha = 1\): truncated normal distribution</p></li>
-</ul><p>Computation is performed in log-space to avoid numerical
-underflow/overflow.</p>
+to the half-normal distribution
+\(\mathrm{HN}(1/\sqrt{2})\).</p>
+<p>At \(\gamma = 0\) and at \(\alpha = 1\)
+exactly the density is computed from the closed form of the law it
+reduces to; a shape or a tilt merely close to those values is a different
+law, and is computed as in the general case:</p><ul><li><p>\(\gamma = 0\): sqrt-Gamma distribution, for
+\(\alpha \le 10^6\).  Above it the Gamma law of
+\(\beta X^2\) is so narrow that rounding
+\(\beta x^2\) moves it by a visible part of its width
+(up to about \(10^{-5}\) of the log density at
+\(\alpha = 10^{20}\)), and \(\gamma = 0\)
+is measured from the peak as below.</p></li>
+<li><p>\(\alpha = 1\): truncated normal distribution (Sun et al.,
+2023, Lemma 6b), the normal law of mean
+\(\mu = \gamma/(2\beta)\) and standard deviation
+\(\sigma = 1/\sqrt{2\beta}\) restricted to
+\((0, \infty)\): <code>dnorm</code> divided by its upper tail
+at 0 where 0 lies within 1000 standard deviations of the mean
+(\(|\gamma|/\sqrt{2\beta} \le 1000\)).
+Farther out the same ratio is written with the normal hazard where 0
+lies above the mean, so that two logarithms of about
+\(-\gamma^2/(4\beta)\) are not subtracted, and
+from the standardised point \((x - \mu)/\sigma\),
+formed directly, where it lies below.  Where
+\(\gamma/(2\beta)\) passes the largest double under
+a negative tilt, the density is the exponential one,
+\(-\gamma e^{\gamma x}\).</p></li>
+</ul><p>A subnormal shape, below the smallest normal double
+\(2.2 \times 10^{-308}\), is computed apart, at
+\(\gamma = 0\) too.  There half of \(\alpha\) is
+not always a double and \(1/\alpha\) can overflow, while
+\(t^\alpha = 1\) to double precision at every positive
+double \(t\); the density is then
+\(\alpha e^{-\beta x^2 + \gamma x} / (x (1 + w))\), with \(w = \alpha K_0(z)\) and \(K_0(z) = \int_0^1 (e^{-t^2 + z t} - 1) / t \, dt +
+\int_1^\infty e^{-t^2 + z t} / t \, dt\).  \(1 / (1 + w)\) is the
+probability that \(X\) lies below the smallest positive double.  Below
+a tilt of about 52 (53 at the smallest shapes) it is 1 in double
+precision: <code><a href="pmhn.html">pmhn</a></code> is 1 at every positive \(x\),
+<code><a href="qmhn.html">qmhn</a></code> is 0 for every lower-tail probability below 1 given
+on the probability scale (the upper tail, or <code>log.p = TRUE</code>, still
+gives the quantiles of the far upper tail), and <code><a href="rmhn.html">rmhn</a></code>
+returns 0.  For a large tilt \(w\) is the mass at
+the peak of the kernel against the mass by the origin; it is below
+\(10^{-200}\) in size for \(z \le 30\), and
+negative below \(z\) of about 0.3.
+<code><a href="pmhn.html">pmhn</a></code>, <code><a href="qmhn.html">qmhn</a></code>, <code><a href="rmhn.html">rmhn</a></code> and the
+moment functions take the same form.  It serves the whole law up to a
+tilt between about 55 and 56.3, as \(\alpha\) falls.  Above it
+the mass by the origin is at most \(2^{-64}\), about
+\(5.4 \times 10^{-20}\), of the whole, and the density, the
+upper tail, the moments and the law of the draws no longer depend on
+\(\alpha\); the lower tail far below the peak, of which that
+mass is more than \(2^{-64}\), is still taken from the same form
+up to where it reaches one half.</p>
+<p>Computation is performed in log-space to avoid numerical
+underflow/overflow.  For a shape \(\alpha\) or a scale-free tilt
+\(z = \gamma/\sqrt{\beta}\) above \(10^6\),
+and wherever the terms of the ordinary form grow too large (see
+<strong>Range</strong>), the log density is measured instead from the peak
+\(v^*\) of the density of \(\log X\), the positive root of
+\(2\beta x^2 - \gamma x - \alpha = 0\),
+as \((\alpha - 1)(\log(1+\rho) - \rho) - \rho - \beta d^2\) less the logarithm of
+\(v^*\) times the peak-normalised integral of the law, with
+\(d = x - v^*\) and \(\rho = d/v^*\).  The
+ordinary form adds terms of size \(\alpha \log x\) and
+\((\alpha/2) \log\beta\), and for
+\(z &gt; 10^3\) measures <code>x</code> from the centre
+\(\gamma/(2\beta)\) rounded to a double; their rounding
+passes \(10^{-7}\) at \(\alpha = 10^8\), and
+\(10^{-6}\) at \(z = 10^{10}\) unless \(\beta\)
+is a power of 2.  Here neither is formed, and \(d\) is exact:
+\(v^*\) is held as a double next to it plus its offset from that
+double.</p>
+<p><strong>Range.</strong>  The ordinary form is used only while the larger
+\(m\) of \(\alpha\) and \(z\) is at most \(10^6\)
+and \(m (1 + |\log v^*|)\), the size of its largest
+terms, is at most \(10^7\): at \(\beta = 1\) up to a
+shape of \(10^6\) or a tilt of about \(7.3 \times 10^5\),
+and at \(\beta = 10^{\pm 300}\) up to about
+\(3 \times 10^4\) for either.  That keeps its rounding to about
+\(2 \times 10^{-9}\); measured from the peak the error is
+about \(10^{-12}\), relative to the size of the log density
+where that is large.  So for \(\alpha \le 10^{15}\),
+\(|z| \le 10^{15}\) and \(\beta\) in
+\([10^{-300}, 10^{300}]\) the log density is accurate
+to the working tolerance <code>sqrt(.Machine$double.eps)</code>.  Outside that
+range the law can be narrower than the spacing of the doubles near its
+peak (for \(z\) above about \(10^{16}\), or
+\(\alpha\) above about \(10^{31}\)), and the density is
+still that of the exact law at the double <code>x</code> given, almost always
+0 there.  For a positive tilt whose mode
+\(\gamma/(2\beta)\) lies beyond the largest double,
+which needs a subnormal \(\beta\), <code>log = TRUE</code> returns
+<code>-Inf</code> where the log density is finite.  Two cases give <code>NA</code>
+with a warning instead: within 45
+standard deviations of the peak of a law narrower than the spacing by a
+factor of order \(10^{19}\) (\(z\) beyond about
+\(10^{35}\), \(\alpha\) beyond about
+\(10^{70}\)), where the position of the peak cannot be resolved
+finely enough; and where the whole law lies beyond the largest double
+without a positive tilt to place it (a shape near the largest double
+against a subnormal \(\beta\)).  Where \(z\) itself
+overflows, the law is its limit: Gamma(\(\alpha\), rate
+\(|\gamma|\)) under a negative tilt and normal about its mode
+with variance \(1/(2\beta)\) under a positive one.  For
+\(\alpha = 1\) and a truncation point
+\(z_0 = -\gamma/\sqrt{2\beta}\) beyond
+\(10^3\) the truncated-normal density is written with the normal
+hazard \(\phi(z_0)/\bar\Phi(z_0)\), and below
+\(-10^3\) with the offset \(2\beta x - \gamma\)
+formed in one rounding (as \(\beta x - \gamma/2\),
+so also where \(2\beta\) overflows), so that it holds to the
+Exponential and normal limits it tends to.</p>
 <p>When any of <code>alpha</code>, <code>beta</code>, <code>gamma</code> is a vector, the
 density is evaluated element-wise. The Fox-Wright \(\Psi\)
-normalizing constant is recomputed only when the recycling cycle
-presents a distinct \((\alpha, \beta, \gamma)\) triple, so passing
-grouped parameters is significantly faster than calling <code>dmhn</code>
-inside an R loop.</p>
+normalizing constant is computed once for each position of the recycling cycle while that cycle
+is at most 256 long, and otherwise once for each run of consecutive
+elements that share the \((\alpha, \beta, \gamma)\) triple.  So
+recycled parameters, and parameter vectors in which equal triples are
+adjacent, are much faster than triples that alternate along a long
+vector, and than calling <code>dmhn</code> inside an R loop.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
