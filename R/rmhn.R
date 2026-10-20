@@ -10,90 +10,314 @@
 #' \deqn{f(x \mid \alpha, \beta, \gamma) =
 #'   \frac{2 \beta^{\alpha/2} x^{\alpha-1}
 #'   \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}
-#'   \quad (x > 0)}
-#' where \eqn{\Psi[a, z]} is the Fox-Wright Psi function. \code{rmhn} does
-#' not evaluate \eqn{\Psi}; the rejection-sampling kernels cancel it out.
+#'   \quad (x > 0)}{f(x | alpha, beta, gamma) = 2 beta^(alpha/2) x^(alpha-1)
+#'   exp(-beta x^2 + gamma x) / Psi[alpha/2, gamma/sqrt(beta)],  x > 0}
+#' where \eqn{\Psi[a, z] = \sum_{n \ge 0} \Gamma(a + n/2) z^n / n!}{Psi[a, z] =
+#' sum_{n >= 0} Gamma(a + n/2) z^n / n!} is the Fox-Wright function
+#' \eqn{{}_1\Psi_1[(a, 1/2); (1, 0); z]}{1Psi1[(a, 1/2); (1, 0); z]}.
+#' \code{rmhn} does not evaluate \eqn{\Psi}; the rejection-sampling kernels
+#' cancel it out.  The one exception is the weight of the origin,
+#' \eqn{1 / (1 + w)}, that it draws for a subnormal shape (see Subnormal
+#' shapes below).
 #'
-#' @param n Non-negative integer giving the number of variates to draw.
+#' @param n Number of variates to draw: a non-negative number no larger than
+#'   \code{.Machine$integer.max}, truncated to an integer, so that
 #'   \code{n = 0} returns \code{numeric(0)}. Following the base R convention
-#'   of \code{rnorm()} and \code{rgamma()}, if \code{length(n) > 1} the
-#'   number required is taken to be \code{length(n)}.
+#'   of \code{rnorm()} and \code{rgamma()}, if \code{length(n)} is not 1 the
+#'   number required is taken to be \code{length(n)}, so that a zero-length
+#'   \code{n} also returns \code{numeric(0)}; \code{NULL} is an error.
 #' @param alpha Shape parameter (\eqn{\alpha > 0}). Scalar or numeric vector.
 #'   Default: 1.
-#' @param beta Scale parameter (\eqn{\beta > 0}). Scalar or numeric vector.
-#'   Default: 1.
-#' @param gamma Location parameter (\eqn{\gamma \in R}). Scalar or numeric
-#'   vector. Default: 0.
+#' @param beta Rate-type parameter (\eqn{\beta > 0}), the coefficient of the
+#'   Gaussian tail \eqn{\exp(-\beta x^2)}{exp(-beta x^2)}; larger values pull
+#'   mass toward zero. Scalar or numeric vector. Default: 1.
+#' @param gamma Tilt parameter (\eqn{\gamma \in R}{gamma in R}), the
+#'   coefficient of the exponential tilt \eqn{\exp(\gamma x)}{exp(gamma x)}.
+#'   Scalar or numeric vector. Default: 0.
 #' @param method Sampling algorithm. One of \code{"auto"} (default),
 #'   \code{"rtdr"}, or \code{"sun"}. See Details.
 #'
-#' @return A numeric vector of length \code{n}. If any of \code{alpha},
-#'   \code{beta}, \code{gamma} (after recycling to length \code{n}) is
-#'   \code{NA} or non-finite (\code{Inf}, \code{-Inf}, \code{NaN}), the
-#'   corresponding output element is \code{NA}.
+#' @return A numeric vector of length \code{n}. As in
+#'   \code{\link[stats]{rnorm}}, an element whose parameters (after
+#'   recycling to length \code{n}) are \code{NA} or \code{NaN}, or lie
+#'   outside the parameter space (\code{alpha} or \code{beta} not positive
+#'   and finite, or \code{gamma} not finite), is \code{NaN}, with a single
+#'   warning "NAs produced", and draws no random numbers.  A zero-length
+#'   \code{alpha}, \code{beta} or \code{gamma} makes every element
+#'   \code{NA}, with the same warning.  The parameters must be numeric
+#'   (double, integer or logical): a factor, a character string, a complex
+#'   number, a list or \code{NULL} is an error.  If a rejection sampler
+#'   accepts none of 1000 proposals for an element (for a subnormal shape,
+#'   none of 1000 draws of the proxy below, each of up to 1000 proposals),
+#'   that element is \code{NaN}, and a single warning reports how many draws
+#'   were affected;
+#'   the acceptance rates of the samplers make this vanishingly unlikely.
+#'   Where the distribution lies beyond the largest double precision number,
+#'   and at some other extreme values, \code{rmhn} instead stops with an
+#'   error for the whole call (see Details).
 #'
 #' @details
 #' The default parameters \code{alpha = 1, beta = 1, gamma = 0} correspond
-#' to the half-normal distribution \eqn{\mathrm{HN}(1/\sqrt{2})}.
+#' to the half-normal distribution \eqn{\mathrm{HN}(1/\sqrt{2})}{HN(1/sqrt(2))}.
 #'
+#' \subsection{Choice of sampler}{
 #' The \code{method} argument selects the rejection sampler:
 #' \itemize{
 #'   \item \code{"auto"} (default): Uses closed-form special cases when
-#'     applicable (\eqn{\gamma \approx 0} -> sqrt-Gamma,
-#'     \eqn{\alpha \approx 1} -> truncated normal). Otherwise it selects the
-#'     fastest provably correct sampler for the parameter region and the
-#'     number of variates drawn per setup: for \eqn{\gamma > 0} it uses Sun
-#'     et al. (2023) Algorithm 1 when \eqn{\alpha > 1} and RTDR (Gao & Wang,
-#'     2025) when \eqn{\alpha < 1}; for \eqn{\gamma < 0} it uses Sun et al.
-#'     Algorithm 3 for small batches and for \eqn{\alpha \ge 10}, and RTDR
-#'     for larger batches with \eqn{\alpha < 10}. A batch counts as large at
-#'     25 variates per setup, raised to 100 for \eqn{\alpha < 0.1} where the
-#'     crossover between the two samplers occurs later. These thresholds were
-#'     fixed by benchmarking (see \code{inst/benchmarks/auto_dispatch.R}).
+#'     applicable (\eqn{\gamma \approx 0}{gamma ~ 0} -> sqrt-Gamma,
+#'     \eqn{\alpha \approx 1}{alpha ~ 1} -> truncated normal, where
+#'     \eqn{\approx}{~} means within \code{sqrt(.Machine$double.eps)}, for
+#'     the tilt on \eqn{|\gamma|/\sqrt{\beta}}{|gamma|/sqrt(beta)}; away
+#'     from \eqn{\gamma = 0}{gamma = 0} and \eqn{\alpha = 1}{alpha = 1}
+#'     themselves the law drawn is then within a total variation distance of
+#'     \eqn{8.6 \times 10^{-9}}{8.6e-9} of the one requested). Otherwise it
+#'     selects the faster of the provably correct samplers, as measured by
+#'     timing them against each other on an Apple M1 Ultra, for the parameter
+#'     region and the number of variates drawn per setup.  The choice changes
+#'     only the speed, not the law drawn, and the crossings move from machine
+#'     to machine. For \eqn{\gamma > 0} it uses RTDR
+#'     (Gao & Wang 2025) when \eqn{\alpha < 1}. When \eqn{\alpha > 1} it
+#'     uses RTDR if \eqn{\alpha \le 2^{59}}{alpha <= 2^59}, the tilt
+#'     \eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} is at most
+#'     \eqn{2\sqrt{\alpha}}{2 sqrt(alpha)} and enough variates share a
+#'     setup, and Sun et al. (2023) Algorithm 1 otherwise. Enough means 5,
+#'     25, 50 or 100 variates for \eqn{z \le \sqrt{\alpha}}{z <= sqrt(alpha)},
+#'     and 25, 50, 100 or 1000 above it, for \eqn{\alpha < 10}{alpha < 10},
+#'     \eqn{10 \le \alpha < 1000}{10 <= alpha < 1000},
+#'     \eqn{1000 \le \alpha < 10^8}{1000 <= alpha < 1e8} and
+#'     \eqn{\alpha \ge 10^8}{alpha >= 1e8} respectively, and 5 or 25 where
+#'     RTDR's setup starts next to the mode (see below). For
+#'     \eqn{\gamma < 0} it uses RTDR above \eqn{\alpha = 2^{59}}{alpha = 2^59}
+#'     (see below). Up to that shape it uses Sun et al. Algorithm 3 when
+#'     fewer than 25 (\eqn{\alpha < 0.1}{alpha < 0.1}), 5
+#'     (\eqn{0.1 \le \alpha < 1}{0.1 <= alpha < 1}), 10
+#'     (\eqn{1000 \le \alpha < 10^5}{1000 <= alpha < 1e5}), 25
+#'     (\eqn{10^5 \le \alpha < 10^8}{1e5 <= alpha < 1e8}) or 50
+#'     (\eqn{\alpha \ge 10^8}{alpha >= 1e8}) variates share a setup,
+#'     for \eqn{-\gamma/\sqrt{\beta} > 10^{150}}{-gamma/sqrt(beta) > 1e150}
+#'     and where RTDR cannot place the distribution (see below), and RTDR
+#'     otherwise, which for \eqn{1 < \alpha < 1000}{1 < alpha < 1000}, and
+#'     wherever RTDR's setup starts next to the mode, means at any number of
+#'     variates per setup. For \eqn{\alpha > 1} that setup searches for the
+#'     two contact points of RTDR's envelope. It starts the search next to
+#'     the mode \eqn{m} of \eqn{\sqrt{\beta}X}{sqrt(beta) X} at very large
+#'     shapes, where it builds the envelope relative to the mode (from about
+#'     \eqn{2.4 \times 10^{12}}{2.4e12} to
+#'     \eqn{3.1 \times 10^{12}}{3.1e12} at moderate tilts, from about
+#'     \eqn{2.3 \times 10^{13}}{2.3e13} near a tilt of
+#'     \eqn{-\alpha/e}{-alpha/e}, and from about
+#'     \eqn{4.5 \times 10^{13}}{4.5e13} at any tilt), and under a very
+#'     strong negative tilt,
+#'     \eqn{z < -10^{10}\sqrt{\alpha}}{z < -1e10 sqrt(alpha)}; the default
+#'     method decides this with the setup's own test. Elsewhere the search
+#'     walks the two points in from \eqn{m/2} and
+#'     \eqn{m + \max(1, m/2)}{m + max(1, m/2)}, and from a
+#'     shape of about 1000 on that makes RTDR's setup dearer than
+#'     Algorithm 3's. The number of variates per setup is counted as \code{n}
+#'     for scalar parameters, and as \code{n} divided by the least common
+#'     multiple of the lengths of \code{alpha}, \code{beta} and
+#'     \code{gamma}, the period after which the recycled triples repeat,
+#'     rounded down, where a setup is kept for each position within that
+#'     period (see below). Otherwise
+#'     it is 1: parameters given as vectors of length \code{n} count one per
+#'     setup, as in a Gibbs sampler, even when equal triples are grouped
+#'     into runs, and such a call draws what the loop of single draws would.
+#'     A long run of one triple is drawn fastest by its own scalar call.
 #'   \item \code{"rtdr"}: Use the Relaxed Transformed Density Rejection
-#'     method of Gao & Wang (2025) for the general case. The acceptance
-#'     probability is bounded below by \eqn{1/e \approx 0.368} uniformly over
-#'     the parameter space. The closed-form special cases are still taken
-#'     first: a negligible tilt draws from the square root of a Gamma, and
-#'     \eqn{\alpha \approx 1} from a truncated normal. Both are exact and
-#'     faster than any rejection scheme, so no sampler choice overrides them.
-#'     Note: Gao & Wang (2025) use the parameterization
+#'     method of Gao & Wang (2025) for the general case. Gao & Wang bound the
+#'     acceptance probability below by \eqn{1/e \approx 0.368}{1/e ~ 0.368}
+#'     uniformly over the parameter space where the contact points of the
+#'     envelope lie in their band (their Eq. (7)); the search for them does
+#'     not always reach that band, and the acceptance measured stays above
+#'     the bound there too. The closed-form special cases are
+#'     still taken first: a negligible tilt draws from the square root of a
+#'     Gamma, and \eqn{\alpha \approx 1}{alpha ~ 1} from a truncated normal.
+#'     Both are exact samplers of their special-case law, which next to
+#'     \eqn{\gamma = 0}{gamma = 0} or \eqn{\alpha = 1}{alpha = 1} is within a
+#'     total variation distance of \eqn{8.6 \times 10^{-9}}{8.6e-9} of the
+#'     law requested, and faster than any rejection scheme, so no sampler
+#'     choice overrides them, except that a negligible tilt above
+#'     \eqn{\alpha = 2^{60}}{alpha = 2^60} is drawn by RTDR (see below).
+#'     Where RTDR cannot place a law of tiny shape under a strong negative
+#'     tilt, Sun et al. Algorithm 3 is used instead (see below). Note:
+#'     Gao & Wang (2025) use the parameterization
 #'     \eqn{(\lambda, \alpha, \beta)} with density proportional to
-#'     \eqn{x^{\lambda - 1} \exp(-\alpha x^2 - \beta x)}; the mapping to
-#'     the Sun et al. parameterization used here is
-#'     \eqn{\lambda \leftrightarrow \alpha},
-#'     \eqn{\alpha \leftrightarrow \beta},
-#'     \eqn{\beta \leftrightarrow -\gamma} (sign flip on the linear term).
+#'     \eqn{x^{\lambda - 1} \exp(-\alpha x^2 - \beta x)}{x^(lambda - 1)
+#'     exp(-alpha x^2 - beta x)}; the mapping to the Sun et al.
+#'     parameterization used here is
+#'     \eqn{\lambda \leftrightarrow \alpha}{lambda <-> alpha},
+#'     \eqn{\alpha \leftrightarrow \beta}{alpha <-> beta},
+#'     \eqn{\beta \leftrightarrow -\gamma}{beta <-> -gamma} (sign flip on
+#'     the linear term).
 #'   \item \code{"sun"}: Use the Sun et al. (2023) algorithms for the general
 #'     case, with the same closed-form special cases taken first.
 #'     Algorithm 1 is used when \eqn{\gamma > 0} and \eqn{\alpha > 1};
-#'     Algorithm 3 is used when \eqn{\gamma \le 0}. The combination
-#'     \eqn{\alpha < 1} with \eqn{\gamma > 0} is unsupported and triggers
-#'     an error, unless a special case answers it first.
+#'     Algorithm 3 is used when \eqn{\gamma \le 0}, up to
+#'     \eqn{\alpha = 2^{59}}{alpha = 2^59}, beyond which the call stops with
+#'     an error (see below). The combination \eqn{\alpha < 1} with
+#'     \eqn{\gamma > 0} is unsupported and triggers an error, unless a
+#'     special case answers it first.
+#' }
 #' }
 #'
+#' \subsection{Vector parameters and setups}{
 #' Vector parameters are recycled to length \code{n} following standard R
 #' rules: only the first \code{n} elements of each parameter are used, and any
 #' further elements are silently ignored, matching the convention of
 #' \code{rnorm}.
 #'
-#' Internally the setup state of the chosen sampler is reused as long as
-#' consecutive \eqn{(\alpha, \beta, \gamma)} triples are equal, so passing
-#' parameters grouped by triple is faster than calling \code{rmhn} inside
-#' an R loop.
+#' Internally the setup of the chosen sampler is built once for each run of
+#' equal consecutive \eqn{(\alpha, \beta, \gamma)} triples and, when short
+#' parameter vectors whose triples repeat after a period of at most 256
+#' draws are recycled over at least four such periods, at most once for each
+#' position within that period, so passing parameters grouped by triple, or
+#' as short recycled vectors, is faster than calling \code{rmhn} inside an R
+#' loop. Grouping saves setups but does not change the number of variates
+#' per setup counted above, and so not the choice of sampler.
+#' }
+#'
+#' \subsection{Reproducibility}{
+#' Under one seed, \code{method = "rtdr"} and \code{method = "sun"} draw one
+#' stream whatever \code{n}: the first \code{k} draws of \code{rmhn(n, ...)}
+#' are those of \code{rmhn(k, ...)}, and draws split over several calls are
+#' those of one call.  The default method does not keep this, as it chooses
+#' its sampler from the number of variates per setup (see above):
+#' \code{rmhn(4, 5, 1, 2)} and the first four draws of
+#' \code{rmhn(100, 5, 1, 2)} come from different samplers.  Its stream
+#' therefore changes with \code{n}, with how the parameters are arranged,
+#' and with a version of the package that moves a threshold, although the law
+#' drawn does not.  Where the draws must not depend on \code{n}, as when a
+#' pilot run is compared with the main one, set \code{method = "rtdr"} or
+#' \code{method = "sun"}.
+#' }
+#'
+#' \subsection{Limits of double precision}{
+#' Double precision limits which laws can be sampled, and how finely. Every
+#' sampler draws from the exact law and rounds the draw to double precision,
+#' and a draw below the smallest positive double is returned as 0. As
+#' \eqn{\alpha} or \eqn{\gamma/\sqrt{\beta}}{gamma/sqrt(beta)} grows, the
+#' distribution narrows around its mode relative to the mode itself, and a
+#' rounding error that moved every draw alike, such as that of a computed
+#' mode, would become a visible part of its standard deviation. Wherever such
+#' a shift could exceed a few times \eqn{10^{-7}}{1e-7} of a standard
+#' deviation, the draws are placed from the mode computed to about twice
+#' double precision, so that each is the exact draw rounded once. R's
+#' \code{\link[stats]{rgamma}}, which the square-root-Gamma closed form and
+#' Sun et al. Algorithm 3 draw from, rounds \eqn{\sqrt{a - 1/2}}{sqrt(a - 1/2)}
+#' and the scale, and so shifts every variate of shape \eqn{a} alike by up
+#' to about \eqn{3 \times 2^{-53}\sqrt{a}}{3 * 2^-53 sqrt(a)} standard
+#' deviations, \eqn{2.5 \times 10^{-7}}{2.5e-7} at
+#' \eqn{a = 2^{59}}{a = 2^59}. Algorithm 3's own setup, which rounds the
+#' shape, power and rate of its Gamma proposal, adds a shift of the same
+#' kind, and its draws were measured to shift by up to about
+#' \eqn{4.5 \times 2^{-53}\sqrt{\alpha}}{4.5 * 2^-53 sqrt(alpha)}
+#' standard deviations in all (\eqn{3.8 \times 10^{-7}}{3.8e-7} at
+#' \eqn{\alpha = 2^{59}}{alpha = 2^59}). Both are used only up to a Gamma
+#' shape of \eqn{2^{59}}{2^59} (about \eqn{5.8 \times 10^{17}}{5.8e17}),
+#' at \eqn{\alpha}{alpha} up to \eqn{2^{60}}{2^60} and \eqn{2^{59}}{2^59}
+#' respectively. Above
+#' \eqn{\alpha = 2^{60}}{alpha = 2^60} a negligible tilt of either sign is
+#' drawn by the Normal proposal of Algorithm 1 centred at the mode (by RTDR
+#' under \code{method = "rtdr"}): Sun et al. (2023) state Algorithm 1 for
+#' \eqn{\gamma > 0} and Theorem 1 for \eqn{\gamma \ge 0}{gamma >= 0}, but
+#' centred at the mode the Normal envelope holds for either sign. Above
+#' \eqn{\alpha = 2^{59}}{alpha = 2^59} a negative tilt that is not
+#' negligible is drawn by RTDR under the default method, while
+#' \code{method = "sun"} stops with an error.
+#'
+#' The RTDR sampler stops with an error for the whole call once the standard
+#' deviation is no larger than the spacing of the double precision numbers
+#' at the mode: from \eqn{\gamma/\sqrt{\beta}}{gamma/sqrt(beta)} of about
+#' \eqn{9 \times 10^{15}}{9e15}
+#' (\eqn{2^{53}}{2^53} at \eqn{\beta = 1}{beta = 1}),
+#' and, for \eqn{\gamma \le 0}{gamma <= 0}, from \eqn{\alpha} between
+#' \eqn{2^{103}}{2^103} and \eqn{2^{106}}{2^106}
+#' (\eqn{1.0 \times 10^{31}}{1.0e31} to \eqn{8.1 \times 10^{31}}{8.1e31}).
+#' The standard deviation of the law over its mode \eqn{m} is about
+#' \eqn{1/\sqrt{2\alpha}}{1/sqrt(2 alpha)} at \eqn{\gamma = 0}{gamma = 0}
+#' and \eqn{1/\sqrt{\alpha}}{1/sqrt(alpha)} under a strong negative tilt,
+#' where the law is close to the Gamma distribution with shape \eqn{\alpha}
+#' and rate \eqn{-\gamma}{-gamma}, and the doubles at \eqn{m} are between
+#' \eqn{2^{-53} m}{2^-53 m} and \eqn{2^{-52} m}{2^-52 m} apart; so the stop
+#' comes between \eqn{2^{103}}{2^103} and \eqn{2^{105}}{2^105}
+#' (\eqn{4.1 \times 10^{31}}{4.1e31}) at \eqn{\gamma = 0}{gamma = 0} and
+#' between \eqn{2^{104}}{2^104} and \eqn{2^{106}}{2^106} under a strong
+#' negative tilt, depending on where \eqn{m} falls between two powers of two.
+#' There the law is normal to far below double precision, with mean
+#' \eqn{m} = \code{mhn_mode(alpha, beta, gamma)} and variance
+#' \eqn{1/((\alpha - 1)/m^2 + 2\beta)}{1/((alpha - 1)/m^2 + 2 beta)}, and
+#' can be drawn from directly. Sun et al. Algorithm 1, which the default
+#' method uses for such laws with \eqn{\gamma > 0} and \eqn{\alpha > 1}
+#' (up to \eqn{\alpha = 2^{59}}{alpha = 2^59} their tilt exceeds
+#' \eqn{2\sqrt{\alpha}}{2 sqrt(alpha)}, and above that shape Algorithm 1
+#' serves at any tilt), and the truncated normal of
+#' \eqn{\alpha \approx 1}{alpha ~ 1} do not stop there: their draws
+#' are placed at the mode to within a few units in the last place, so that
+#' they take only a few distinct values near it. For a strongly negative
+#' tilt the law approaches the Gamma distribution with shape \eqn{\alpha} and
+#' rate \eqn{-\gamma}{-gamma}, which Algorithm 3 draws at any tilt up to its
+#' shape limit. RTDR works with \eqn{\sqrt{\beta}\,x}{sqrt(beta) x}, or for
+#' \eqn{\alpha \le 1}{alpha <= 1} with its logarithm
+#' \eqn{y = \log(\sqrt{\beta}\,x)}{y = log(sqrt(beta) x)}, and cannot
+#' place the law in three cases. The first is where
+#' \eqn{-\gamma/\sqrt{\beta}}{-gamma/sqrt(beta)} passes the largest double.
+#' The second is for \eqn{\alpha \le 1}{alpha <= 1} and a finite
+#' \eqn{-\gamma/\sqrt{\beta}}{-gamma/sqrt(beta)}: the mode of
+#' \eqn{\log(\sqrt{\beta}X)}{log(sqrt(beta) X)} is the logarithm of about
+#' \eqn{\alpha\sqrt{\beta}/|\gamma|}{alpha sqrt(beta) / |gamma|}, and where
+#' \eqn{\alpha} is below about \eqn{2.5 \times 10^{-324}}{2.5e-324} (half
+#' the smallest positive double) times
+#' \eqn{-\gamma/\sqrt{\beta}}{-gamma/sqrt(beta)}, which needs
+#' \eqn{\alpha}{alpha} below \eqn{4.4 \times 10^{-16}}{4.4e-16}, that number
+#' rounds to 0; almost all the mass of \eqn{X} then lies below the smallest
+#' positive double. The third is for a shape of a few, where
+#' \eqn{-\gamma/\sqrt{\beta}}{-gamma/sqrt(beta)} comes within a small factor
+#' of the largest double. In the second case, and in the first for
+#' \eqn{\alpha < 10^{-15}}{alpha < 1e-15}, but for a subnormal shape (see
+#' below), \code{method = "rtdr"} draws from
+#' Algorithm 3, which samples the law exactly there; otherwise it stops and
+#' names that Gamma law. The default method uses Algorithm 3 in all three
+#' cases, except where \eqn{-\gamma/\sqrt{\beta}}{-gamma/sqrt(beta)} passes
+#' the largest double at a shape above \eqn{2^{59}}{2^59}; there it stops as
+#' RTDR does. Where the distribution lies beyond the largest double precision
+#' number, no draw can represent it, and every sampler, the closed forms
+#' included, stops with an error.
+#' }
+#'
+#' \subsection{Subnormal shapes}{
+#' A subnormal shape, below the smallest normal double
+#' \eqn{2.2 \times 10^{-308}}{2.2e-308}, is drawn as the mixture its law is
+#' (see the Details of \code{\link{dmhn}}): 0 with probability
+#' \eqn{1 / (1 + w)}, the probability of a value below the smallest positive
+#' double, and otherwise from the peak, as the law of the shape
+#' \eqn{2^{-60}}{2^-60} above \eqn{\sqrt{\beta} x = 1}{sqrt(beta) x = 1},
+#' which has the peak's density there to within a relative
+#' \eqn{4 \times 10^{-18}}{4e-18}, by the sampler \code{method} selects
+#' for that shape.  The choice between 0 and the peak compares one uniform
+#' variate with \eqn{1 / (1 + w)}, and so has the resolution of the
+#' generator, \eqn{2^{-32}}{2^-32} for R's default.  Where
+#' \eqn{1 / (1 + w)} is 1 in double precision, below a tilt of about 52 (53
+#' at the smallest shapes), every draw is 0 and uses no random number; a
+#' shape from \eqn{2^{-1022}}{2^-1022} up is drawn by the samplers above,
+#' which use random numbers there too, so that the stream after the draws
+#' moves as the shape crosses \eqn{2^{-1022}}{2^-1022} although every draw
+#' is 0 on either side.  A refusal names the shape asked for.
+#' }
 #'
 #' @references
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #' distribution: Properties and an efficient sampling scheme.
 #' \emph{Communications in Statistics - Theory and Methods}, 52(5),
-#' 1591--1613.
+#' 1591--1613. \doi{10.1080/03610926.2021.1934700}
 #'
-#' Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
+#' Gao, F., & Wang, H.-B. (2025). Generating modified-half-normal random
 #' variates by a relaxed transformed density rejection method.
-#' \emph{Communications in Statistics - Simulation and Computation}.
+#' \emph{Communications in Statistics - Simulation and Computation}, 1--25.
+#' Advance online publication. \doi{10.1080/03610918.2025.2524551}
 #'
 #' Robert, C. P. (1995). Simulation of truncated normal variables.
 #' \emph{Statistics and Computing}, 5(2), 121--125.
+#' \doi{10.1007/BF00143942}
 #'
 #' @seealso \code{\link{dmhn}}, \code{\link{mhn_mean}}, \code{\link{mhn_var}}
 #'
@@ -108,14 +332,26 @@
 #' @export
 rmhn <- function(n, alpha = 1, beta = 1, gamma = 0,
                  method = c("auto", "rtdr", "sun")) {
-  # match.arg is roughly 55% of the cost of rmhn(1, alpha, beta, gamma), the
-  # single-variate call a Gibbs sampler makes once per sweep.  Skipping it when
-  # the argument was not supplied costs nothing and validates exactly as before
-  # for any value that was.
-  method <- if (missing(method)) "auto" else match.arg(method)
+  # match.arg costs more than the sampling itself in a single-variate call,
+  # the call a Gibbs sampler makes once per sweep, so a missing argument and
+  # an exact choice skip it; anything else, including a partial match, still
+  # goes through match.arg.
+  method <- if (missing(method)) {
+    "auto"
+  } else if (is.character(method) && length(method) == 1L && !is.na(method) &&
+             (method == "auto" || method == "rtdr" || method == "sun")) {
+    method
+  } else {
+    match.arg(method)
+  }
+  if (!(is.double(alpha) && is.double(beta) && is.double(gamma))) {
+    .check_numeric(alpha, beta, gamma)
+  }
   # Follow the base R convention shared by rnorm(), runif() and rgamma():
-  # a vector n asks for length(n) variates.
-  n <- if (length(n) > 1L) length(n) else as.integer(n)[1L]
+  # a vector n asks for length(n) variates, one of length zero included, and
+  # NULL is an error.  n goes on as a double, so that one beyond the integer
+  # range is refused without a coercion warning on the way.
+  n <- if (is.null(n) || length(n) == 1L) as.double(n)[1L] else length(n)
   .rmhn_cpp(n,
             as.numeric(alpha), as.numeric(beta), as.numeric(gamma),
             method)

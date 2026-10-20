@@ -10,8 +10,8 @@ home:
   title: The Modified Half-Normal Distribution
   description: >
     Density, distribution, quantile and random generation for the modified
-    half-normal distribution, with moments, mode, and the Fox-Wright Psi
-    function that normalises it.
+    half-normal distribution, whose normalising constant is a Fox-Wright Psi
+    function, with helpers for its moments and mode.
 
 navbar:
   structure:
@@ -33,8 +33,10 @@ reference:
 
   - title: Summary statistics
     desc: >
-      Closed-form summaries of a single MHN(alpha, beta, gamma) law.  These
-      take one parameter triple rather than recycling vectors.
+      Mean, variance, skewness, excess kurtosis and mode of a single
+      MHN(alpha, beta, gamma) law, from closed forms where these are accurate
+      and from quadrature otherwise.  These take one parameter triple rather
+      than recycling vectors.
     contents:
       - mhn_mean
       - mhn_var

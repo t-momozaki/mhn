@@ -1,2 +1,3 @@
-# C++17 is required for Boost.Math quadrature and root-finding helpers.
+# C++17: the sources use hexadecimal floating literals, a C++17 feature.
+# (Boost.Math itself asks for C++14.)
 CXX_STD = CXX17

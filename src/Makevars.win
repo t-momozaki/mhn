@@ -1,2 +1,0 @@
-# C++17 is required for Boost.Math quadrature and root-finding helpers.
-CXX_STD = CXX17

@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
-# replicate_gw_tables.R --- Reproduce Tables 1 and 2 of Gao & Wang (2025).
+# replicate_gw_tables.R --- Repeat the timing experiment behind Tables 1 and
+# 2 of Gao & Wang (2025): their design, on this machine.
 #
 # Source: Gao & Wang (2025), Tables 1 and 2.
 #
@@ -18,9 +19,9 @@
 #   alpha in {0.01, 0.3, 0.8, 1.1, 10, 100, 10000}
 #   gamma in {10000, 100, 2, 0.5, -10, -100, -10000}
 #
-# Patterns (paper text, L309):
-#   T1 : 1 variate per call x 10000 calls       (Table 1, "Gibbs case")
-#   T2 : 5 variates per call x 2000 calls       (Table 2, "varying parameter case")
+# Patterns (Gao & Wang 2025, Section 5):
+#   T1 : 1 variate per call x 10000 calls  (Table 1, "as in Gibbs sampler")
+#   T2 : 5 variates per call x 2000 calls  (Table 2, "varying parameter case")
 #
 # Methods:
 #   A1 = RTDR (Gao & Wang's proposed generator) -> mhn::rmhn(method = "rtdr")
@@ -28,43 +29,67 @@
 #
 # A2 limitation: Sun et al. (2023) Algorithm 2 (the only Sun
 # algorithm that covers alpha < 1 & gamma > 0; Algorithm 1 requires
-# alpha > 1) is not implemented in this package because its expected
-# cost grows like gamma^2 / beta (Sun et al. 2023, Lemma 8) and
-# degrades by orders of magnitude in the very regime the rest of
-# this script measures.
+# alpha > 1) is not implemented in this package: Sun et al. (2023,
+# Section 4.1.2) note that its running time becomes significant when alpha
+# or gamma^2 / beta is large (the truncation index of its mixture weights,
+# their Lemma 8, grows like gamma^2 / beta), which is the very regime the
+# rest of this script measures.
 # For those cells (alpha in {0.01, 0.3, 0.8} x gamma in {10000, 100, 2,
 # 0.5}, 12 cells) the A2 column is recorded as NA with reason
 # "sun_algo2_not_implemented".
 #
-# Output: mhn/inst/benchmarks/results/replicate_gw_tables_<YYYYMMDD>.csv
+# Output: replicate_gw_tables_<YYYYMMDD>.csv (and a _diagnostics_ file that
+# records the software and machine of the run, from provenance.R)
 # Columns: alpha, gamma, gw_lambda, gw_beta, pattern, method,
 #          time_sec_median, time_sec_iqr, paper_value, error
 #
-# Invocation (from repository root):
-#   Rscript mhn/inst/benchmarks/replicate_gw_tables.R
+# Invocation:
+#   Rscript <file>
+# where <file> is
+# system.file("benchmarks", "replicate_gw_tables.R", package = "mhn").
+# The results are written to MHN_GW_OUTDIR when it names a directory, and not
+# at all otherwise.
+# Next to them it records the software and machine of the run
+# (provenance.R), for which it runs `R CMD config`, the compiler with
+# `--version`, and `sysctl` on macOS or `lscpu` on Linux.
 #
 # Optional environment variables:
 #   MHN_GW_QUICK=1  -> reduce grid (3x3) and iterations for smoke test
-#   MHN_GW_ITER=N   -> override bench::mark iterations (default 5)
+#   MHN_GW_ITER=N   -> override bench::mark iterations (default 50; 2 with
+#                      MHN_GW_QUICK=1)
 #   MHN_GW_OUTDIR   -> override output directory
+#   MHN_GIT_COMMIT  -> git commit of the installed package sources, recorded
+#                      in the diagnostics CSV
 
 suppressPackageStartupMessages({
   if (!requireNamespace("bench", quietly = TRUE))
     stop("replicate_gw_tables.R requires 'bench'. install.packages('bench').")
   if (!requireNamespace("mhn", quietly = TRUE))
-    stop("replicate_gw_tables.R requires 'mhn'. R CMD INSTALL mhn first.")
+    stop("replicate_gw_tables.R requires the 'mhn' package; install it first.")
 })
 
 QUICK <- isTRUE(nchar(Sys.getenv("MHN_GW_QUICK")) > 0L)
-# Iterations are set to 50 because at iter=5 the bench::mark IQR
-# approached or exceeded the median, and at iter=20 run-to-run flips
-# still appeared on 5-12 of the 48 borderline cells observed in
-# auto_dispatch.R.  At iter=50 the typical relative IQR is below 3%
-# on this hardware.
+# 50 iterations by default: at 5 the bench::mark IQR can approach the
+# median, and at 20 the rtdr/sun ranking of near-tie cells still changes
+# from one run to the next.  Even at 50 the relative IQR of a timing is
+# often several per cent.
 BENCH_ITER <- {
   v <- suppressWarnings(as.integer(Sys.getenv("MHN_GW_ITER", unset = "")))
   if (is.na(v) || v < 1L) (if (QUICK) 2L else 50L) else v
 }
+
+# The provenance helper ships beside this script.
+local({
+  f <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+  here <- if (length(f)) dirname(gsub("~+~", " ", f[1L], fixed = TRUE)) else "."
+  cand <- c(file.path(here, "provenance.R"),
+            system.file("benchmarks", "provenance.R", package = "mhn"))
+  cand <- cand[nzchar(cand) & file.exists(cand)]
+  if (!length(cand))
+    stop("cannot find provenance.R beside this script or in the installed mhn")
+  source(cand[1L], local = FALSE)
+})
+RUN <- provenance_start()
 
 # Full Gao & Wang grid (Sun notation).
 GW_LAMBDAS <- if (QUICK) c(0.3, 1.1, 10) else c(0.01, 0.3, 0.8, 1.1, 10, 100, 10000)
@@ -80,8 +105,13 @@ PATTERNS <- list(
 )
 
 OUTDIR <- Sys.getenv("MHN_GW_OUTDIR", unset = "")
-if (!nzchar(OUTDIR)) OUTDIR <- file.path("mhn", "inst", "benchmarks", "results")
-dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+# The results are written only where MHN_GW_OUTDIR names a directory; without
+# it the script prints its summary and writes nothing.
+SAVE <- nzchar(OUTDIR)
+if (SAVE) dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+save_csv <- function(x, path) {
+  if (SAVE) utils::write.csv(x, path, row.names = FALSE)
+}
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("replicate_gw_tables_%s.csv", TODAY))
 DIAG_CSV   <- file.path(OUTDIR,
@@ -91,7 +121,8 @@ cat(sprintf("[replicate_gw] mode=%s iterations=%d lambda=%d beta=%d patterns=%d 
             if (QUICK) "QUICK" else "FULL", BENCH_ITER,
             length(GW_LAMBDAS), length(GW_BETAS), length(PATTERNS),
             length(ALPHAS) * length(GAMMAS)))
-cat(sprintf("[replicate_gw] result_csv=%s\n", RESULT_CSV))
+cat(if (SAVE) sprintf("[replicate_gw] result_csv=%s\n", RESULT_CSV) else
+      "[replicate_gw] results not saved (set MHN_GW_OUTDIR to save them)\n")
 
 # ----- Reference values from Gao & Wang (2025) Tables 1 and 2 ---------------
 # Indexed by (gw_lambda, gw_beta). NA where not in paper.
@@ -258,7 +289,7 @@ for (i_alpha in seq_along(ALPHAS)) {
 }
 
 df <- do.call(rbind, rows)
-write.csv(df, RESULT_CSV, row.names = FALSE)
+save_csv(df, RESULT_CSV)
 
 t_end <- Sys.time()
 elapsed_min <- as.numeric(difftime(t_end, t_start, units = "mins"))
@@ -267,28 +298,52 @@ cat("\n========== SUMMARY ==========\n")
 cat(sprintf("Elapsed: %.1f min   (start=%s end=%s)\n",
             elapsed_min, format(t_start, "%H:%M:%S"), format(t_end, "%H:%M:%S")))
 
-print_table <- function(df, pattern_label, method_code) {
+# The package's times are those of its C++ kernels on this machine, and the
+# paper's those of Gao & Wang's R code on their hardware, so the two are not
+# comparable as they stand.  What can be compared is the ratio of the two
+# samplers' times within each source: RTDR over Sun here, with Gao & Wang's
+# ratio in parentheses.
+print_times <- function(df, pattern_label, method_code) {
   sub <- subset(df, pattern == pattern_label & method == method_code)
-  cat(sprintf("\n[%s, method=%s] time_sec_median, paper value in parentheses\n",
+  cat(sprintf("\n[%s, method=%s] time_sec_median on this machine\n",
               pattern_label, toupper(method_code)))
   for (lam in GW_LAMBDAS) {
     line <- sprintf("  lambda=%-7g | ", lam)
     for (bet in GW_BETAS) {
       r <- sub[sub$gw_lambda == lam & sub$gw_beta == bet, ]
-      if (nrow(r) == 0L) { line <- paste0(line, "  --   "); next }
-      ours <- r$time_sec_median[1]
-      paper <- r$paper_value[1]
-      ours_str <- if (is.na(ours)) "NA" else sprintf("%.2f", ours)
-      paper_str <- if (is.na(paper)) "NA" else sprintf("%.2f", paper)
-      line <- paste0(line, sprintf("%6s(%-6s) ", ours_str, paper_str))
+      ours <- if (nrow(r) == 0L) NA_real_ else r$time_sec_median[1]
+      line <- paste0(line, sprintf("%8s ", if (is.na(ours)) "--" else
+                                     sprintf("%.3f", ours)))
     }
     cat(line, "\n")
   }
 }
-print_table(df, "T1", "rtdr")
-print_table(df, "T1", "sun")
-print_table(df, "T2", "rtdr")
-print_table(df, "T2", "sun")
+print_ratios <- function(df, pattern_label) {
+  cat(sprintf(paste0("\n[%s] time of RTDR / time of Sun on this machine,",
+                     " Gao & Wang's ratio in parentheses\n"), pattern_label))
+  cell <- function(method_code, lam, bet) {
+    r <- df[df$pattern == pattern_label & df$method == method_code &
+              df$gw_lambda == lam & df$gw_beta == bet, ]
+    if (nrow(r) == 0L) c(NA_real_, NA_real_) else
+      c(r$time_sec_median[1], r$paper_value[1])
+  }
+  for (lam in GW_LAMBDAS) {
+    line <- sprintf("  lambda=%-7g | ", lam)
+    for (bet in GW_BETAS) {
+      rt <- cell("rtdr", lam, bet)
+      sn <- cell("sun", lam, bet)
+      fmt <- function(x) if (is.na(x)) "NA" else sprintf("%.2f", x)
+      line <- paste0(line, sprintf("%6s(%-6s) ", fmt(rt[1] / sn[1]),
+                                   fmt(rt[2] / sn[2])))
+    }
+    cat(line, "\n")
+  }
+}
+for (pat in c("T1", "T2")) {
+  print_times(df, pat, "rtdr")
+  print_times(df, pat, "sun")
+  print_ratios(df, pat)
+}
 
 # -----------------------------------------------------------------------
 # Diagnostics CSV (single-row environment / provenance record)
@@ -308,7 +363,10 @@ diag <- data.frame(
   elapsed_min = round(elapsed_min, 2),
   stringsAsFactors = FALSE
 )
-write.csv(diag, DIAG_CSV, row.names = FALSE)
+diag <- with_provenance(diag, RUN)
+save_csv(diag, DIAG_CSV)
 
-cat(sprintf("\nResults written to: %s\n", RESULT_CSV))
-cat(sprintf("Diagnostics written to: %s\n", DIAG_CSV))
+if (SAVE) {
+  cat(sprintf("\nResults written to: %s\n", RESULT_CSV))
+  cat(sprintf("Diagnostics written to: %s\n", DIAG_CSV))
+}

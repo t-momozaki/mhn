@@ -8,8 +8,9 @@ bibentry(
                     email = "momozaki.stat@gmail.com",
                     role  = c("aut", "cre")),
   year     = "2026",
-  note     = "R package version 0.1.1",
-  url      = "https://github.com/t-momozaki/mhn",
+  note     = sprintf("R package version %s", meta$Version),
+  url      = "https://CRAN.R-project.org/package=mhn",
+  doi      = "10.32614/CRAN.package.mhn",
   header   = "To cite the mhn package itself:"
 )
 
@@ -47,7 +48,7 @@ bibentry(
 bibentry(
   bibtype  = "Article",
   title    = "Simulation of truncated normal variables",
-  author   = person("Christian P.", "Robert"),
+  author   = person(c("Christian", "P."), "Robert"),
   journal  = "Statistics and Computing",
   year     = "1995",
   volume   = "5",

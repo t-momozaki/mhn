@@ -1,15 +1,12 @@
-# Regression tests for closed forms that lose precision in double arithmetic.
-#
-# Each block below pins a parameter region where a textbook algebraic form
-# silently returns a wrong answer -- zero, NaN, or a value outside the domain
-# the source theorem requires -- while the mathematically identical form used
-# by the package stays exact.  The grids elsewhere in the suite stop well short
-# of these regions, which is why they went unnoticed.
+# Numerical-stability tests: parameter regions where a direct formula loses
+# precision or overflows, and the behaviour of the samplers, their warnings
+# and their error messages at extreme parameters.  The grids elsewhere in the
+# suite stop well short of most of these regions.
 
 test_that("mhn_mode stays exact for strongly negative gamma", {
   # Sun et al. (2023) Lemma 3b as printed evaluates
   #   (gamma + sqrt(gamma^2 + 8 beta (alpha-1))) / (4 beta),
-  # whose numerator cancels for gamma < 0.  Gao & Wang (2025, Eq. 9) also give
+  # whose numerator cancels for gamma < 0.  Gao & Wang (2025, Eq. (9)) also give
   # the conjugate form, which is what the package uses.
   exact <- function(alpha, beta, gamma) {
     2 * (alpha - 1) / (sqrt(gamma^2 + 8 * beta * (alpha - 1)) - gamma)
@@ -29,8 +26,8 @@ test_that("mhn_mode stays exact for strongly negative gamma", {
 
 test_that("dmhn and pmhn remain finite and positive at alpha = 2 with large gamma", {
   # Psi[1, z] = 1 + sqrt(pi) z exp(z^2/4) Phi(z/sqrt(2)); the middle factor
-  # overflows a double for z > 53.3, which drove the normalising constant to
-  # +Inf and the whole density to zero.
+  # overflows a double for z > 53.3, which, formed as written, drives the
+  # normalising constant to +Inf and the whole density to zero.
   for (gamma in c(53.3, 60, 100, 1000)) {
     mode_x <- (gamma + sqrt(gamma^2 + 8)) / 4    # alpha = 2, beta = 1
     d <- dmhn(mode_x, alpha = 2, beta = 1, gamma = gamma)
@@ -45,7 +42,7 @@ test_that("dmhn and pmhn remain finite and positive at alpha = 2 with large gamm
     expect_gt(p, 0)
     expect_lt(p, 1)
   }
-  # No collapse across the former overflow boundary.  One unit above the mode
+  # No collapse across that overflow boundary.  One unit above the mode
   # is sqrt(2) standard deviations once the law has become normal with variance
   # 1/2, so every value must sit at Phi(sqrt(2)) and stay there; a one-sided
   # bound on the change would admit the collapse to zero this block guards.
@@ -57,10 +54,11 @@ test_that("dmhn and pmhn remain finite and positive at alpha = 2 with large gamm
 })
 
 test_that("Sun Algorithm 1 keeps delta_opt inside (0, beta)", {
-  # Sun et al. (2023) Theorem 1a requires delta in (0, beta).  Evaluated
-  # literally the optimum is a difference of two quantities of size gamma^2
-  # and leaves the interval for large tilt; a negative value made the proposal
-  # a Gamma with negative scale, so every draw came back NaN.
+  # The first part of Sun et al.'s (2023) Theorem 1 (printed "a.") requires
+  # delta in (0, beta).  Evaluated literally the optimum delta_opt of the
+  # second part (printed "a." too) is a difference of two quantities of size
+  # gamma^2 and leaves the interval for large tilt; a negative value would
+  # make the proposal a Gamma with negative scale, and every draw NaN.
   for (alpha in c(1.5, 2, 10, 100)) {
     for (beta in c(0.01, 1, 100)) {
       for (gamma in 10^seq(2, 12, by = 0.5)) {
@@ -74,8 +72,10 @@ test_that("Sun Algorithm 1 keeps delta_opt inside (0, beta)", {
 })
 
 test_that("rmhn draws are finite at extreme positive tilt", {
-  # The (alpha, beta, gamma) triples at which the old delta_opt turned
-  # negative.  Each returned an all-NaN vector, with no error or warning.
+  # Triples at which the literal Theorem 1 formula for delta_opt loses every
+  # digit: its sign then depends on how the compiler evaluates the
+  # subtraction, and a negative value makes the proposal a Gamma with negative
+  # scale and every draw NaN, with no error or warning.
   cases <- list(c(1.5, 0.01, 3162.3), c(2, 0.01, 5623.4),
                 c(1.5, 1, 56234.1),   c(10, 0.01, 31622.8))
   for (p in cases) {
@@ -85,9 +85,8 @@ test_that("rmhn draws are finite at extreme positive tilt", {
     expect_true(all(is.finite(x)))
     expect_true(all(x > 0))
     # At this tilt the law concentrates tightly at its mode, so the exact mean
-    # sits there too.  Judge the sample mean on the scale of its own standard
-    # error: 5% of a mean of 1e5 is more than 1e4 standard errors wide, a band
-    # no sampler could fail.
+    # sits there too.  The sample mean is judged in its own standard errors,
+    # since any relative band would be thousands of them wide.
     mode_x <- (p[3] + sqrt(p[3]^2 + 8 * p[2] * (p[1] - 1))) / (4 * p[2])
     expect_equal(mhn_mean(p[1], p[2], p[3]), mode_x, tolerance = 1e-6)
     z <- (mean(x) - mhn_mean(p[1], p[2], p[3])) /
@@ -96,17 +95,39 @@ test_that("rmhn draws are finite at extreme positive tilt", {
   }
 })
 
-test_that("pmhn stays bounded in cost and range for strongly negative gamma", {
-  # The Lemma 10(d) truncation length grows like z^2, so the CDF series asked
-  # for ~5e7 terms at gamma = -1e4.  Past a ceiling the series now defers to
-  # quadrature, which answers in a bounded number of evaluations.
-  # Cost is asserted through the mechanism rather than the wall clock.  Past
-  # the ceiling the series returns its NaN sentinel, and that sentinel is what
-  # hands the call to quadrature; if the ceiling stopped firing the series
-  # would run its 5e7 terms again and this expectation would be the one to
-  # fail.  A wall-clock bound was the original guard and it failed under
-  # valgrind, which runs everything an order of magnitude slower -- and would
-  # be no less fragile on a loaded CRAN machine.
+test_that("pmhn stays bounded in cost and range for a strong tilt", {
+  # With K the Lemma 10(d) length, the CDF series runs to index 2K + 1,
+  # which grows like 1.44 z^2: at alpha = 2.5, beta = 1 it is about 9.2e5
+  # terms at |gamma| = 800, 1.2e6 at 900, 1.4e8 at 1e4 and 1.4e10 at 1e5.
+  # Past a ceiling of 1e6 terms the series returns its NaN sentinel without
+  # summing, and pmhn() takes quadrature instead, which answers in a bounded
+  # number of evaluations.  The
+  # ceiling is asserted through that sentinel rather than the wall clock, which
+  # under valgrind or on a loaded machine varies by an order of magnitude.
+  #
+  # For gamma > 0 every term is positive and there is no cancellation guard,
+  # so at this shape and q the sentinel can come only from the ceiling:
+  # without it the series would run at gamma = 900 (stopping early, since for
+  # a positive tilt it also stops once the terms fall below 2^-54 of Psi) and
+  # return a number.  At gamma = 800, under the ceiling, it does return one,
+  # and it matches the quadrature.  gamma = 1e4 is refused on z^2 alone,
+  # before any truncation length is formed.  The CDF at the mode is 0.5 to
+  # within the skewness of the near-normal law there.
+  for (gamma in c(900, 1e4)) {
+    q <- mhn_mode(2.5, 1, gamma)
+    expect_true(is.nan(mhn:::.pmhn_force(q, 2.5, 1, gamma, "series")),
+                info = sprintf("gamma=%g", gamma))
+    expect_equal(pmhn(q, 2.5, 1, gamma), 0.5, tolerance = 1e-3)
+  }
+  q <- mhn_mode(2.5, 1, 800)
+  series <- mhn:::.pmhn_force(q, 2.5, 1, 800, "series")
+  expect_false(is.nan(series))
+  expect_equal(series, mhn:::.pmhn_force(q, 2.5, 1, 800, "integrate"),
+               tolerance = 1e-8)
+
+  # For gamma < 0 the cancellation guard also returns the sentinel at these
+  # tilts, so there it shows only that the series declines, not which exit
+  # fired: at gamma = -800, under the ceiling, it is the guard.
   for (gamma in c(-800, -2000, -10000, -1e5)) {
     v <- pmhn(0.5, alpha = 2.5, beta = 1, gamma = gamma)
     expect_true(is.finite(v))
@@ -122,7 +143,7 @@ test_that("pmhn stays bounded in cost and range for strongly negative gamma", {
     series <- mhn:::.pmhn_force(0.3, 2.5, 1, gamma, "series")
     quad   <- mhn:::.pmhn_force(0.3, 2.5, 1, gamma, "integrate")
     expect_true(is.finite(quad))
-    if (!is.nan(series)) expect_equal(series, quad, tolerance = 1e-6)
+    if (!is.nan(series)) expect_equal(series, quad, tolerance = 1e-10)
     # Either way the public entry point must return a valid probability.
     p <- pmhn(0.3, 2.5, 1, gamma)
     expect_true(is.finite(p) && p >= 0 && p <= 1)
@@ -130,19 +151,63 @@ test_that("pmhn stays bounded in cost and range for strongly negative gamma", {
 })
 
 test_that("a sampler that exhausts its retry budget reports once, not per draw", {
-  # Successful draws are never NaN, so NaN is the failure signal; the wrapper
-  # counts them and raises a single warning rather than one per element.
+  # A rejection sampler that rejects max_retries proposals for one draw
+  # returns it as NaN, which no successful draw is; the dispatcher counts those
+  # and raises a single warning naming the count.  rmhn() leaves the budget at
+  # 1000, which no supported law exhausts, so the internal entry point is
+  # given a smaller one.  With a budget of 0 every draw of a rejection sampler
+  # fails; the NA parameter in the middle draws NaN too, as rnorm() does, but
+  # that is not a failure of the sampler: it is reported by its own warning
+  # and must not be counted.
+  set.seed(1)
+  w <- testthat::capture_warnings(
+    x <- mhn:::.rmhn_cpp(3L, c(2, NA, 2), 1, 1, "auto", max_retries = 0L))
+  expect_length(w, 2L)
+  expect_identical(w[1], "NAs produced")
+  expect_match(w[2], "exhausted its retry budget for 2 of 3 draws",
+               fixed = TRUE)
+  expect_true(all(is.nan(x)))
+  # The same for each sampler: Algorithm 1 above, RTDR and Algorithm 3 here.
+  for (args in list(list(0.5, 1, 2, "auto"), list(2, 1, -1, "sun"),
+                    list(2, 1, -1, "rtdr"))) {
+    w <- testthat::capture_warnings(
+      x <- mhn:::.rmhn_cpp(4L, args[[1]], args[[2]], args[[3]], args[[4]],
+                           max_retries = 0L))
+    expect_length(w, 1L)
+    expect_match(w, "for 4 of 4 draws", fixed = TRUE)
+    expect_true(all(is.nan(x)))
+  }
+  # With a budget of one proposal, a draw fails exactly when its proposal is
+  # rejected, about once in five times for RTDR at (0.5, 1, 2), whose
+  # acceptance rate is 0.81: the single warning must carry the count of NaN
+  # draws, whatever it is.
+  set.seed(2)
+  w <- testthat::capture_warnings(
+    x <- mhn:::.rmhn_cpp(200L, 0.5, 1, 2, "rtdr", max_retries = 1L))
+  k <- sum(is.nan(x))
+  expect_gt(k, 0L)
+  expect_lt(k, 200L)
+  expect_length(w, 1L)
+  expect_match(w, sprintf("for %d of 200 draws", k), fixed = TRUE)
+  # The closed forms have no budget to exhaust: the half-normal at
+  # (1, 1, 0) draws finite values even with a budget of 0.
+  expect_silent(x <- mhn:::.rmhn_cpp(3L, 1, 1, 0, "auto", max_retries = 0L))
+  expect_true(all(is.finite(x)))
+  expect_error(mhn:::.rmhn_cpp(1L, 2, 1, 1, "auto", max_retries = -1L),
+               "must be non-negative")
+  # A working sampler with the default budget stays silent.
   set.seed(1)
   expect_silent(rmhn(500, alpha = 2, beta = 1, gamma = 1))
 })
 
 test_that("region D envelope pieces stay finite and usable at high tilt", {
   # An envelope piece integrates to exp(base) * expm1(slope * width) / slope,
-  # and its inverse CDF needs log(1 + u (exp(slope * width) - 1)).  Both were
-  # formed by exponentiating slope * width first, which overflows past about
-  # 709.  The area became +Inf, which turned the whole piece-selection
-  # cumulative sum into NaN; the inverse CDF returned +Inf for every u, so the
-  # widest piece proposed nothing inside its own support.
+  # and its inverse CDF needs log(1 + u (exp(slope * width) - 1)).  Formed by
+  # exponentiating slope * width first, both overflow past about 709: the area
+  # becomes +Inf, which turns the whole piece-selection cumulative sum into
+  # NaN, and the inverse CDF returns +Inf for every u, so the widest piece
+  # proposes nothing inside its own support.  The package forms both on the
+  # log scale (log_abs_expm1 and log1p_u_expm1 in mhn_stable.h).
   for (alpha in c(0.01, 0.05, 0.3, 0.45)) {
     for (gamma in c(50, 100, 1000, 1e4)) {
       env <- mhn:::.dump_rtdr_envelope_cpp(alpha, 1, gamma)
@@ -163,30 +228,31 @@ test_that("region D envelope pieces stay finite and usable at high tilt", {
 
 test_that("rmhn is unbiased in region D at high tilt", {
   skip_on_cran()
-  # alpha < 1 with gamma > 0 routes to RTDR under every method.  Before the
-  # envelope-overflow fix, gamma = 100 gave a Kolmogorov-Smirnov p-value of
-  # about 1e-121 and a mean 20 standard errors high.
+  # rmhn() under its default method = "auto" sends alpha < 1 with gamma > 0 to
+  # RTDR, region D for alpha = 0.3 at these tilts.  An envelope piece whose
+  # area overflows (see the test above) leaves the draws biased, which the
+  # Kolmogorov-Smirnov test and the five-standard-error bound on the mean
+  # below both detect.
   for (gamma in c(50, 100, 200, 1000)) {
     set.seed(11)
     x <- rmhn(4000, alpha = 0.3, beta = 1, gamma = gamma)
     expect_false(anyNA(x))
-    expect_gt(stats::ks.test(x, function(q) pmhn(q, 0.3, 1, gamma))$p.value, 0.001)
-    z <- (mean(x) - mhn_mean(0.3, 1, gamma)) /
-         sqrt(mhn_var(0.3, 1, gamma) / length(x))
+    ref <- mhn_ref(0.3, 1, gamma)
+    expect_gt(stats::ks.test(x, ref$cdf)$p.value, 0.001)
+    z <- (mean(x) - ref$mean) / sqrt(ref$var / length(x))
     expect_lt(abs(z), 5)
   }
 })
 
 test_that("Sun Algorithm 1 meets the Theorem 2e acceptance bound", {
-  skip_on_cran()
   # Theorem 2e of Sun et al. (2023) guarantees acceptance >= 0.8 for alpha >= 4
-  # and any gamma > 0.  The envelope constant K_1 had been transcribed from the
-  # main-text statement of Theorem 1a, whose power has base sqrt(beta (alpha-1));
-  # a direct maximisation of f_MHN / f_Normal gives sqrt(beta) (alpha-1), which
-  # is also what the paper's own proof and Theorem 1c carry.  With the printed
-  # form, log K_1 is short by (alpha-1)/2 * log(alpha-1), so the comparison
-  # against K_2 picked the Normal proposal over most of the small-tilt half of
-  # the region and acceptance fell to about 0.70.
+  # and any gamma > 0.  Which proposal is used depends on comparing K_2 with the
+  # envelope constant K_1 of the first part of Theorem 1 (printed "a."),
+  # whose power has base
+  # sqrt(beta) (alpha-1) / (2 beta mu - gamma).  Putting (alpha-1) under the
+  # square root instead understates log K_1 by (alpha-1)/2 * log(alpha-1),
+  # selects the Normal proposal over most of the small-tilt half of the region,
+  # and drops acceptance to about 0.70.
   for (alpha in c(4, 10)) {
     for (gamma in c(0.05, 0.5, 2, 20)) {
       set.seed(7)
@@ -199,11 +265,12 @@ test_that("Sun Algorithm 1 meets the Theorem 2e acceptance bound", {
 
 test_that("the Psi quadrature resolves the peak at strongly negative gamma", {
   # For gamma < 0 the normalising constant is evaluated by quadrature of
-  # u^(alpha-1) exp(-u^2 - |z| u).  That integrand's mass sits in a window of
-  # width about 1/|z| around u = (alpha-1)/|z|, but the upper limit had been set
-  # near |z|/2 -- the peak of exp(-u^2 + |z| u), the opposite sign.  A
-  # fixed-order rule then sampled only the flat tail, and log Psi collapsed to
-  # -Inf from |z| about 600, taking dmhn, pmhn and the moments with it.
+  # u^(alpha-1) exp(-u^2 - |z| u).  That integrand is close to a
+  # Gamma(alpha, rate |z|) kernel, whose mass lies within a few multiples of
+  # (alpha + 1)/|z| of the origin.  An upper limit near |z|/2 -- the peak of
+  # exp(-u^2 + |z| u), the opposite sign -- would leave a fixed-order rule
+  # sampling only the flat tail, and log Psi would collapse to -Inf from |z|
+  # about 600, taking dmhn, pmhn and the moments with it.
   reference <- function(alpha, gamma) {
     cc <- abs(gamma)
     I <- stats::integrate(function(s) exp((alpha - 1) * log(s) - s^2 / cc^2 - s),
@@ -224,16 +291,21 @@ test_that("the Psi quadrature resolves the peak at strongly negative gamma", {
   expect_true(is.finite(mhn_mean(2.5, 1, -1000)))
   expect_gt(mhn_mean(2.5, 1, -1000), 0)
   expect_gt(mhn_var(2.5, 1, -1000), 0)
-  expect_equal(pmhn(1e-4, 2.5, 1, -1e4), 0.150855, tolerance = 1e-4)
+  # At this tilt the law is Gamma(alpha, rate |gamma|) up to the factor
+  # exp(-beta x^2), which moves F by a relative beta E[X^2] at most,
+  # alpha (alpha + 1) / gamma^2 = 8.8e-8 here.
+  expect_equal(pmhn(1e-4, 2.5, 1, -1e4), pgamma(1, 2.5), tolerance = 1e-6)
 })
 
 test_that("the special-case tests are made on the scale-free tilt", {
-  # The family depends on gamma only through Delta = gamma / sqrt(beta)
-  # (Sun et al. 2023, Theorem 1c), so "is the tilt negligible?" cannot be a
-  # test on |gamma| alone.  At beta = 4e-18 a gamma of 1e-8 is Delta = 5 -- an
-  # ordinary tilt -- yet it was routed to the gamma = 0 closed form by both the
-  # special-case detector and the Psi dispatcher, and every exported function
-  # returned the untilted answer.
+  # The shape depends on gamma only through Delta = gamma / sqrt(beta)
+  # (sqrt(beta) X ~ MHN(alpha, 1, Delta), from the density in Sun et al. 2023,
+  # Lemma 1a), so "is the tilt negligible?" cannot be a test on |gamma| alone.
+  # At beta = 4e-18 a gamma of 1e-8 is Delta = 5 -- an ordinary tilt -- yet a
+  # test on |gamma| would send it to the gamma = 0 closed form of rmhn, which
+  # draws from that law for a Delta within sqrt(eps) of 0.  The other
+  # exported functions take gamma = 0 only where it is 0 exactly, and the
+  # mean below checks that they see the tilt at such a beta.
   alpha <- 2; gamma <- 1e-8; beta <- (gamma / 5)^2      # Delta = 5
   expect_false(mhn:::.is_sqrt_gamma(gamma, beta))
   expect_true(mhn:::.is_sqrt_gamma(gamma, 1e40))        # genuinely negligible
@@ -254,23 +326,26 @@ test_that("the special-case tests are made on the scale-free tilt", {
 test_that("the alpha = 1 sampler stays inside its support at extreme tilt", {
   # Robert (1995) draws y = a + e with a = -mu/sigma and returns mu + sigma*y.
   # That subtracts two nearly equal quantities once mu is far below zero, but
-  # the mu cancels analytically: mu + sigma(a + e) = sigma*e.  Returning the
-  # literal form gave negative draws -- outside (0, Inf) -- and collapsed
-  # 2e5 draws onto 13 distinct doubles.
+  # the mu cancels analytically: mu + sigma(a + e) = sigma*e.  The literal
+  # form rounds each draw to the spacing of the doubles near |mu|, about
+  # 7e-9 at gamma = -1e8 against a mean of 1e-8: of 2e5 such draws some 40%
+  # are exactly zero, outside (0, Inf), and there are only about a dozen
+  # distinct values.
   for (gamma in c(-1e4, -1e6, -1e8, -1e10)) {
     set.seed(31)
     x <- rmhn(2e4, alpha = 1, beta = 1, gamma = gamma)
     expect_true(all(x > 0), info = sprintf("gamma=%g", gamma))
     expect_gt(length(unique(x)), 1e4)
     # As the tilt grows the law tends to Exponential(rate = |gamma|).
-    expect_equal(mean(x), 1 / abs(gamma), tolerance = 0.05)
+    expect_close(mean(x), 1 / abs(gamma), 0.05,
+                 info = sprintf("gamma=%g", gamma))
   }
 })
 
 test_that("Psi at alpha = 1 avoids the z^2/4 cancellation", {
   # log Psi[1/2, z] = log(2) + log(pi)/2 + z^2/4 + log Phi(z/sqrt(2)).  For
   # z << 0 the last two terms cancel to every significant digit; at z = -1e8
-  # the absolute error reached 0.73 in a quantity of size 17.7.  Writing
+  # this form is off by 0.73 in a quantity of size 17.7.  Writing
   # Phi(z/sqrt2) = exp(-z^2/4) erfcx(|z|/2) / 2 removes the large terms.
   reference <- function(gamma) {
     cc <- abs(gamma)
@@ -303,40 +378,62 @@ test_that("skewness and kurtosis survive a large tilt", {
   # Formed from raw moments, the third and fourth central moments cancel as
   # soon as sigma is small next to mu.  At (3, 1, 1000) the mean is about 500
   # and the standard deviation about 0.7, so mu^4 is 6e10 against a fourth
-  # central moment below 1: mhn_kurtosis returned -701.6, for a quantity that
-  # cannot be less than -2, and mhn_skewness returned the wrong sign at 200.
+  # central moment below 1: even from a mean exact to rounding, that expansion
+  # gives a skewness of exactly 0 there and an excess kurtosis of the wrong
+  # sign at gamma = 200.
   for (gamma in c(20, 100, 200, 1000)) {
     k <- mhn_kurtosis(3, 1, gamma)
     s <- mhn_skewness(3, 1, gamma)
     expect_true(is.finite(k)); expect_true(is.finite(s))
-    # Excess kurtosis is bounded below by -2 for every distribution, and the
-    # MHN is right-skewed, so both have a known sign here.
+    # Excess kurtosis is bounded below by -2 for every distribution, and at
+    # alpha = 3 the MHN is right-skewed (as it is for alpha >= 1; for alpha < 1
+    # a positive tilt can make it left-skewed, e.g. -0.30 at (0.1, 1, 5)), so
+    # both have a known sign here.
     expect_gt(k, -2)
     expect_gt(s, 0)
     # A strong positive tilt drives the law to a normal, so both go to 0.
     expect_lt(abs(k), 0.01)
     expect_lt(abs(s), 0.01)
   }
-  # The Pearson inequality kurtosis >= skewness^2 - 2 must hold everywhere.
-  for (p in list(c(0.5,1,-5), c(2,1,-30), c(3,1,0), c(5,1,2), c(10,0.1,5), c(100,1,-1))) {
+  # Pearson's inequality, kurtosis >= skewness^2 - 2, holds for every
+  # distribution.  Near a normal law the bound is close to -2, so it catches
+  # only gross failures; the values themselves are checked against exact ones
+  # in test-moments.R.  Skewness and kurtosis depend on beta only through
+  # z = gamma / sqrt(beta) (Sun et al. 2023, Lemmas 1a and 2a), so each point
+  # is also taken with beta scaled by 1e-160 and 1e140 and gamma by the square
+  # root of that, which leaves z unchanged: a quadrature in the units of x
+  # would leave the double range at those scales.  1e-10 relative covers the
+  # rounding of z.
+  for (p in list(c(0.5, 1, -5), c(2, 1, -30), c(3, 1, 0), c(5, 1, 2),
+                 c(10, 0.1, 5), c(100, 1, -1))) {
+    info <- sprintf("alpha=%g beta=%g gamma=%g", p[1], p[2], p[3])
     k <- mhn_kurtosis(p[1], p[2], p[3]); s <- mhn_skewness(p[1], p[2], p[3])
-    expect_gte(k, s^2 - 2 - 1e-6, label = sprintf("alpha=%g beta=%g gamma=%g", p[1], p[2], p[3]))
+    expect_gte(k, s^2 - 2 - 1e-6, label = info)
+    for (e in c(-160, 140)) {
+      b <- p[2] * 10^e
+      g <- p[3] * 10^(e / 2)
+      expect_equal(mhn_kurtosis(p[1], b, g), k, tolerance = 1e-10,
+                   info = paste(info, "scaled by", 10^e))
+      expect_equal(mhn_skewness(p[1], b, g), s, tolerance = 1e-10,
+                   info = paste(info, "scaled by", 10^e))
+    }
   }
 })
 
 test_that("qmhn reaches the quantile for small alpha", {
   # For alpha < 1 the distribution function behaves like x^alpha near zero, so
   # the quantile of a small p sits near p^(1/alpha) -- 2.3e-40 at alpha = 0.1,
-  # p = 1e-4.  The lower bracket started at sqrt(eps) and could be halved only
-  # 30 times, reaching 1.4e-17, and the solver then returned that endpoint as
-  # if it were the root.  pmhn of the answer came back as 0.019 instead of the
-  # 1e-4 asked for.
+  # p = 1e-4 -- far below any lower bracket set from the scale of the law.
+  # The search has to keep halving that end until F there falls below p; a
+  # bracket halved only 30 times from sqrt(eps) stops at 1.4e-17, and a solver
+  # that returned that endpoint as the root would give pmhn 0.019 instead of
+  # the 1e-4 asked for.
   for (alpha in c(0.5, 0.2, 0.1, 0.05)) {
     for (p in c(1e-2, 1e-4, 1e-8)) {
       q <- qmhn(p, alpha, 1, 1)
       expect_true(is.finite(q))
       expect_gt(q, 0)
-      expect_equal(pmhn(q, alpha, 1, 1), p, tolerance = 1e-5,
+      expect_close(pmhn(q, alpha, 1, 1), p, 1e-12,
                    info = sprintf("alpha=%g p=%g", alpha, p))
     }
   }
@@ -345,13 +442,13 @@ test_that("qmhn reaches the quantile for small alpha", {
   expect_no_error(qmhn(1e-8, 0.01, 1, 1))
 })
 
-test_that("a large positive tilt no longer raises from the Psi series", {
-  # The Lemma 10 truncation length grows like z^2, and past a ceiling the
-  # series raised an error with no alternative path -- so dmhn, pmhn, qmhn and
-  # the moment helpers simply failed on ordinary parameter sets such as
-  # (2.5, 1e-4, 20).  Psi depends on the tilt only through z = gamma/sqrt(beta)
-  # and the integrand is well behaved for either sign, so the quadrature that
-  # already served gamma < 0 answers these too.
+test_that("a large positive tilt, in gamma or in 1 / beta, reaches the normal limit", {
+  # The Lemma 10(d) truncation length K of the series for Psi grows like z^2,
+  # and at these tilts it passes the ceiling of 1e6 that psi_series puts on K.
+  # Psi depends on the tilt only through z = gamma / sqrt(beta), and the
+  # integrand is well behaved for either sign, so above z = 20 the quadrature
+  # used for gamma < 0 serves instead.  dmhn, pmhn and the mean must then be
+  # those of the normal limit.
   for (gamma in c(3e3, 1e4, 1e5)) {
     expect_no_error(mhn:::.mhn_log_normalizing_const(2.5, 1, gamma))
     mode_x <- (gamma + sqrt(gamma^2 + 8 * 1.5)) / 4
@@ -363,17 +460,24 @@ test_that("a large positive tilt no longer raises from the Psi series", {
     expect_equal(pmhn(mode_x, 2.5, 1, gamma), 0.5, tolerance = 1e-3)
     expect_equal(mhn_mean(2.5, 1, gamma), mode_x, tolerance = 1e-5)
   }
-  # The parameter set the audit named, where beta rather than gamma is extreme.
-  expect_no_error(dmhn(1, 2.5, 1e-4, 20))
-  expect_true(is.finite(dmhn(1, 2.5, 1e-4, 20)))
+  # The same tilt, z = 2000, reached through a small beta rather than a large
+  # gamma.  The normal limit then has variance 1/(2 beta), so the density at
+  # the mode is sqrt(beta / pi).
+  beta <- 1e-4
+  mode_x <- (20 + sqrt(20^2 + 8 * beta * 1.5)) / (4 * beta)
+  expect_equal(dmhn(mode_x, 2.5, beta, 20), sqrt(beta / pi), tolerance = 1e-3)
+  expect_equal(pmhn(mode_x, 2.5, beta, 20), 0.5, tolerance = 1e-3)
+  expect_equal(mhn_mean(2.5, beta, 20), mode_x, tolerance = 1e-5)
 })
 
 test_that("the mean stays exact at extreme tilt", {
   # E[X] is a ratio of two Fox-Wright values whose logarithms are both about
-  # z^2/4 while their difference is only about log z, so subtracting them costs
-  # an absolute error of (z^2/4) times the unit roundoff: 31% in the answer by
-  # gamma = 1e8.  Past that point the mean comes from the same quadrature the
-  # central moments use, taken in the variable centred on the peak.
+  # z^2/4 while their difference is only about log z, so subtracting them
+  # costs an absolute error of order (z^2/4) times the unit roundoff, which is
+  # a relative error in the ratio: 31% by gamma = 1e8.  For z = gamma /
+  # sqrt(beta) above 12 the mean comes instead from the same quadrature the
+  # central moments use, taken in the variable centred on the peak; every
+  # gamma below is on that side.
   for (gamma in c(1e3, 1e5, 1e7, 1e8, 1e9, 1e10)) {
     got <- mhn_mean(2.5, 1, gamma)
     # A strong tilt drives the law to a normal centred on the mode, and the
@@ -382,17 +486,20 @@ test_that("the mean stays exact at extreme tilt", {
     expect_equal(got, mode_x, tolerance = 1e-8,
                  info = sprintf("gamma=%g", gamma))
   }
-  # The ordinary range keeps the closed form and is unchanged.
-  expect_equal(mhn_mean(2.5, 1, 0), 1.0139673601, tolerance = 1e-9)
-  expect_equal(mhn_mean(2.5, 1, -1), 0.819124503718, tolerance = 1e-9)
+  # In the ordinary range the mean is the Lemma 2a ratio: at gamma = 0 it is
+  # Gamma(1.75) / Gamma(1.25), and at gamma = -1 it is taken from the kernel
+  # reference of helper-mhn-cdf.R.
+  expect_equal(mhn_mean(2.5, 1, 0), gamma(1.75) / gamma(1.25),
+               tolerance = 1e-12)
+  expect_equal(mhn_mean(2.5, 1, -1), mhn_ref(2.5, 1, -1)$mean,
+               tolerance = 1e-10)
 })
 
 test_that("the distribution function stays monotone past the support", {
-  # Trimming the quadrature range below the anchor but not above it left the
-  # upper panel running out to x, so once x left the support the rule saw
-  # nothing there and F collapsed to the value of the first panel alone:
-  # pmhn(q, 2.5, 1, -30) held at 1 until q = 3600, then dropped to 0.301 for
-  # every larger q.
+  # A quadrature range trimmed below the anchor but not above it leaves the
+  # upper panel running out to x, so once x is far past the support the rule
+  # sees nothing there and F collapses to the value of the first panel alone:
+  # at (2.5, 1, -30), 0.301 for every q beyond about 3600.
   for (p in list(c(2.5, 1, -30), c(1.5, 1, -50), c(5, 1, -10), c(0.7, 1, -20),
                  c(2, 0.1, -30), c(3, 1, 5))) {
     q <- c(0.01, 0.1, 1, 10, 100, 1e3, 3.6e3, 3.65e3, 1e4, 1e6, 1e8)
@@ -408,26 +515,40 @@ test_that("the moments match the Gamma limit that a strong negative tilt implies
   # As gamma -> -Inf the quadratic term stops mattering and the law tends to
   # Gamma(alpha, |gamma|), whose skewness is 2/sqrt(alpha) and whose excess
   # kurtosis is 6/alpha.  That is an independent check on the whole moment
-  # path, and it is the region the earlier repair missed: with no interior peak
-  # the code fell back to the raw-moment expansion, which gave -58485 for a
-  # kurtosis of 6, and where a peak did exist the integration window was taken
-  # from the curvature and so was far too wide once the tilt squeezed the peak
-  # towards the origin.
+  # path, and it covers both shapes the quadrature must handle: no interior
+  # peak (alpha <= 1), where the raw-moment expansion gives -58485 for a
+  # kurtosis of 6, and a peak squeezed towards the origin (alpha > 1), where a
+  # window taken from the curvature alone would be far too wide.
+  #
+  # The limit is approached at a known rate.  Y = |gamma| X has density
+  # proportional to y^(alpha-1) e^(-y) e^(-eps y^2), eps = beta / gamma^2, and
+  # to first order in eps the factor e^(-eps y^2) lowers the n-th cumulant of
+  # Y from alpha (n-1)! by eps alpha (alpha+1) (n+1)!.  So the skewness is
+  # 2/sqrt(alpha) (1 - 3 (alpha+1) eps) and the excess kurtosis
+  # 6/alpha (1 - 8 (alpha+1) eps), up to terms in eps^2 that stay below 2e-9
+  # relative on this grid.  1e-8 leaves room for those and still resolves the
+  # first-order term, 3.2e-5 of the kurtosis at alpha = 3, gamma = -1000, some
+  # three thousand times over.
   for (alpha in c(0.2, 0.5, 1, 1.01, 1.2, 1.5, 3)) {
     for (gamma in c(-1000, -3000)) {
-      expect_equal(mhn_kurtosis(alpha, 1, gamma), 6 / alpha, tolerance = 0.02,
-                   info = sprintf("alpha=%g gamma=%g", alpha, gamma))
-      expect_equal(mhn_skewness(alpha, 1, gamma), 2 / sqrt(alpha), tolerance = 0.02,
-                   info = sprintf("alpha=%g gamma=%g", alpha, gamma))
+      eps <- 1 / gamma^2
+      info <- sprintf("alpha=%g gamma=%g", alpha, gamma)
+      expect_equal(mhn_kurtosis(alpha, 1, gamma),
+                   6 / alpha * (1 - 8 * (alpha + 1) * eps),
+                   tolerance = 1e-8, info = info)
+      expect_equal(mhn_skewness(alpha, 1, gamma),
+                   2 / sqrt(alpha) * (1 - 3 * (alpha + 1) * eps),
+                   tolerance = 1e-8, info = info)
     }
   }
 })
 
-test_that("mhn_mean keeps the closed form where it is exact", {
+test_that("mhn_mean under a strong negative tilt is the Lemma 2a ratio", {
   # The cancellation in the ratio of two Fox-Wright values is one-sided: it
-  # afflicts gamma > 0, where both logarithms grow like z^2/4.  Switching to
-  # quadrature for gamma < 0 as well replaced an exact answer with a truncation
-  # error of 1.4e-3.
+  # afflicts gamma > 0, where both logarithms grow like z^2/4.  For gamma < 0
+  # they stay modest and the ratio is accurate well within the working
+  # tolerance, so it is what the mean returns, and the two must agree to
+  # rounding.
   for (gamma in c(-940, -960, -1000, -1e4)) {
     ratio <- exp(mhn:::.mhn_log_normalizing_const(2.2, 1, gamma) -
                  mhn:::.mhn_log_normalizing_const(1.2, 1, gamma))
@@ -437,12 +558,11 @@ test_that("mhn_mean keeps the closed form where it is exact", {
 })
 
 test_that("the alpha = 1 quantile survives a strongly negative tilt", {
-  # The truncation mass was formed as 1 - Phi(-mu/sigma), which underflows to
-  # exactly 0 once -mu/sigma passes about 8.3 -- reached at gamma = -12 with
-  # beta = 1 -- after which qmhn returned Inf for every p.  Taking it from
-  # pnorm's own upper tail on the log scale, and assembling the answer as
-  # sigma * t rather than mu + sigma * (t + z0), keeps both the mass and the
-  # subtraction in range.
+  # Formed as 1 - Phi(-mu/sigma), the truncation mass rounds to exactly 0 once
+  # -mu/sigma passes about 8.3 -- reached at gamma = -12 with beta = 1 -- and
+  # qmhn would then return Inf for every p.  Taking it from pnorm's own upper
+  # tail on the log scale, and assembling the answer as sigma * t rather than
+  # mu + sigma * (t + z0), keeps both the mass and the subtraction in range.
   for (gamma in c(-2, -10, -30, -50, -200, -1000)) {
     for (p in c(0.01, 0.1, 0.5, 0.9, 0.99)) {
       q <- qmhn(p, 1, 1, gamma)
@@ -459,8 +579,9 @@ test_that("the alpha = 1 quantile survives a strongly negative tilt", {
 test_that("the upper tail is evaluated, not derived from one minus the lower", {
   # Deriving P(X > q) as 1 - F loses it entirely once F rounds to 1, which
   # happens as soon as the survival probability falls below about 1e-16: at
-  # alpha = 2.5, beta = 1, gamma = 1 that is q = 8, where pmhn returned exactly
-  # 0 and -Inf on the log scale for a true value near 5e-25.
+  # alpha = 2.5, beta = 1, gamma = 1 that happens from q = 6.6, and at q = 8
+  # 1 - F is exactly 0, and -Inf on the log scale, for a true value near
+  # 5e-25.
   for (tri in list(c(2.5, 1, 1), c(1.5, 1, -2), c(0.7, 1, 3), c(3, 0.5, 0))) {
     a <- tri[1]; b <- tri[2]; g <- tri[3]
     for (q in c(3, 5, 8, 12, 20, 30)) {
@@ -475,23 +596,23 @@ test_that("the upper tail is evaluated, not derived from one minus the lower", {
     }
   }
 
-  # And qmhn inverts that tail rather than inverting 1 - p, which is what made
-  # it return Inf below p = 1e-16.
+  # And qmhn inverts that tail rather than inverting 1 - p, which rounds to 1
+  # below p = 1e-16 and would give Inf.
   for (tri in list(c(2.5, 1, 1), c(2, 1, 0), c(1, 1, 2), c(1, 1, -10))) {
     for (p in c(1e-8, 1e-16, 1e-20, 1e-30)) {
       q <- qmhn(p, tri[1], tri[2], tri[3], lower.tail = FALSE)
       expect_true(is.finite(q), info = sprintf("a=%g g=%g p=%g", tri[1], tri[3], p))
-      expect_equal(pmhn(q, tri[1], tri[2], tri[3], lower.tail = FALSE), p,
-                   tolerance = 1e-6)
+      expect_close(pmhn(q, tri[1], tri[2], tri[3], lower.tail = FALSE), p,
+                   1e-11, info = sprintf("a=%g g=%g p=%g", tri[1], tri[3], p))
     }
     # log.p, where the point of the flag is that p need not be representable.
     q <- qmhn(-100, tri[1], tri[2], tri[3], lower.tail = FALSE, log.p = TRUE)
     expect_equal(pmhn(q, tri[1], tri[2], tri[3], lower.tail = FALSE, log.p = TRUE),
-                 -100, tolerance = 1e-6)
+                 -100, tolerance = 1e-12)
   }
 
-  # The gamma = 0 case must agree with base R exactly, since both reduce to the
-  # same qgamma call.
+  # The gamma = 0 case must agree with base R to rounding, since both reduce to
+  # the same qgamma call.
   for (p in c(1e-16, 1e-20, 1e-30, 1e-100)) {
     expect_equal(qmhn(p, 2, 1, 0, lower.tail = FALSE),
                  sqrt(stats::qgamma(p, 1, 1, lower.tail = FALSE)),
@@ -499,12 +620,29 @@ test_that("the upper tail is evaluated, not derived from one minus the lower", {
   }
 })
 
+# P(X > q) for a small shape, from the kernel on the log axis, x = exp(u):
+# int exp(alpha u - beta e^{2u} + gamma e^u) du, whose part below U = -40 is
+# exp(alpha U) / alpha to double precision, since e^{2U} and |gamma| e^U are
+# below rounding there.  It calls no function of the package.
+tail_reference <- function(alpha, beta, gamma, q) {
+  kernel <- function(u) exp(alpha * u - beta * exp(2 * u) + gamma * exp(u))
+  U <- -40
+  tail_int <- stats::integrate(kernel, U, 40, rel.tol = 1e-13,
+                               subdivisions = 10000L)$value
+  upper <- stats::integrate(kernel, log(q), 40, rel.tol = 1e-13,
+                            subdivisions = 10000L)$value
+  upper / (exp(alpha * U) / alpha + tail_int)
+}
+
 test_that("the normalising constant keeps the mass below the smallest double", {
-  # For gamma < 0 the normalising constant is a quadrature in x, and half the
-  # mass of x^(alpha-1) sits below x = exp(-1/alpha).  At alpha = 1e-6 that is
-  # exp(-1e6), so no abscissa can reach it: the quadrature saturated at
-  # Psi = 1.3e3 against a true value of 2.0e6, and every density, probability
-  # and moment at small alpha was scaled by the shortfall.
+  # For gamma < 0 the normalising constant is a quadrature in log x that
+  # stops at x of about 4.5e-9 / |z| and takes everything below that in
+  # closed form.  A fraction 1/e of the mass of x^(alpha-1) on (0, 1) sits
+  # below x = exp(-1/alpha).  At alpha = 1e-6 that is exp(-1e6), which no
+  # abscissa in x can reach: a quadrature in x that stops at the smallest
+  # doubles saturates at Psi = 1.3e3 against a true value of 2.0e6, and
+  # would scale every density, probability and moment at small alpha by the
+  # shortfall.
   #
   # Reference: substituting x = exp(u) turns the integral into
   # int exp(alpha u - beta e^{2u} + gamma e^u) du, whose left half is exactly
@@ -526,24 +664,14 @@ test_that("the normalising constant keeps the mass below the smallest double", {
     }
   }
 
-  # Tail probabilities are the user-visible consequence, and they were wrong by
-  # the same factor -- 1545 times too large at alpha = 1e-6.
-  tail_reference <- function(alpha, beta, gamma, q) {
-    kernel <- function(u) exp(alpha * u - beta * exp(2 * u) + gamma * exp(u))
-    U <- -40
-    tail_int <- stats::integrate(kernel, U, 40, rel.tol = 1e-13,
-                                 subdivisions = 10000L)$value
-    upper <- stats::integrate(kernel, log(q), 40, rel.tol = 1e-13,
-                              subdivisions = 10000L)$value
-    upper / (exp(alpha * U) / alpha + tail_int)
-  }
-
+  # Tail probabilities are the user-visible consequence, and a missing head
+  # would make them wrong by the same factor, about 1.5e3 at alpha = 1e-6.
   for (alpha in c(1e-6, 1e-4, 1e-3, 0.01)) {
     for (gamma in c(-10, -1)) {
       for (q in c(0.01, 0.5)) {
-        expect_equal(pmhn(q, alpha, 1, gamma, lower.tail = FALSE),
+        expect_close(pmhn(q, alpha, 1, gamma, lower.tail = FALSE),
                      tail_reference(alpha, 1, gamma, q),
-                     tolerance = 1e-6,
+                     1e-11,
                      info = sprintf("alpha=%g gamma=%g q=%g", alpha, gamma, q))
       }
     }
@@ -551,36 +679,42 @@ test_that("the normalising constant keeps the mass below the smallest double", {
 })
 
 test_that("rmhn covers the whole support when the mode is tiny or alpha is small", {
-  skip_on_cran()
-
-  # Region A starts its left contact search at half the mode.  An absolute
-  # floor of 1e-6 was applied as well, which put the start to the right of the
-  # mode whenever the mode was smaller than 2e-6 and the search then returned a
-  # point with the wrong sign of slope.  These all threw on the default path.
+  # rmhn() sends these (gamma < 0 with 1 < alpha < 1e3, at any n) to RTDR
+  # region A, whose left contact search starts at half the mode.  The modes
+  # here run from 1e-9 to 1e-6, so even an absolute floor of 1e-6 on that
+  # start would put it at or to the right of the mode, and the search, which
+  # tests the acceptance band before it clamps into range, would return a
+  # contact point with the wrong sign of slope.
   for (par in list(c(4, 1, -1e7), c(4, 1, -3e6), c(3, 1, -1e7),
                    c(4, 1, -1e8), c(1.1, 1, -1e8))) {
     set.seed(20)
     draws <- rmhn(4000, par[1], par[2], par[3])
     expect_true(all(is.finite(draws)) && all(draws > 0))
-    expect_equal(mean(draws), mhn_mean(par[1], par[2], par[3]),
-                 tolerance = 0.05,
-                 info = sprintf("alpha=%g gamma=%g", par[1], par[3]))
+    # At these tilts the law is Gamma(alpha, rate |gamma|) to a relative
+    # O(alpha^2 / gamma^2), below 1e-11, so the sample mean is judged in
+    # standard errors of that law: mean alpha / |gamma|, variance
+    # alpha / gamma^2.
+    z <- (mean(draws) - par[1] / abs(par[3])) /
+      sqrt(par[1] / par[3]^2 / length(draws))
+    expect_lt(abs(z), 5, label = sprintf("alpha=%g gamma=%g", par[1], par[3]))
   }
 
   # The right contact search runs on the log axis, where the density carries
-  # exp(2y) and overflows past y = 354.  The recommended start of Gao & Wang
-  # (2025), Eq. (8) is m + sqrt(-2 delta / L''(m)), which for a flat mode lands
-  # well beyond that -- 447 above the mode at alpha = 1e-5.  The slope came
-  # back as NaN, the sign guard let it through because NaN fails every
-  # comparison, and the plateau piece was dropped without any error, leaving a
-  # sampler whose support excluded the mode and the entire right tail.
+  # exp(2y) and overflows past y = 354.  The start Gao & Wang (2025,
+  # Section 2) recommend for their Eq. (8) iteration is
+  # m + sqrt(-2 delta / L''(m)), which for a flat mode lands well beyond
+  # that -- 447 above the mode at alpha = 1e-5.  The slope there is NaN, a
+  # sign guard written as a plain
+  # comparison lets it through because NaN fails every comparison, and the
+  # plateau piece would be dropped without any error, leaving a sampler whose
+  # support excluded the mode and the entire right tail.
   for (par in list(c(1e-4, 1, 0.01), c(3e-4, 1, 0.01), c(1e-5, 1, -1),
                    c(1e-6, 1, 0.001))) {
     set.seed(21)
     draws <- rmhn(100000, par[1], par[2], par[3])
     expect_true(all(is.finite(draws)) && all(draws >= 0))
     for (q in c(0.005, 0.05)) {
-      expected <- pmhn(q, par[1], par[2], par[3], lower.tail = FALSE)
+      expected <- tail_reference(par[1], par[2], par[3], q)
       # Binomial three-sigma band, floored so that a probability of a few
       # draws in 1e5 does not make the test flaky.
       band <- max(3 * sqrt(expected * (1 - expected) / 100000), 3e-5)
@@ -590,12 +724,11 @@ test_that("rmhn covers the whole support when the mode is tiny or alpha is small
 })
 
 test_that("the CDF quadrature keeps the mass below the smallest double", {
-  # The same unreachable head that the normalising constant had: for alpha < 1
-  # with a negative tilt the lower-tail quadrature runs from 0, and half the
-  # mass of x^(alpha-1) lies below x = exp(-1/alpha).  It was masked while the
-  # normalising constant carried the same shortfall, and appeared as soon as
-  # that was fixed -- F(1e-3) at (1e-6, 1, -1000) came back as 6.3e-4 against a
-  # true value of 1.
+  # The same unreachable head as in the normalising constant: for alpha < 1
+  # with a negative tilt the lower-tail quadrature runs from 0, and a fraction
+  # 1/e of the mass of x^(alpha-1) on (0, 1) lies below x = exp(-1/alpha).  A
+  # quadrature missing that head, divided by a normalising constant that has
+  # it, gives F(1e-3) at (1e-6, 1, -1000) as 6.3e-4 against a true value of 1.
   #
   # Reference: with beta x^2 negligible against |gamma| x the law is
   # Gamma(alpha, rate = |gamma|), which base R evaluates exactly.
@@ -610,16 +743,17 @@ test_that("the CDF quadrature keeps the mass below the smallest double", {
     }
   }
 
-  # The upper tail on the same path, which underflowed to 0 for every q because
-  # its range was set from the Gaussian width (894 at beta = 1e-4) rather than
-  # from the slope, leaving the whole mass in a sliver the rule never sampled.
+  # The upper tail on the same path.  Its range must be set from the slope of
+  # the kernel, not from the Gaussian reach (894 at beta = 1e-4, where the
+  # kernel dies within 0.08): set from the latter it leaves the whole mass in
+  # a sliver the rule never samples, and the tail comes out as 0 for every q.
   for (q in c(1e-6, 1e-4, 1e-3, 1e-2)) {
-    expect_equal(pmhn(q, 0.05, 1e-4, -1000, lower.tail = FALSE),
+    expect_close(pmhn(q, 0.05, 1e-4, -1000, lower.tail = FALSE),
                  stats::pgamma(q, 0.05, rate = 1000, lower.tail = FALSE),
-                 tolerance = 1e-5, info = sprintf("q=%g", q))
+                 1e-5, info = sprintf("q=%g", q))
   }
-  # qmhn inverted that, so it returned its own initial bracket -- the same
-  # number for every p, with no warning.
+  # qmhn inverts that tail; inverting one that is 0 everywhere would return its
+  # own initial bracket -- the same number for every p, with no warning.
   for (p in c(1e-2, 1e-3, 1e-4, 1e-6)) {
     expect_equal(qmhn(p, 0.05, 1e-4, -1000, lower.tail = FALSE),
                  stats::qgamma(p, 0.05, rate = 1000, lower.tail = FALSE),
@@ -628,22 +762,57 @@ test_that("the CDF quadrature keeps the mass below the smallest double", {
 })
 
 test_that("the variance stays accurate on both sides of the Lemma 2c cancellation", {
-  # alpha/(2 beta) and mu gamma/(2 beta) are each about alpha/2 while the
-  # variance is about alpha/gamma^2, so the closed form amplifies the rounding
-  # of its own terms by gamma^2/(2 beta alpha): it was 17 percent high at
-  # gamma = -1e7 and clamped to exactly 0 by -1e8.  Under a strong tilt the law
-  # tends to Gamma(alpha, |gamma|), whose variance is alpha/gamma^2.
+  # Var = alpha/(2 beta) + mu gamma/(2 beta) - mu^2.  Under a strong negative
+  # tilt the first two terms are each about alpha/(2 beta) while the variance
+  # is about alpha/gamma^2, so the closed form amplifies the rounding of its
+  # own terms by about gamma^2/(2 beta).  Measured over the shapes below, at
+  # gamma = -1e7 it is off by 2 to 34 percent, depending on alpha (17 percent
+  # high at alpha = 1), and at -1e8 it is 8 to 80 times too large, or goes
+  # negative and is clamped to 0.  The law then tends to Gamma(alpha, |gamma|),
+  # whose variance is alpha/gamma^2.
   for (alpha in c(1e-4, 0.01, 0.3, 1, 3, 10)) {
     for (gamma in c(-1e4, -1e6, -1e8)) {
-      expect_equal(mhn_var(alpha, 1, gamma), alpha / gamma^2,
-                   tolerance = 1e-3,
+      expect_close(mhn_var(alpha, 1, gamma), alpha / gamma^2,
+                   1e-3,
                    info = sprintf("alpha=%g gamma=%g", alpha, gamma))
     }
   }
-  # Away from the cancellation the closed form is the accurate one and must
-  # still be what is used, to the last bit.
+  # Under a strong positive tilt the last two terms are each about
+  # gamma^2/(4 beta^2) while the variance is about 1/(2 beta), and the form
+  # multiplies the relative error of the mean by about gamma^2/(2 beta).  A
+  # mean formed as the ratio of two Fox-Wright values of size exp(z^2/4),
+  # z = gamma / sqrt(beta), carries a relative error of up to about eps z^2/4
+  # (half an ulp in each logarithm), so the variance the form would give from
+  # it is off by up to about eps z^4/8; measured, 2e-9 at gamma = 100, 1e-7 at
+  # 300 and 1e-5 at 900.
+  # Reference: the second central moment by stats::integrate in the offset t
+  # from the mode m, with the log kernel written as
+  # (alpha-1) log1p(t/m) + t (gamma - 2m) - t^2, in which nothing cancels, over
+  # +-12 standard-deviation-sized units (the mass beyond is below 1e-60).  The
+  # quadrature is asked for 1e-13; 1e-8 is the working tolerance of the
+  # moment helpers.
+  central_var <- function(alpha, gamma) {
+    m <- mhn_mode(alpha, 1, gamma)
+    k <- function(t) exp((alpha - 1) * log1p(t / m) + t * (gamma - 2 * m) - t^2)
+    br <- seq(-12, 12, by = 3)
+    panel <- function(f) sum(vapply(seq_len(length(br) - 1), function(i)
+      stats::integrate(f, br[i], br[i + 1], rel.tol = 1e-13)$value, 0))
+    z0 <- panel(k)
+    d <- panel(function(t) t * k(t)) / z0
+    panel(function(t) (t - d)^2 * k(t)) / z0
+  }
   for (alpha in c(1e-4, 0.01, 0.3, 1, 3, 10)) {
-    for (gamma in c(-10, -1, 0.5, 100)) {
+    for (gamma in c(100, 300, 900)) {
+      expect_equal(mhn_var(alpha, 1, gamma), central_var(alpha, gamma),
+                   tolerance = 1e-8,
+                   info = sprintf("alpha=%g gamma=%g", alpha, gamma))
+    }
+  }
+  # Where the form loses little to cancellation -- |gamma| <= 10 at beta = 1,
+  # where its terms are at most about 80 times the variance -- it is accurate,
+  # and mhn_var must agree with it to rounding.
+  for (alpha in c(1e-4, 0.01, 0.3, 1, 3, 10)) {
+    for (gamma in c(-10, -1, 0.5, 10)) {
       mu <- mhn_mean(alpha, 1, gamma)
       expect_equal(mhn_var(alpha, 1, gamma),
                    alpha / 2 + mu * (gamma / 2 - mu),
@@ -654,17 +823,12 @@ test_that("the variance stays accurate on both sides of the Lemma 2c cancellatio
 })
 
 test_that("pmhn agrees element-wise and vectorised under every tail flag", {
-  # pmhn dispatches the special cases twice, and the two implementations
-  # disagreed: the vector-parameter path derived the truncated-normal lower tail
-  # as 1 - upper, which is exactly 0 once the lower tail falls below the
-  # rounding of 1.  pmhn(3.0184, 1, 1, 18) was 1.35e-17 scalar and 0 vectorised.
-  #
-  # The comparison is made on whichever tail is the small one.  A probability
-  # that rounds to 1 carries no information about its own distance from 1, so
-  # its logarithm is meaningless to compare at any tolerance -- at q = 2 the
-  # lower tail is 1 - 2.7e-11 and log(F) is limited to about 4e-6 relative by
-  # the double that holds F.  It is the small tail that a wrong branch destroys,
-  # and the small tail that has to survive.
+  # Each special case has one per-element implementation, called both by the
+  # all-scalar path and by the loop that recycles vector parameters, so the
+  # two must return the same double under every tail flag.  The grid is the
+  # truncated normal at strong tilts of either sign.  At q = 3.0184056,
+  # gamma = 18 the lower tail is 1.35e-17: derived as 1 minus the upper tail it
+  # would be exactly 0.
   for (gamma in c(18, 30, 10, -10)) {
     for (q in c(0.5, 1, 2, 3.0184056)) {
       for (lt in c(TRUE, FALSE)) {
@@ -672,25 +836,22 @@ test_that("pmhn agrees element-wise and vectorised under every tail flag", {
           scalar <- pmhn(q, 1, 1, gamma, lower.tail = lt, log.p = lp)
           vector <- pmhn(q, alpha = c(1, 1), beta = 1, gamma = gamma,
                          lower.tail = lt, log.p = lp)[1]
-          info <- sprintf("g=%g q=%g lower.tail=%s log.p=%s", gamma, q, lt, lp)
-          if ((lp && scalar > -0.693) || (!lp && scalar > 0.5)) {
-            expect_lt(abs(vector - scalar), 1e-8, label = info)
-          } else {
-            expect_equal(vector, scalar, tolerance = 1e-10, info = info)
-          }
+          expect_identical(vector, scalar,
+                           info = sprintf("g=%g q=%g lower.tail=%s log.p=%s",
+                                          gamma, q, lt, lp))
         }
       }
     }
   }
+  expect_gt(pmhn(3.0184056, 1, 1, 18), 1e-17)
 })
 
 test_that("the RTDR region boundary at alpha exactly 1 is sampled, not rejected", {
-  skip_on_cran()
-
-  # Region A needs an interior mode in x, and at alpha = 1 there is none: the
-  # mode is 0 for a non-positive tilt, log f(0) is -Inf, and the envelope
-  # degenerated to a plateau of height -Inf spanning [0, Inf].  Every proposal
-  # was rejected and the draws came back NaN.  The public API is shielded by the
+  # Region A needs an interior mode in x, and at alpha = 1 with a non-positive
+  # tilt there is none: the mode formula returns the origin.  An envelope
+  # built around it would degenerate to a plateau spanning [0, Inf] and
+  # reject every proposal, so alpha = 1 belongs to region BC, whose log-axis
+  # mode is positive for every alpha > 0.  The public API is shielded by the
   # truncated-normal interception, so this is reached through the kernel.
   for (alpha in c(1 - 1.49e-8, 1, 1 + 1.49e-8)) {
     for (gamma in c(-2, 0, 2)) {
@@ -714,9 +875,10 @@ test_that("the RTDR region boundary at alpha exactly 1 is sampled, not rejected"
 })
 
 test_that("method = \"sun\" accepts what the dispatcher answers in closed form", {
-  # The pre-scan tested the bare floats while the dispatcher routes on the
-  # scale-free predicates, so it rejected parameters the sun path handles
-  # perfectly well -- alpha within sqrt(eps) of 1, or a negligible tilt.
+  # The pre-scan that refuses method = "sun" for alpha < 1 with gamma > 0 must
+  # test the same scale-free predicates the dispatcher routes on.  Tested on
+  # the bare floats it would reject parameters the sun path handles perfectly
+  # well -- alpha within sqrt(eps) of 1, or a negligible tilt.
   for (par in list(c(1 - 1e-9, 1, 2), c(1, 1, 2), c(0.5, 1, 1e-12),
                    c(0.5, 1e18, 1))) {
     set.seed(6)
@@ -732,9 +894,9 @@ test_that("method = \"sun\" accepts what the dispatcher answers in closed form",
 test_that("the log density does not cancel against the normalising constant", {
   # log Psi and the kernel exponent -beta x^2 + gamma x are each about
   # gamma^2/(4 beta) near the mode, while the log density they combine into is
-  # of order one.  Assembled directly, the result carried an absolute error of
-  # about eps gamma^2/(4 beta): 3.7e-8 at |z| = 3e4, and 4.6 percent at 3e7.
-  # Both sides now have that term removed analytically.
+  # of order one.  Assembled directly, the result would carry an absolute
+  # error of about eps gamma^2/(4 beta): 3.7e-8 at |z| = 3e4, and 4.6 percent
+  # at 3e7.  For z above 1e3 both sides have that term removed analytically.
   #
   # Reference: completing the square gives
   #   log f(x) = log 2 + (alpha/2) log beta - P + (alpha-1) log x
@@ -761,25 +923,26 @@ test_that("the log density does not cancel against the normalising constant", {
                  info = sprintf("alpha=%g beta=%g gamma=%g", alpha, beta, gamma))
   }
 
-  # The scalar fast path and the recycling loop share one implementation, so
-  # they cannot disagree the way pmhn's two truncated-normal paths once did.
+  # The scalar fast path and the recycling loop share one implementation of
+  # the general log density, so they must return the same doubles.
   for (par in list(c(3, 1, 3e4), c(3, 1e-6, 3e3), c(2.5, 1, 5))) {
     alpha <- par[1]; beta <- par[2]; gamma <- par[3]
     xs <- (gamma + sqrt(gamma^2 + 8 * beta * (alpha - 1))) / (4 * beta) *
       c(0.5, 0.9, 1, 1.1, 2)
-    expect_equal(dmhn(xs, alpha = c(alpha, alpha), beta = beta, gamma = gamma,
-                      log = TRUE),
-                 dmhn(xs, alpha, beta, gamma, log = TRUE),
-                 tolerance = 1e-14)
+    expect_identical(dmhn(xs, alpha = c(alpha, alpha), beta = beta,
+                          gamma = gamma, log = TRUE),
+                     dmhn(xs, alpha, beta, gamma, log = TRUE))
   }
 })
 
 test_that("the CDF cancellation guard fires before the tolerance is spent", {
-  # The guard charged one unit of roundoff to each accumulator, but the two sums
-  # run over i_max terms and their errors accumulate as a random walk.  Without
-  # the sqrt(i_max) it admitted results some twenty times worse than the
-  # tolerance asked for -- at (10, 1, -100) the dispatcher returned 0.542194283
-  # where an independent quadrature gives 0.542194428.
+  # For gamma < 0 the CDF series alternates, and its two sums, of the even and
+  # of the odd terms, nearly cancel.  The guard compares their relative
+  # difference with the rounding carried by the terms, weighted by the size of
+  # each term (see mhn_cdf_series.cpp), and returns the NaN sentinel when the
+  # result could miss the working tolerance.  A guard that charged only one
+  # unit of roundoff to each sum would admit results many times worse than
+  # that tolerance.
   #
   # The assertion is on the guard's contract rather than on a reference value:
   # wherever the series is allowed through, it must agree with the integration
@@ -800,21 +963,19 @@ test_that("the CDF cancellation guard fires before the tolerance is spent", {
 })
 
 test_that("the two tails of pmhn sum to one", {
-  # The cheapest check there is on the survival function, and the one that would
-  # have caught the defect below the moment it was introduced.
+  # The cheapest check there is on the survival function.
   #
-  # log_ccdf_integrate anchored its range at max(peak, q).  For q at or below
-  # the mode that anchor IS the mode, where the slope is zero by definition, so
-  # a reach derived from the slope collapsed to the Gaussian width -- 894 at
-  # beta = 1e-4 where the kernel dies within 0.08 -- and the panel from the mode
-  # outward returned nothing.  pmhn(q, 3, 1e-4, -1000, lower.tail = FALSE) then
-  # reported only the mass between q and the mode: the two tails summed to
-  # F(mode) = 0.323 for every q below it, and qmhn inverted that, returning the
-  # denormal floor for every p.
-  #
-  # A second failure of the same shape sat at alpha < 1 with a tiny q, where the
-  # range spanned sixty decades. Both are gone now that the integral is taken on
-  # the log axis with panels that double in width away from the peak.
+  # An upper-tail range anchored at max(peak, q) fails for q at or below the
+  # mode: the anchor is then the mode, where the slope is zero by definition,
+  # so a reach derived from the slope collapses to the Gaussian width -- 894
+  # at beta = 1e-4, where the kernel dies within 0.08 -- and the panel from the
+  # mode outward sees nothing.  pmhn(q, 3, 1e-4, -1000, lower.tail = FALSE)
+  # would then report only the mass between q and the mode, the two tails
+  # would sum to F(mode) = 0.323 for every q below it, and qmhn would return
+  # the denormal floor for every p.  A range spanning sixty decades, at
+  # alpha < 1 with a tiny q, fails the same way.  The package takes the
+  # integral on the log axis, with panels that double in width away from the
+  # peak, which handles both.
   for (alpha in c(0.05, 0.1, 0.3, 0.5, 0.8, 1, 1.5, 3, 10)) {
     for (beta in c(1e-4, 0.01, 1, 100)) {
       for (gamma in c(-1000, -100, -10, -1, 0, 1, 10, 100)) {
@@ -824,7 +985,7 @@ test_that("the two tails of pmhn sum to one", {
           q <- f * mu
           lo <- pmhn(q, alpha, beta, gamma)
           up <- pmhn(q, alpha, beta, gamma, lower.tail = FALSE)
-          expect_lt(abs(lo + up - 1), 1e-6,
+          expect_lt(abs(lo + up - 1), 1e-8,
                     label = sprintf("alpha=%g beta=%g gamma=%g q=%.4g",
                                     alpha, beta, gamma, q))
         }
@@ -851,12 +1012,12 @@ test_that("the survival function matches its Gamma limit where beta is negligibl
                                    lower.tail = FALSE) / -gamma, 1e-7)
     for (p in c(0.99, 0.5, 0.1, 1e-3)) {
       q <- stats::qgamma(p, alpha, rate = -gamma, lower.tail = FALSE)
-      expect_equal(pmhn(q, alpha, beta, gamma, lower.tail = FALSE), p,
-                   tolerance = 1e-5,
+      expect_close(pmhn(q, alpha, beta, gamma, lower.tail = FALSE), p,
+                   1e-5,
                    info = sprintf("alpha=%g beta=%g gamma=%g p=%g",
                                   alpha, beta, gamma, p))
-      expect_equal(qmhn(p, alpha, beta, gamma, lower.tail = FALSE), q,
-                   tolerance = 1e-5,
+      expect_close(qmhn(p, alpha, beta, gamma, lower.tail = FALSE), q,
+                   1e-5,
                    info = sprintf("alpha=%g beta=%g gamma=%g p=%g",
                                   alpha, beta, gamma, p))
     }
@@ -864,10 +1025,9 @@ test_that("the survival function matches its Gamma limit where beta is negligibl
 })
 
 test_that("the density vanishes at infinity on every path", {
-  # Every base R density returns 0 there.  The general expression gave NaN,
-  # since (alpha-1) log(x) and gamma x are +Inf while -beta x^2 is -Inf; the
-  # sqrt-Gamma branch gave NaN for the same reason.  Only the truncated-normal
-  # branch was right, because it delegates to dnorm.
+  # Every base R density returns 0 there.  Evaluated as written, the general
+  # expression gives NaN, since (alpha-1) log(x) and gamma x are +Inf while
+  # -beta x^2 is -Inf, and the sqrt-Gamma form gives NaN for the same reason.
   for (par in list(c(2, 1, 1), c(2, 1, 0), c(1, 1, 2), c(0.3, 1, -1),
                    c(0.3, 1, 5), c(10, 4, -20))) {
     info <- sprintf("alpha=%g beta=%g gamma=%g", par[1], par[2], par[3])
@@ -882,24 +1042,19 @@ test_that("the density vanishes at infinity on every path", {
 })
 
 test_that("a steep tilt samples its Gaussian limit, and reports nothing", {
-  skip_on_cran()
-
-  # This triple used to answer differently on different machines.  At
-  # alpha = 0.7 with beta = 1e-8 and gamma = 1e8 the standardised tilt
-  # gamma / sqrt(beta) is 1e12, and setup_region_bc read its contact drop out
-  # of a difference of two values of log g whose own size is
-  # gamma_norm^2 / 4 = 2.5e23.  ulp(2.5e23) is 3.4e7 against a target drop of
-  # log 4, so the drop came back as a small multiple of that ulp and the
-  # envelope was decided by the last bit of exp(): here it built a NaN-bounded
-  # envelope and returned 50 NaN with a retry-budget warning, while Linux and
-  # Windows tripped the p_l >= p_r guard and raised an error, from the same
-  # input.  The earlier version of this test asserted the NaN, which pinned one
-  # platform's rounding as the contract; the outcome was not even monotone in
-  # gamma, since gamma = 3e7 and 1e9 both drew normally.
+  # At alpha = 0.7 with beta = 1e-8 and gamma = 1e8 the standardised tilt
+  # gamma / sqrt(beta) is 1e12, and region BC's contact drop, read off as a
+  # difference of two values of log g whose own size is
+  # gamma_norm^2 / 4 = 2.5e23, would be a small multiple of ulp(2.5e23) =
+  # 3.4e7 against a target drop of log 4.  The envelope would then be decided
+  # by the last bit of exp(), and differently on different platforms: a
+  # NaN-bounded envelope and 50 NaN draws with a retry-budget warning on one,
+  # an error from the p_l >= p_r guard on another.  The drop is measured from
+  # the mode instead.
   #
   # There is nothing exotic about the density here: at this tilt it is
-  # Normal(mode, 1 / (2 beta)) to about 1e-34 relative, so the draws are
-  # checked against that.
+  # Normal(mode, 1 / (2 beta)) to within a relative 1e-24 in the variance, so
+  # the draws are checked against that.
   mu <- mhn_mode(0.7, 1e-8, 1e8)      # 5e15
   sigma <- 1 / sqrt(2 * 1e-8)         # 7071.07
   set.seed(2)
@@ -910,8 +1065,8 @@ test_that("a steep tilt samples its Gaussian limit, and reports nothing", {
   expect_gt(sd(draws) / sigma, 0.5)
   expect_lt(sd(draws) / sigma, 2)
 
-  # The other half of the original test: a working sampler stays quiet.  A
-  # per-draw warning would fire fifty times here.
+  # A working sampler stays quiet.  No draw here exhausts its retry budget, so
+  # any warning would be spurious.
   set.seed(2)
   expect_silent(rmhn(50, 2, 1, 1))
   set.seed(2)
@@ -921,19 +1076,18 @@ test_that("a steep tilt samples its Gaussian limit, and reports nothing", {
 test_that("the region BC envelope stays well posed across the tilt range", {
   skip_on_cran()
 
-  # The invariant that would have caught the above on the first run, rather
-  # than three platforms later.  Nothing in the suite looked at the envelope
-  # away from ordinary tilts, so a construction decided by rounding noise from
-  # gamma / sqrt(beta) ~ 1e8 upward went unseen; the single triple in the test
-  # above was the only steep tilt the suite ever sampled, and it was steep
-  # enough to fail outright rather than to fail quietly.
-  #
-  # Sweep the standardised tilt over the range region BC must handle and
-  # require, at each point, an ordered finite envelope with finite piece areas
-  # and draws consistent with the density's Gaussian limit.  None of these
-  # depends on libm rounding.  The ceiling is 1e13: past about 1e14 the contact
-  # offset falls below one ulp of the mode on the log axis, and the mode's
-  # neighbourhood is no longer representable at all.
+  # The same invariant as a sweep.  Read off the uncentred log g, the envelope
+  # would be decided by rounding noise from gamma / sqrt(beta) ~ 1e8 upward,
+  # so the standardised tilt is swept from 1e6 to 1e13, requiring at each
+  # point an ordered finite envelope with finite piece areas and draws
+  # consistent with the density's Gaussian limit.  None of these depends on
+  # libm rounding.  The sweep stops at 1e13 to bound its run time; the sampler
+  # itself refuses only once the law's standard deviation is no larger than
+  # the spacing of the doubles at its mode, in the caller's coordinate -- at
+  # beta = 1 from gamma / sqrt(beta) = 2^53 = 9.0e15, where the mode passes
+  # 2^52 and the doubles there lie a unit apart, farther than the standard
+  # deviation 1/sqrt(2), and at beta = 1e-8 from about 7.4e15 (see the refusal
+  # test below).
   for (log_tilt in seq(6, 13, by = 0.5)) {
     for (beta in c(1e-8, 1)) {
       gamma <- 10^log_tilt * sqrt(beta)
@@ -958,31 +1112,31 @@ test_that("the region BC envelope stays well posed across the tilt range", {
 test_that("the region A envelope stays well posed across the tilt range", {
   skip_on_cran()
 
-  # Region BC's invariant, applied to region A, which carried the same defect
-  # and was left out of the fix for it.  Region A works on f(x) in x rather
-  # than on the log axis, and log f(x) = (alpha-1) log x - x^2 + gamma_norm x
-  # is gamma_norm^2/4 - (x - gamma_norm/2)^2 up to the power term, so every
-  # value of it carries gamma_norm^2/4 -- 2.5e19 at gamma_norm = 1e10, one ulp
-  # of which is 5.5e3 -- while the contact drop, the two intersections, the
-  # piece areas and the accept test are all O(1) differences of two such
-  # values.  Unfixed, this returned draws whose standard deviation was 12x the
-  # truth, and at some triples no draws at all.
+  # Region BC's invariant, applied to region A.  Region A works on f(x) in x
+  # rather than on the log axis, and log f(x) = (alpha-1) log x - x^2 +
+  # gamma_norm x is gamma_norm^2/4 - (x - gamma_norm/2)^2 up to the power term,
+  # so every value of it carries gamma_norm^2/4 -- 2.5e19 at gamma_norm = 1e10,
+  # one ulp of which is 4096 -- while the contact drop, the two intersections,
+  # the piece areas and the accept test are all O(1) differences of two such
+  # values.  Region A therefore measures its ordinate from the mode.
   #
-  # The two assertions that are not in the BC block are the ones that catch the
-  # second defect, which the mode-centred ordinate exposes rather than cures:
-  # the contact search starting a fixed fraction of the mode away from it needs
-  # log2(m/2) Newton steps against a budget of 30, so past gamma_norm ~ 2e9 it
-  # returned a contact whose drop was hundreds instead of one.  The draws stay
+  # Two of the assertions below, on the width of the plateau and on the
+  # acceptance rate, catch an unconverged contact search: started a fixed
+  # fraction of the mode away from it, the search would need log2(m/2) Newton
+  # steps against a budget of 30, so past gamma_norm ~ 2e9 it would return a
+  # contact whose drop is hundreds instead of one.  The draws would stay
   # correctly distributed -- any tangent of a concave log-density dominates --
   # so neither the KS test nor the moments see it.  Only the width of the
   # plateau and the acceptance rate do, and the acceptance rate is the quantity
-  # Gao & Wang (2025) bound below by 1/e.
+  # Gao & Wang (2025, Theorem 3.1) bound below by 1/e.
   #
-  # gamma > 0 with alpha > 1 is dispatched to Sun's Algorithm 1, so region A
-  # has to be asked for by name here.  The ceiling is 1e13: one ulp of the mode
-  # is 1.57e-16 * gamma_norm standard deviations in this coordinate, so past
-  # about 1e14 the draws fall on a visible lattice and no sampler working in x
-  # can do better.
+  # The default method sends gamma > 0 with alpha > 1 to Sun's Algorithm 1 at
+  # tilts above 2 sqrt(alpha), which covers this sweep, so region A has to be
+  # asked for by name here.  The sweep stops at 1e13 to bound its run time;
+  # region A returns the exact draw rounded once to double precision and
+  # refuses only where the law is narrower than the spacing of the doubles at
+  # its mode (at beta = 1 from gamma / sqrt(beta) = 2^53 = 9.0e15; see the
+  # refusal test below).
   for (log_tilt in seq(6, 13, by = 0.5)) {
     for (beta in c(1e-8, 1)) {
       for (alpha in c(1.5, 2, 10)) {
@@ -999,7 +1153,8 @@ test_that("the region A envelope stays well posed across the tilt range", {
 
         # The envelope is built in the beta = 1 coordinate, where the limiting
         # standard deviation is 1/sqrt(2).  An unconverged contact search shows
-        # up here and nowhere else: this was 1646 at gamma_norm = 1e13.
+        # up here and nowhere else: from the fixed-fraction start this ratio
+        # would be 1646 at gamma_norm = 1e13.
         expect_lt((env$p_r - env$p_l) / 2 * sqrt(2), 20)
 
         set.seed(4)
@@ -1012,9 +1167,10 @@ test_that("the region A envelope stays well posed across the tilt range", {
         expect_lt(suppressWarnings(
           stats::ks.test((draws - mu) / sigma, "pnorm")$statistic), 0.05)
 
-        # Acceptance stays above the 1/e floor of Gao & Wang (2025).  This is
-        # the invariant that the wrong contact point violates: it fell to
-        # 0.0076 at gamma_norm = 1e12 and 0.0010 at 1e14.
+        # Acceptance stays above the 1/e floor of Gao & Wang (2025,
+        # Theorem 3.1).  This is the invariant that the wrong contact point
+        # violates: from the fixed-fraction start it would fall to 0.0076 at
+        # gamma_norm = 1e12.
         set.seed(4)
         d2 <- mhn:::.rmhn_rtdr_cpp(2000L, alpha, beta, gamma)
         expect_gt(2000 / (2000 + attr(d2, "rtdr_retries")), 1 / exp(1))
@@ -1029,24 +1185,26 @@ test_that("the region D envelope stays well posed across the tilt range", {
   # The same invariant for region D, which is on the *default* path: rmhn's
   # auto dispatch sends every alpha < 1 with gamma > 0 to RTDR, and
   # classify_region sends alpha < 1/2 above the gamma_d threshold to region D.
-  # So every failure this block asserts against was reachable from a plain
-  # rmhn(n, 0.3, 1, 1e8).
+  # So every failure this block asserts against would be reachable from a
+  # plain rmhn(n, 0.3, 1, 1e8).
   #
-  # Region D is the inflection-point envelope on the T_{-1/2}-transformed
-  # g(y) = exp(alpha y - e^{2y} + gamma_norm e^y): a secant chain over the
-  # convex half, a tangent over the concave half, a plateau, and a right tail.
-  # It carried the region BC ordinate defect verbatim, plus three of its own --
-  # a contact search that could not converge from its start, a dual point and a
-  # rho written as differences of gamma_norm-sized values, and a secant count
-  # ceil(rho) narrowed into an int, which is undefined behaviour past
-  # gamma_norm ~ 1.8e9 and saturates one way on arm64 and the other on x86-64.
-  # Together they produced, at gamma_norm = 1e10, a plateau whose right edge
-  # lay to the left of its left edge; the piece was then dropped without any
-  # error and the sampler's support no longer contained the mode.
+  # Region D is the inflection-point envelope on log g(y) for the log-axis
+  # density g(y) = exp(alpha y - e^{2y} + gamma_norm e^y), with log-linear
+  # pieces throughout: a secant chain over the convex half, a tangent over the
+  # concave half, a plateau, and a right tail.
+  # It needs the region BC mode-centred ordinate and three safeguards of its
+  # own: a contact search started where it converges, a dual point and rho
+  # formed without differences of gamma_norm-sized values, and the count
+  # ceil(rho) kept in double, since narrowing it into an int is undefined
+  # behaviour past gamma_norm ~ 1.8e9 and saturates one way on arm64 and the
+  # other on x86-64.  Without them, at gamma_norm = 1e10, the plateau's right
+  # edge would lie to the left of its left edge, the piece would be dropped
+  # without any error, and the mode would lie outside the sampler's support.
   #
-  # The ceiling is 1e12.  Past that one ulp of the mode on the log axis
-  # approaches the mode's own width there, about 1.4/gamma_norm, and the
-  # neighbourhood the envelope needs stops being representable.
+  # The sweep stops at 1e12 to bound its run time; the sampler refuses only
+  # where the law is narrower than the spacing of the doubles at its mode (at
+  # beta = 1 from gamma / sqrt(beta) = 2^53 = 9.0e15; see the refusal test
+  # below).
   for (log_tilt in seq(6, 12, by = 0.5)) {
     for (beta in c(1e-8, 1)) {
       for (alpha in c(0.05, 0.3, 0.49)) {
@@ -1054,7 +1212,6 @@ test_that("the region D envelope stays well posed across the tilt range", {
         info <- sprintf("alpha = %g, beta = %g, gamma = %g", alpha, beta, gamma)
         env <- mhn:::.dump_rtdr_envelope_cpp(alpha, beta, gamma)
         expect_identical(env$region, 2L, info = info)
-        expect_false(env$fell_back_to_bc, info = info)
         expect_gte(env$K_eff, 1L)
         expect_true(is.finite(env$p_l) && is.finite(env$p_r), info = info)
         expect_lt(env$p_l, env$p_r)
@@ -1064,14 +1221,14 @@ test_that("the region D envelope stays well posed across the tilt range", {
         expect_true(all(is.finite(env$piece_log_area)), info = info)
 
         # rho is v (gamma_norm - v) with v <= gamma_norm/2, so it is positive
-        # and below gamma_norm^2/4; it was 41 times its true value at
-        # gamma_norm = 1e10 and 6e5 times it at 1e14.
+        # and below gamma_norm^2/4; formed as a difference of gamma_norm-sized
+        # values it would be 41 times its true value at gamma_norm = 1e10.
         gn <- gamma / sqrt(beta)
         expect_gt(env$rho, 0)
         expect_lt(env$rho, gn * gn / 4)
 
         # Exactly one plateau piece, spanning the mode.  Dropping it silently
-        # is how the mode left the support.
+        # would leave the mode outside the support.
         types <- vapply(env$pieces, function(p) p$type, integer(1))
         expect_identical(sum(types == 0L), 1L, info = info)
         expect_lt(env$p_l, env$mode)
@@ -1102,61 +1259,69 @@ test_that("the region D envelope stays well posed across the tilt range", {
 })
 
 test_that("a tilt past the representable range is refused in the user's terms", {
-  # Both regions stop above their own ceiling, where the whole contact
-  # structure falls inside one ulp of the mode.  Before this the region A
-  # corner returned a vector that was 99.9% NaN and region D returned finite
-  # draws whose standard deviation was 2.6 million times the truth, which is
-  # worse than an error because nothing says so.  The message must not tell
-  # the user they have found a defect: they have found the edge of double
-  # precision, and the normal limit is the answer there.
+  # Every region refuses to sample once the law's standard deviation is no
+  # larger than the spacing of the doubles at its mode, in the caller's
+  # coordinate: at beta = 1 from a tilt of 2^53 = 9.0e15, and on the shape
+  # axis at the latest from alpha = 2^105 = 4.1e31.  Past that point draws
+  # could take only a few distinct values, and finite draws of the wrong
+  # spread would be worse than an error because nothing would say so.  The
+  # message must not tell the user they have found a defect: they have found
+  # the edge of double precision, and the normal limit is the answer there.
   expect_error(rmhn(10, 2, 1, 1e16, method = "rtdr"),
                "narrower than the spacing of the double")
   expect_error(rmhn(10, 0.3, 1, 1e16), "narrower than the spacing of the double")
   expect_error(rmhn(10, 1e33, 1, 1, method = "rtdr"),
                "narrower than the spacing of the double")
-  # And just below each ceiling it still samples, with no NaN.
+  # Inside that limit it samples, with no NaN (test-rmhn-rtdr-regions.R checks
+  # the law of the draws up to 8e15).
   set.seed(1)
   expect_true(all(is.finite(rmhn(200, 2, 1, 1e14, method = "rtdr"))))
   set.seed(1)
   expect_true(all(is.finite(rmhn(200, 0.3, 1, 1e12))))
 })
 
-test_that("a non-finite shape or rate is refused, in the caller's vocabulary", {
-  # alpha > 0 is true of Inf, so an infinite shape passed validation and reached
-  # the series, where a truncation length computed from it overflowed the
-  # size_t handed to std::vector.  What the user saw was that container's own
-  # exception, whose entire message is the word "vector".
+test_that("a non-finite shape or rate is taken as outside the parameter space", {
+  # alpha > 0 is true of Inf, so a test of positivity alone would pass an
+  # infinite shape on to the evaluators, which have no meaning for it, and the
+  # user would see whatever failed first deep inside them -- an exception from
+  # a container or a quadrature, whose message may be as bare as the word
+  # "vector", or a NaN without a warning.  The d/p/q functions give NaN with
+  # a warning, as for any parameter outside the space, and the moment
+  # functions stop with an error that names the argument.
   for (f in list(dmhn, pmhn)) {
-    expect_error(f(1, Inf, 1, 1), "alpha must be positive and finite")
-    expect_error(f(1, 1, Inf, 1), "beta must be positive and finite")
-    expect_error(f(1, NaN, 1, 1), "alpha must be positive")
+    expect_warning(out <- f(1, Inf, 1, 1), "NaNs produced")
+    expect_identical(out, NaN)
+    expect_warning(out <- f(1, 1, Inf, 1), "NaNs produced")
+    expect_identical(out, NaN)
+    expect_identical(f(1, NaN, 1, 1), NaN)
   }
-  expect_error(qmhn(0.5, Inf, 1, 1), "alpha must be positive and finite")
+  expect_warning(out <- qmhn(0.5, Inf, 1, 1), "NaNs produced")
+  expect_identical(out, NaN)
   for (f in list(mhn_mean, mhn_var, mhn_skewness, mhn_kurtosis, mhn_mode)) {
     expect_error(f(Inf, 1, 1), "alpha must be positive and finite")
     expect_error(f(1, Inf, 1), "beta must be positive and finite")
   }
   # The vector path too, where the offending element is not the first.
-  expect_error(dmhn(1, alpha = c(2, Inf), beta = 1, gamma = 1),
-               "alpha must be positive and finite")
+  expect_warning(out <- dmhn(1, alpha = c(2, Inf), beta = 1, gamma = 1),
+                 "NaNs produced")
+  expect_identical(out, c(dmhn(1, 2, 1, 1), NaN))
 
-  # rmhn keeps the contract its documentation states: an NA draw, not an error.
+  # rmhn draws NaN there, with a warning, as rnorm() does.
   set.seed(1)
-  expect_silent(x <- rmhn(4, alpha = c(2, Inf, 2, NaN), beta = 1, gamma = 1))
-  expect_equal(is.na(x), c(FALSE, TRUE, FALSE, TRUE))
+  expect_warning(x <- rmhn(4, alpha = c(2, Inf, 2, NaN), beta = 1, gamma = 1),
+                 "NAs produced")
+  expect_identical(is.nan(x), c(FALSE, TRUE, FALSE, TRUE))
 })
 
 test_that("the distribution function approaches its normal limit at a strong tilt", {
-  # win-builder found this on all three Windows R versions while the local check
-  # passed: pmhn at the mode returned 1 rather than 0.5.
-  #
   # log Psi and the log of the integral over [0, x] are each about
   # gamma^2/(4 beta) -- 2.5e13 at gamma = 1e7 -- while the log probability they
   # combine into is of order one.  Assembled directly the answer carries the
   # rounding of both, and how that rounding falls depends on the platform's
-  # quadrature: here it cost four digits, there enough to be clamped to 1.
-  # Both sides now have the term removed analytically, and the integrand is
-  # written in the variable centred on its own anchor.
+  # quadrature and libm: it can cost four digits, or enough for F at the mode
+  # to be clamped to 1 rather than 0.5.  For z above 1e3 both sides have the
+  # term removed analytically, and the integrand is written in the variable
+  # centred on its own anchor.
   #
   # As the tilt grows the law tends to a normal of variance 1/(2 beta) centred
   # on the mode, so the CDF must approach Phi at every multiple of that scale.

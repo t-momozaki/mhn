@@ -3,16 +3,14 @@
 # that the package's pmhn/Psi dispatch implicitly depends on.
 #
 # Background: pmhn()'s dispatch implicitly depends on three claims
-# about the Sun et al. (2023, Lemma 10/11) Psi series and the Lemma 1b
-# CDF series.  This script verifies all three at double precision
+# about the Sun et al. (2023, Supplementary Lemma 10) Psi series and the
+# Lemma 1b CDF series.  This script verifies all three at double precision
 # against Rmpfr 500-bit ground truth.
 #
-# Paper refs: Sun et al. (2023), Supplementary Section 1
+# Paper refs: Sun et al. (2023, Supplementary Section 1)
 #
 # Claim A (Sun et al. 2023, Supplementary Section 1 qualitative
-#          observation; paraphrased for readability -- the original
-#          wording is slightly ungrammatical, e.g. "the each terms of
-#          the A(k) ... that involving 'lgamma'"):
+#          observation, paraphrased):
 #   In the case when gamma < 0, the series approximation procedure
 #   appears to be inefficient.  From empirical experiments Sun et al.
 #   observed that the accumulated errors contributed by the
@@ -28,8 +26,8 @@
 #   The same lgamma-rounding issue applies to the Lemma 1b CDF series
 #   for gamma < 0.  This is *not* stated in Sun et al.; it is the
 #   reason mhn_cdf_series.cpp installs a runtime cancellation guard
-#   that returns NaN when alternating-sign cancellation would exceed
-#   the user's tolerance.
+#   that returns NaN when alternating-sign cancellation could push the
+#   relative error past the working tolerance sqrt(.Machine$double.eps).
 #
 # Claim C (theoretical control):
 #   For gamma > 0, every term in both series is non-negative, so
@@ -41,20 +39,55 @@
 # (gold standard).  No C++ code is touched; the audit is entirely in R.
 #
 # Output:
-#   mhn/inst/audits/results/series_breakdown_audit_<YYYYMMDD>.csv
-#   mhn/inst/audits/results/series_breakdown_audit_diagnostics_<YYYYMMDD>.csv
+#   series_breakdown_audit_<YYYYMMDD>.csv
+#   series_breakdown_audit_diagnostics_<YYYYMMDD>.csv  (one row: settings and
+#       the software and machine of the run, from ../benchmarks/provenance.R)
 #
-# Invocation (from repository root):
-#   Rscript mhn/inst/audits/series_breakdown_audit.R
+# Invocation:
+#   Rscript <file>
+# where <file> is
+# system.file("audits", "series_breakdown_audit.R", package = "mhn").
+# The results are written to MHN_BENCH_OUTDIR when it names a directory, and
+# not at all otherwise.
+# Next to them it records the software and machine of the run
+# (provenance.R), for which it runs `R CMD config`, the compiler with
+# `--version`, and `sysctl` on macOS or `lscpu` on Linux.
+#
+# Environment variables (optional):
+#   MHN_BENCH_QUICK=1     reduce the grid to a smoke test (under a minute)
+#   MHN_BENCH_OUTDIR=DIR  write the results to DIR
+#   MHN_GIT_COMMIT=H      git commit of the package sources, recorded in the
+#                         diagnostics CSV
 
 suppressPackageStartupMessages({
   if (!requireNamespace("Rmpfr", quietly = TRUE))
     stop("series_breakdown_audit.R requires the 'Rmpfr' package")
 })
 
+QUICK <- isTRUE(nchar(Sys.getenv("MHN_BENCH_QUICK")) > 0L)
+
+# The provenance helper ships with the benchmark scripts, next to this
+# directory both in the package sources and in an installed package.
+local({
+  f <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+  here <- if (length(f)) dirname(gsub("~+~", " ", f[1L], fixed = TRUE)) else "."
+  cand <- c(file.path(here, "..", "benchmarks", "provenance.R"),
+            system.file("benchmarks", "provenance.R", package = "mhn"))
+  cand <- cand[nzchar(cand) & file.exists(cand)]
+  if (!length(cand))
+    stop("cannot find provenance.R in ../benchmarks or in the installed mhn")
+  source(cand[1L], local = FALSE)
+})
+RUN <- provenance_start()
+
 OUTDIR <- Sys.getenv("MHN_BENCH_OUTDIR", unset = "")
-if (!nzchar(OUTDIR)) OUTDIR <- file.path("mhn", "inst", "audits", "results")
-dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+# The results are written only where MHN_BENCH_OUTDIR names a directory;
+# without it the script prints its summary and writes nothing.
+SAVE <- nzchar(OUTDIR)
+if (SAVE) dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+save_csv <- function(x, path) {
+  if (SAVE) utils::write.csv(x, path, row.names = FALSE)
+}
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("series_breakdown_audit_%s.csv", TODAY))
 DIAG_CSV   <- file.path(OUTDIR,
@@ -68,12 +101,12 @@ Q_LEMMA10 <- 0.5
 TOL <- sqrt(.Machine$double.eps)
 
 # -----------------------------------------------------------------------
-# Sun et al. (2023, Lemma 10) truncation helpers (R ports of the C++
-# anonymous-namespace functions in mhn/src/mhn_psi_series.cpp).  Inputs
-# always use abs(z) so the formulas are well-defined for either sign of
-# gamma.  The Errata correction (alpha_adj * z^2, not alpha_adj * z) is
-# applied; see the "Errata in Sun et al. (2023)" subsection of the
-# package's theory vignette for the derivation.
+# Sun et al. (2023, Supplementary Lemma 10) truncation helpers (R ports of
+# lemma10_C and lemma10_K in mhn/src/mhn_psi_series.cpp).  Inputs always
+# use abs(z) so the formulas are well-defined for either sign of gamma.
+# The Errata correction (alpha_adj * z^2, not alpha_adj * z) is applied;
+# see the "Errata in Sun et al. (2023)" subsection of the package's theory
+# vignette for the derivation.
 # -----------------------------------------------------------------------
 lemma10_C <- function(alpha_adj, z2, q, c1, c2) {
   denom <- 8 * q
@@ -106,8 +139,9 @@ compute_lemma10_K <- function(alpha, abs_z, tol = TOL) {
   log_eps_q4 <- log(tol / 4)
   C1 <- lemma10_C(alpha,       z2, Q_LEMMA10, 6 * Q_LEMMA10,  4 * Q_LEMMA10)
   C2 <- lemma10_C(alpha + 1.0, z2, Q_LEMMA10, 10 * Q_LEMMA10, 12 * Q_LEMMA10)
-  K1 <- lemma10_K(alpha / 2,         abs_z, z2, C1, Q_LEMMA10, log_eps_q4, TRUE)
-  K2 <- lemma10_K((alpha + 1.0) / 2, abs_z, z2, C2, Q_LEMMA10, log_eps_q4, FALSE)
+  # Both take a = alpha/2: the B branch of lemma10_K adds the half itself.
+  K1 <- lemma10_K(alpha / 2, abs_z, z2, C1, Q_LEMMA10, log_eps_q4, TRUE)
+  K2 <- lemma10_K(alpha / 2, abs_z, z2, C2, Q_LEMMA10, log_eps_q4, FALSE)
   list(K1 = K1, K2 = K2, K = max(K1, K2))
 }
 
@@ -277,7 +311,14 @@ log_cdf_series_mpfr <- function(alpha, beta, gamma, x, log_psi_mpfr,
     g_n     <- if (is_even) g_even else g_odd
     arg_i   <- (ma + i) / 2
     arg_i_d <- (alpha + i) / 2
-    P_i     <- Rmpfr::mpfr(pgamma(y_double, shape = arg_i_d), prec_bits)
+    # P_i from its logarithm: in double precision P_i itself underflows to
+    # 0 past a few hundred terms under a strong tilt (at (0.5, 1, 150) and
+    # q = 25 from the 3623rd term, before the terms peak), which would drop
+    # the terms that carry the sum.  log P_i is good to a few units in its
+    # last place, a relative 1e-13 or better of P_i, far below the 1e-8 the
+    # double series is judged against.
+    P_i     <- exp(Rmpfr::mpfr(pgamma(y_double, shape = arg_i_d, log.p = TRUE),
+                               prec_bits))
 
     full_term <- g_n * zfact * P_i
     S_num     <- S_num + full_term
@@ -302,28 +343,35 @@ log_cdf_series_mpfr <- function(alpha, beta, gamma, x, log_psi_mpfr,
 # =======================================================================
 # Grid + main loop
 # =======================================================================
-ALPHAS <- c(0.5, 1.5, 3, 10)
-GAMMAS <- c(-150, -100, -75, -50, -30, -25, -22, -20, -18, -15,
-            -10, -8, -5, -2, -1,
-             1,  2,  5,  8, 10, 15, 18, 20, 22, 25, 30, 50, 75, 100, 150)
+ALPHAS <- if (QUICK) c(0.5, 3) else c(0.5, 1.5, 3, 10)
+GAMMAS <- if (QUICK) c(-20, -5, 5, 20) else
+  c(-150, -100, -75, -50, -30, -25, -22, -20, -18, -15,
+    -10, -8, -5, -2, -1,
+     1,  2,  5,  8, 10, 15, 18, 20, 22, 25, 30, 50, 75, 100, 150)
 Q_FACTORS <- c(1 / 3, 1, 3)
 BETA <- 1.0
 
-# Sun et al. (2023) Lemma 4a upper bound on E[X], proven for alpha > 1.
-# Used here purely as a scale to pick informative q points; for
-# alpha <= 1 we extrapolate the same formula since the audit only
-# needs a reasonable positive scale, not a rigorous bound.
+# Sun et al. (2023) Lemma 4a upper bound on E[X].  Lemma 4a is stated
+# for alpha > 1, but the remark after Lemma 4 notes that this upper
+# bound holds for all alpha > 0.  Used here only as a scale to pick
+# informative q points.
 approx_mean <- function(alpha, beta, gamma) {
   (gamma + sqrt(gamma^2 + 8 * alpha * beta)) / (4 * beta)
 }
 
-cat(sprintf("[series_breakdown_audit] prec_bits=%d alphas=%d gammas=%d q_factors=%d\n",
+cat(sprintf("[series_breakdown_audit] mode=%s prec_bits=%d alphas=%d gammas=%d q_factors=%d\n",
+            if (QUICK) "QUICK" else "FULL",
             PREC_BITS, length(ALPHAS), length(GAMMAS), length(Q_FACTORS)))
-cat(sprintf("[series_breakdown_audit] result_csv=%s\n", RESULT_CSV))
+cat(if (SAVE) sprintf("[series_breakdown_audit] result_csv=%s\n", RESULT_CSV) else
+      "[series_breakdown_audit] results not saved (set MHN_BENCH_OUTDIR to save them)\n")
 
+# The error of a value whose logarithm is v_d against the reference
+# logarithm v_m: |v_d - v_m|, the relative error of the value itself.  (A
+# relative error of the logarithm means nothing where the value is close to
+# 1 and its logarithm close to 0.)
 rel <- function(v_d, v_m) {
   if (is.na(v_d) || is.na(v_m)) return(NA_real_)
-  abs(v_d - v_m) / max(abs(v_m), 1e-300)
+  abs(v_d - v_m)
 }
 
 rows <- list()
@@ -398,7 +446,7 @@ for (alpha in ALPHAS) for (gamma in GAMMAS) {
 }
 
 results <- do.call(rbind, rows)
-write.csv(results, RESULT_CSV, row.names = FALSE)
+save_csv(results, RESULT_CSV)
 
 # -----------------------------------------------------------------------
 # Per-experiment summary
@@ -462,10 +510,14 @@ diag <- data.frame(
   peak_buffer    = PEAK_BUFFER,
   rows           = nrow(results),
   total_secs     = round(total_secs, 2),
+  mode           = if (QUICK) "QUICK" else "FULL",
   stringsAsFactors = FALSE
 )
-write.csv(diag, DIAG_CSV, row.names = FALSE)
+diag <- with_provenance(diag, RUN)
+save_csv(diag, DIAG_CSV)
 
-cat(sprintf("\n[series_breakdown_audit] wrote %s\n", RESULT_CSV))
-cat(sprintf("[series_breakdown_audit] wrote %s\n", DIAG_CSV))
+if (SAVE) {
+  cat(sprintf("\n[series_breakdown_audit] wrote %s\n", RESULT_CSV))
+  cat(sprintf("[series_breakdown_audit] wrote %s\n", DIAG_CSV))
+}
 cat(sprintf("[series_breakdown_audit] total time = %.1fs\n", total_secs))

@@ -1,5 +1,5 @@
-// Numerical-integration fallback for the MHN CDF, used by the pmhn
-// dispatcher when the Sun et al. (2023) Lemma 1b series is unsuitable.
+// Numerical integration for the MHN CDF, used by the pmhn dispatcher where
+// the Sun et al. (2023) Lemma 1b series is not tried or is unsuitable.
 // Built on Boost.Math quadrature with peak-normalized integrands.
 
 #ifndef MHN_CDF_INTEGRATE_H
@@ -7,10 +7,11 @@
 
 namespace mhn {
 
-// Numerical-integration fallback for the MHN CDF, used when the Sun
-// et al. (2023) Lemma 1b series is unsuitable (log_cdf_series returns
-// NaN when the alternating-sign cancellation guard for gamma < 0
-// fires).
+// Numerical integration for the MHN CDF, used outside the region in which
+// the Sun et al. (2023) Lemma 1b series is tried (mhn_cdf_series.h), and
+// inside it when the series is unsuitable (log_cdf_series returns NaN when
+// the alternating-sign cancellation guard for gamma < 0 fires or its last
+// index 2K + 1 exceeds the ceiling of 1e6).
 //
 // Computes log integral_0^x g(t) dt where
 //   g(t) = t^(alpha-1) exp(-beta t^2 + gamma t)
@@ -39,7 +40,7 @@ double log_cdf_integrate_shifted(double alpha, double beta, double gamma,
 //
 // Deriving the upper tail as 1 - F loses it entirely once F rounds to 1, which
 // happens as soon as the survival probability falls below about 1e-16 -- at
-// alpha = 2.5, beta = 1, gamma = 1 that is already q = 8.  Integrating the
+// alpha = 2.5, beta = 1, gamma = 1 that is already q = 7.  Integrating the
 // other way keeps the full range, exactly as base R's distribution functions
 // do with their lower.tail argument.
 double log_ccdf_integrate(double alpha, double beta, double gamma,

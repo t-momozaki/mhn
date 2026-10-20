@@ -1,51 +1,71 @@
 #!/usr/bin/env Rscript
 # cdf_series_accuracy.R --- Accuracy audit of the pmhn() Lemma 1b series.
 #
-# Role: this is an *accuracy audit*, not a timing benchmark.  It
-# verifies that the dispatcher in src/mhn_pmhn_state.h produces
-# arbitrary-precision-correct CDF values across a wide (alpha, gamma, q)
-# grid.  The companion file series_breakdown_audit.R verifies the
-# underlying theoretical breakdown behaviour of the Lemma 10 Psi
-# series and the Lemma 1b CDF series; this one verifies the pmhn()
-# output itself.
+# Role: this is an *accuracy audit*, not a timing benchmark.  It checks
+# the CDF values that the dispatcher in src/mhn_pmhn_state.h returns
+# against high-precision references over an (alpha, gamma, q) grid at
+# beta = 1.  The companion file series_breakdown_audit.R checks where the
+# Lemma 10 Psi series and the Lemma 1b CDF series break down; this one
+# checks the pmhn() output itself.
 #
-# Background: pmhn() uses the Sun et al. (2023, Lemma 1b) CDF series
-# as its primary path.  For gamma < 0 the series has alternating-sign
-# terms whose log-sum-exp accumulator can suffer catastrophic
-# cancellation as |gamma / sqrt(beta)| grows: lgamma rounding errors
+# Background: below the peak of the density of log X, pmhn() computes the
+# lower tail by one of two routes, chosen by measuring their cost and
+# accuracy (src/mhn_cdf_series.h): the Sun et al. (2023, Lemma 1b) CDF
+# series, or a Boost.Math integration of the unnormalised density.  The
+# series is tried first for alpha < 1 (with z = gamma / sqrt(beta) <= 1e3)
+# and for alpha >= 1 while |z| <= 20 and alpha <= 100; elsewhere the
+# integration, the faster of the two there, is used directly.  At the
+# grid's points with alpha > 1 and |gamma| > 20 the dispatcher therefore
+# does not try the series, which the forced method below still evaluates
+# there.  Where the series is tried, the integration replaces it when it
+# would need more than 1e6 terms, when beta q^2 is below the smallest
+# normal double, and when its cancellation guard fires.  For gamma < 0 the
+# series has alternating-sign terms whose log-sum-exp accumulator can
+# suffer catastrophic cancellation as |z| grows: lgamma rounding errors
 # accumulate to a magnitude comparable to Psi, silently corrupting the
-# CDF.  The implementation in src/mhn_cdf_series.cpp guards against
-# this at runtime by tracking the cancellation depth and returning
-# NaN whenever the relative error would exceed the user's tolerance,
-# in which case the dispatcher in src/mhn_pmhn_state.h falls back to
-# a Boost.Math integration of the unnormalised density.
+# CDF.  The implementation in src/mhn_cdf_series.cpp guards against this
+# at runtime by weighing the cancellation against the rounding of the
+# terms and returning NaN whenever the relative error could exceed the
+# working tolerance sqrt(.Machine$double.eps).
 #
-# Purpose: at each point of a grid that spans the suspected breakdown
-# region for gamma < 0, call mhn:::.pmhn_force(..., method = "series")
-# and .pmhn_force(..., method = "integrate") in isolation (bypassing
-# the dispatcher), then compare each value against an arbitrary-
-# precision reference computed from the same Lemma 1b series in
-# `Rmpfr` at 200 bits of precision.  The dispatcher's default output
-# is also recorded.  The audit verifies that the runtime cancellation
-# guard fires correctly across the grid and that the dispatcher's
-# output matches the high-precision reference within tolerance.
+# Purpose: at each point of the grid, which spans the region where the
+# gamma < 0 series breaks down, call mhn:::.pmhn_force(..., method =
+# "series") and .pmhn_force(..., method = "integrate") in isolation
+# (bypassing the dispatcher), and record the dispatcher's default output
+# as well.  Each value is compared with an independent reference, an
+# `Rmpfr` quadrature on the log axis that computes the normalising
+# constant from scratch (see cdf_quad_mpfr below), or, where that
+# reference is unavailable, with the same Lemma 1b series summed in
+# `Rmpfr` (200 bits of precision by default).  The audit checks that the
+# runtime cancellation guard fires where it should and that the
+# dispatcher's output matches the reference within tolerance.
 #
 # Outputs:
-#   mhn/inst/audits/results/cdf_series_accuracy_<YYYYMMDD>.csv
-#   mhn/inst/audits/results/cdf_series_accuracy_diagnostics_<YYYYMMDD>.csv
+#   cdf_series_accuracy_<YYYYMMDD>.csv
+#   cdf_series_accuracy_diagnostics_<YYYYMMDD>.csv  (one row: headline figures
+#       and the software and machine of the run, from ../benchmarks/provenance.R)
 #
-# Invocation (from repository root):
-#   Rscript mhn/inst/audits/cdf_series_accuracy.R
+# Invocation:
+#   Rscript <file>
+# where <file> is
+# system.file("audits", "cdf_series_accuracy.R", package = "mhn").
+# The results are written to MHN_BENCH_OUTDIR when it names a directory, and
+# not at all otherwise.
+# Next to them it records the software and machine of the run
+# (provenance.R), for which it runs `R CMD config`, the compiler with
+# `--version`, and `sysctl` on macOS or `lscpu` on Linux.
 #
 # Environment variables (optional):
-#   MHN_BENCH_QUICK=1     reduce the grid to a smoke test (~30 s)
-#   MHN_BENCH_OUTDIR=DIR  override the result directory
+#   MHN_BENCH_QUICK=1     reduce the grid to a smoke test (48 points, about
+#                         ten minutes, nearly all in the mpfr references)
+#   MHN_BENCH_OUTDIR=DIR  write the results to DIR
 #   MHN_BENCH_PREC=N      override the mpfr precision (default 200 bits)
+#   MHN_GIT_COMMIT=H      git commit of the installed package sources,
+#                         recorded in the diagnostics CSV
 
 suppressPackageStartupMessages({
   if (!requireNamespace("mhn", quietly = TRUE))
-    stop("cdf_series_accuracy.R requires the 'mhn' package. ",
-         "Run R CMD INSTALL mhn first.")
+    stop("cdf_series_accuracy.R requires the 'mhn' package; install it first.")
   if (!requireNamespace("Rmpfr", quietly = TRUE))
     stop("cdf_series_accuracy.R requires the 'Rmpfr' package. ",
          "Install via install.packages('Rmpfr').")
@@ -57,10 +77,24 @@ PREC_BITS <- {
   if (is.na(v) || v < 64L) 200L else v
 }
 # Hard ceiling on the mpfr reference series.  In practice the series
-# converges to mpfr machine zero (relative magnitude < 2^-PREC_BITS) in
-# fewer than 4 * z^2 terms for the worst grid point (|z| = 100), well
-# below this limit.
+# converges to mpfr machine zero (relative magnitude < 2^-PREC_BITS)
+# within about 7000 terms even at the worst grid points (|z| = 100, where
+# the terms of Psi peak near i = z^2/2 = 5000), well below this limit.
 MAX_TERMS <- 30000L
+
+# The provenance helper ships with the benchmark scripts, next to this
+# directory both in the package sources and in an installed package.
+local({
+  f <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+  here <- if (length(f)) dirname(gsub("~+~", " ", f[1L], fixed = TRUE)) else "."
+  cand <- c(file.path(here, "..", "benchmarks", "provenance.R"),
+            system.file("benchmarks", "provenance.R", package = "mhn"))
+  cand <- cand[nzchar(cand) & file.exists(cand)]
+  if (!length(cand))
+    stop("cannot find provenance.R in ../benchmarks or in the installed mhn")
+  source(cand[1L], local = FALSE)
+})
+RUN <- provenance_start()
 
 ALPHAS <- if (QUICK) c(0.5, 2) else c(0.3, 0.7, 1, 1.5, 3, 10)
 GAMMAS <- if (QUICK) {
@@ -76,18 +110,23 @@ GAMMAS <- if (QUICK) {
 Q_FACTORS <- c(1 / 3, 1, 3)
 BETA <- 1.0
 
-# Sun et al. (2023) Lemma 4a upper bound on E[X], proven for alpha > 1.
-# Used here purely as a scale to pick informative q points; for
-# alpha <= 1 we extrapolate the same formula since the audit only
-# needs a reasonable positive scale, not a rigorous bound.  Strictly
-# positive for every (alpha > 0, beta > 0, gamma in R).
+# Sun et al. (2023) Lemma 4a upper bound on E[X].  Lemma 4a is stated
+# for alpha > 1, but the remark after Lemma 4 notes that this upper
+# bound holds for all alpha > 0.  Used here only as a scale to pick
+# informative q points.  Strictly positive for every
+# (alpha > 0, beta > 0, gamma in R).
 approx_mean <- function(alpha, beta, gamma) {
   (gamma + sqrt(gamma^2 + 8 * alpha * beta)) / (4 * beta)
 }
 
 OUTDIR <- Sys.getenv("MHN_BENCH_OUTDIR", unset = "")
-if (!nzchar(OUTDIR)) OUTDIR <- file.path("mhn", "inst", "audits", "results")
-dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+# The results are written only where MHN_BENCH_OUTDIR names a directory;
+# without it the script prints its summary and writes nothing.
+SAVE <- nzchar(OUTDIR)
+if (SAVE) dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+save_csv <- function(x, path) {
+  if (SAVE) utils::write.csv(x, path, row.names = FALSE)
+}
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("cdf_series_accuracy_%s.csv", TODAY))
 DIAG_CSV   <- file.path(OUTDIR,
@@ -97,8 +136,12 @@ cat(sprintf("[cdf_series_accuracy] mode=%s prec=%d bits alpha=%d gamma=%d q=%d p
             if (QUICK) "QUICK" else "FULL", PREC_BITS,
             length(ALPHAS), length(GAMMAS), length(Q_FACTORS),
             length(ALPHAS) * length(GAMMAS) * length(Q_FACTORS)))
-cat(sprintf("[cdf_series_accuracy] result_csv=%s\n", RESULT_CSV))
-cat(sprintf("[cdf_series_accuracy] diag_csv=%s\n", DIAG_CSV))
+if (SAVE) {
+  cat(sprintf("[cdf_series_accuracy] result_csv=%s\n", RESULT_CSV))
+  cat(sprintf("[cdf_series_accuracy] diag_csv=%s\n", DIAG_CSV))
+} else {
+  cat("[cdf_series_accuracy] results not saved (set MHN_BENCH_OUTDIR to save them)\n")
+}
 
 # -----------------------------------------------------------------------
 # High-precision reference: Sun et al. (2023) Lemma 1b numerator
@@ -115,17 +158,23 @@ cat(sprintf("[cdf_series_accuracy] diag_csv=%s\n", DIAG_CSV))
 # depth is bounded by log10(peak |T_i|) - log10(F * Psi), which stays
 # moderate for the grid we test).
 #
-# Psi[alpha/2, z] itself is **not** accumulated from the Lemma 1b
-# series here.  For gamma < 0 that sum has hundreds of decimal digits
-# of cancellation between alternating-sign terms (|z| = 100 needs
-# ~ 333 digits, more than reasonable mpfr precision can deliver
-# efficiently), so we instead pull log Psi from the package's own
-# dispatcher, which uses the Sun et al. (2023, Lemma 11) integral for
-# gamma < 0 and the Sun et al. (2023, Lemma 10) positive-term series
-# for gamma > 0 -- both well-
-# conditioned.  This mirrors what the C++ implementation in
-# src/mhn_cdf_series.cpp does internally; it is the numerator sum, not
-# Psi, that the audit really exercises.
+# Psi[alpha/2, z] itself is **not** accumulated from its power series
+# (the sum above with every P = 1) here.  For gamma < 0 that sum
+# cancels between alternating-sign terms: at |z| = 100 its largest
+# term, about exp(z^2/4), exceeds Psi by more than a factor of 1e1080,
+# more digits than a reasonable mpfr precision can carry efficiently.
+# So we instead pull
+# log Psi from the package's own dispatcher, which uses the
+# positive-term series of Sun et al. (2023, Supplementary Lemma 10) for
+# 0 < z <= 20 with alpha <= 100, and otherwise -- for gamma < 0, for
+# z > 20 and for alpha > 100 -- a quadrature of
+# 2 int_0^Inf u^(alpha-1) exp(-u^2 + z u) du, the normalisation of the
+# density in their Lemma 1a, except at alpha = 1, and at alpha = 2 with
+# gamma > 0, where it takes the closed forms of their Supplementary
+# Lemma 9(c); all are well conditioned.  This mirrors
+# what the C++ implementation in src/mhn_cdf_series.cpp does
+# internally; it is the numerator sum, not Psi, that the audit really
+# exercises.
 #
 # Gamma((alpha + i)/2) is recurred in place via the shift-by-2 identity
 # Gamma((alpha + i + 2)/2) = ((alpha + i)/2) * Gamma((alpha + i)/2);
@@ -138,8 +187,8 @@ cat(sprintf("[cdf_series_accuracy] diag_csv=%s\n", DIAG_CSV))
 # preserves at least ~15 digits per P_i, far more than the 1e-8
 # accuracy threshold we test against; the full mpfr precision is
 # reserved for the outer numerator sum.  Rmpfr::pgamma() at 200 bits
-# is several orders of magnitude slower than base pgamma() and was
-# unfit for the full grid.
+# is several orders of magnitude slower than base pgamma(), too slow
+# for the full grid.
 # -----------------------------------------------------------------------
 log_cdf_series_mpfr <- function(alpha, beta, gamma, x,
                                 prec_bits = PREC_BITS,
@@ -283,9 +332,9 @@ cdf_quad_mpfr <- function(alpha, beta, gamma, x, prec_bits = PREC_BITS,
 
   # Trapezoid with Richardson extrapolation.  `scale` is the length over which
   # the integrand varies; the node count is set from it so that even the
-  # coarsest level resolves the peak.  Sizing the grid by the panel width alone
-  # left the coarse levels unresolved and the extrapolation non-asymptotic,
-  # which cost five digits at alpha = 10 with a narrow peak.
+  # coarsest level resolves the peak.  Sized by the panel width alone, the grid
+  # would leave the coarse levels unresolved and the extrapolation
+  # non-asymptotic, costing five digits at alpha = 10 with a narrow peak.
   romberg <- function(lo, up, scale) {
     if (up <= lo) return(Rmpfr::mpfr(0, prec_bits))
     n0 <- max(64L, min(8192L,
@@ -419,7 +468,7 @@ for (k in seq_len(N)) {
 }
 
 results <- do.call(rbind, rows)
-write.csv(results, RESULT_CSV, row.names = FALSE)
+save_csv(results, RESULT_CSV)
 
 # -----------------------------------------------------------------------
 # Headline diagnostics
@@ -474,8 +523,11 @@ diag <- data.frame(
   ref_reached_max_count = sum(results$ref_reached_max == TRUE, na.rm = TRUE),
   stringsAsFactors = FALSE
 )
-write.csv(diag, DIAG_CSV, row.names = FALSE)
+diag <- with_provenance(diag, RUN)
+save_csv(diag, DIAG_CSV)
 
-cat(sprintf("\n[cdf_series_accuracy] wrote %s\n", RESULT_CSV))
-cat(sprintf("[cdf_series_accuracy] wrote %s\n", DIAG_CSV))
+if (SAVE) {
+  cat(sprintf("\n[cdf_series_accuracy] wrote %s\n", RESULT_CSV))
+  cat(sprintf("[cdf_series_accuracy] wrote %s\n", DIAG_CSV))
+}
 cat(sprintf("[cdf_series_accuracy] total time = %.1fs\n", total_secs))

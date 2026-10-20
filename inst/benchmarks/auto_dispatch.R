@@ -5,26 +5,36 @@
 # vs Sun across a parameter grid and a range of (n_per_call, n_calls)
 # patterns.
 #
-# Grid:    alpha in {0.3, 0.5, 0.7, 0.8, 1, 1.5, 3, 5, 10, 100}  (now spans
-#          the non-log-concave alpha < 1 region, the headline corner)
+# Grid:    alpha in {0.3, 0.5, 0.7, 0.8, 1, 1.5, 3, 5, 10, 100}  (spans the
+#          non-log-concave alpha < 1 region, the headline corner)
 #          gamma in {-100, -10, -2, -0.5, 0.5, 2, 10, 100}      => 80 points
+#
+# The grid starts at alpha = 0.3, so it measures the crossovers of the
+# shipped dispatch for alpha >= 0.3 (5 variates per setup for gamma < 0
+# below alpha = 1 and RTDR at any batch for 1 < alpha < 1e3; for gamma > 0 at
+# a tilt up to 2 sqrt(alpha), 5 or 25 below alpha = 10 and 25 or 50 above,
+# by tilt), but not the crossover of 25 below alpha = 0.1, which a paired
+# timing race of the two samplers reaching alpha = 0.01 measured.  Its
+# largest shape is 100: from alpha = 1e3 the thresholds come from a second
+# race reaching alpha = 1e14.  Neither race is shipped with the package.
 # Patterns (n_per_call m spans setup-dominated to per-proposal-dominated):
 #   A : n_per_call=1     x n_calls=10000  (Gibbs-style, setup dominates)
 #   B..B100 : m = 5,10,25,50,100          (the crossover sweep)
 #   C : n_per_call=10000 x n_calls=1      (batch, per-proposal dominates)
 #
 # alpha < 1 needs NO new sampler: Sun's Algorithm 3 is valid for all alpha > 0
-# when gamma <= 0, so alpha<1, gamma<=0 is a fair rtdr-vs-A3 comparison; and
-# alpha<1, gamma>0 is the corner where Sun would need the deliberately-omitted
-# Algorithm 2, so sun is recorded as sun_incompatible and only rtdr's
-# acceptance (the 1/e floor that anchors the default) is measured there.
+# when gamma <= 0, so alpha<1, gamma<=0 is a fair rtdr-vs-Algorithm-3
+# comparison; and alpha<1, gamma>0 is the corner where Sun would need the
+# deliberately-omitted Algorithm 2, so sun is recorded as sun_incompatible
+# and only rtdr's acceptance (the 1/e floor that anchors the default) is
+# measured there.
 #
 # This is a FAIR, within-C++ comparison: rtdr and sun are both this package's
-# own C++ kernels timed on one machine, so the confound that makes an absolute
-# comparison against Gao & Wang's published R timings meaningless does not
-# apply here.  All timings and acceptance rates below are comparable.
+# own C++ kernels timed on one machine.  Gao & Wang's published timings are
+# not comparable with them (an R implementation on other hardware), but
+# all timings and acceptance rates below are comparable with one another.
 #
-# What it now measures (beyond raw per-pattern times):
+# What it measures besides the raw per-pattern times:
 #   - Acceptance rate for rtdr and sun (machine-independent efficiency).
 #   - A setup / per-proposal cost decomposition per kernel: with the thunk
 #     running k calls of m draws each, median_us = k*(T_setup + m*T_prop), so
@@ -41,32 +51,63 @@
 #   auto_dispatch_diagnostics_<YYYYMMDD>.csv    (per point acceptance + kernel diag)
 #   auto_dispatch_recommendation_<YYYYMMDD>.csv (per point: decomposition,
 #       crossover, measured winner, shipped auto pick, and mismatch flags)
+#   auto_dispatch_provenance_<YYYYMMDD>.csv     (one row: seed, iterations and
+#       the software and machine of the run, from provenance.R)
 #
-# Invocation (from repository root):
-#   Rscript mhn/inst/benchmarks/auto_dispatch.R
+# Invocation:
+#   Rscript <file>
+# where <file> is
+# system.file("benchmarks", "auto_dispatch.R", package = "mhn").
+# The results are written to MHN_BENCH_OUTDIR when it names a directory, and not
+# at all otherwise.
+# Next to them it records the software and machine of the run
+# (provenance.R), for which it runs `R CMD config`, the compiler with
+# `--version`, and `sysctl` on macOS or `lscpu` on Linux.
 #
 # Optional environment variables:
 #   MHN_BENCH_QUICK=1 -> reduce grid and iterations for smoke testing
-#   MHN_BENCH_ITER=N  -> override bench::mark iterations (default 5)
+#   MHN_BENCH_ITER=N  -> override bench::mark iterations (default 50; 2 with
+#                        MHN_BENCH_QUICK=1)
+#   MHN_BENCH_SEED=S  -> RNG seed set before every timing and diagnostic
+#                        (default 1).  Independent runs use different
+#                        seeds.
 #   MHN_BENCH_OUTDIR  -> override output directory
+#   MHN_GIT_COMMIT    -> git commit of the installed package sources, recorded
+#                        in the provenance CSV
 
 suppressPackageStartupMessages({
   if (!requireNamespace("bench", quietly = TRUE))
     stop("auto_dispatch.R requires the 'bench' package. Install via install.packages('bench').")
   if (!requireNamespace("mhn", quietly = TRUE))
-    stop("auto_dispatch.R requires the 'mhn' package. Run R CMD INSTALL mhn first.")
+    stop("auto_dispatch.R requires the 'mhn' package; install it first.")
 })
 
 QUICK <- isTRUE(nchar(Sys.getenv("MHN_BENCH_QUICK")) > 0L)
-# Iterations are set to 50 because iter=5 was noisy enough to randomly
-# invert sun/rtdr decisions, and iter=20 still showed run-to-run flips
-# on 5-12 of 48 borderline cells (especially alpha >= 10, gamma in
-# {2, 10}).  iter=50 keeps relative IQR below 3% on this hardware so
-# that the 10% decision threshold remains meaningful.
+# 50 iterations by default: fewer leave the rtdr/sun ranking of near-tie
+# cells unstable between runs.  Even at 50 the relative IQR of a timing is
+# often several per cent, which is why a decision needs a 10% advantage
+# (DECISION_THRESHOLD).
 BENCH_ITER <- {
   v <- suppressWarnings(as.integer(Sys.getenv("MHN_BENCH_ITER", unset = "")))
   if (is.na(v) || v < 1L) (if (QUICK) 2L else 50L) else v
 }
+SEED <- {
+  v <- suppressWarnings(as.integer(Sys.getenv("MHN_BENCH_SEED", unset = "")))
+  if (is.na(v)) 1L else v
+}
+
+# The provenance helper ships beside this script.
+local({
+  f <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+  here <- if (length(f)) dirname(gsub("~+~", " ", f[1L], fixed = TRUE)) else "."
+  cand <- c(file.path(here, "provenance.R"),
+            system.file("benchmarks", "provenance.R", package = "mhn"))
+  cand <- cand[nzchar(cand) & file.exists(cand)]
+  if (!length(cand))
+    stop("cannot find provenance.R beside this script or in the installed mhn")
+  source(cand[1L], local = FALSE)
+})
+RUN <- provenance_start()
 
 ALPHAS <- if (QUICK) c(0.5, 1, 3) else c(0.3, 0.5, 0.7, 0.8, 1, 1.5, 3, 5, 10, 100)
 GAMMAS <- if (QUICK) c(-10, -0.5, 2) else c(-100, -10, -2, -0.5, 0.5, 2, 10, 100)
@@ -84,8 +125,13 @@ PATTERNS <- list(
 DECISION_THRESHOLD <- 0.10  # require a 10% wall-clock advantage to flip from RTDR to Sun
 
 OUTDIR <- Sys.getenv("MHN_BENCH_OUTDIR", unset = "")
-if (!nzchar(OUTDIR)) OUTDIR <- file.path("mhn", "inst", "benchmarks", "results")
-dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+# The results are written only where MHN_BENCH_OUTDIR names a directory; without
+# it the script prints its summary and writes nothing.
+SAVE <- nzchar(OUTDIR)
+if (SAVE) dir.create(OUTDIR, recursive = TRUE, showWarnings = FALSE)
+save_csv <- function(x, path) {
+  if (SAVE) utils::write.csv(x, path, row.names = FALSE)
+}
 TODAY <- format(Sys.Date(), "%Y%m%d")
 RESULT_CSV <- file.path(OUTDIR, sprintf("auto_dispatch_%s.csv", TODAY))
 DIAG_CSV   <- file.path(OUTDIR, sprintf("auto_dispatch_diagnostics_%s.csv", TODAY))
@@ -96,12 +142,13 @@ PROV_CSV   <- file.path(OUTDIR, sprintf("auto_dispatch_provenance_%s.csv", TODAY
 # winner per call shape, and the shipped auto pick with mismatch flags.
 REC_CSV    <- file.path(OUTDIR, sprintf("auto_dispatch_recommendation_%s.csv", TODAY))
 
-cat(sprintf("[auto_dispatch] mode=%s iterations=%d alpha=%d gamma=%d patterns=%d points=%d\n",
-            if (QUICK) "QUICK" else "FULL", BENCH_ITER,
+cat(sprintf("[auto_dispatch] mode=%s iterations=%d seed=%d alpha=%d gamma=%d patterns=%d points=%d\n",
+            if (QUICK) "QUICK" else "FULL", BENCH_ITER, SEED,
             length(ALPHAS), length(GAMMAS), length(PATTERNS),
             length(ALPHAS) * length(GAMMAS)))
-cat(sprintf("[auto_dispatch] result_csv=%s\n", RESULT_CSV))
-cat(sprintf("[auto_dispatch] diag_csv=%s\n", DIAG_CSV))
+cat(if (SAVE) sprintf("[auto_dispatch] result_csv=%s\n", RESULT_CSV) else
+      "[auto_dispatch] results not saved (set MHN_BENCH_OUTDIR to save them)\n")
+if (SAVE) cat(sprintf("[auto_dispatch] diag_csv=%s\n", DIAG_CSV))
 
 is_special_case <- function(alpha, gamma) {
   EPS <- sqrt(.Machine$double.eps)
@@ -130,14 +177,14 @@ make_thunk <- function(alpha, beta, gamma, method, n_per_call, n_calls) {
   }
 }
 
-bench_one <- function(alpha, gamma, method, pattern_name, pattern, seed = 1L) {
+bench_one <- function(alpha, gamma, method, pattern_name, pattern, seed = SEED) {
   set.seed(seed)
   thunk <- make_thunk(alpha, 1.0, gamma, method, pattern$n_per_call, pattern$n_calls)
   res <- tryCatch(
     # NB: do not pass time_unit = "us" here. That option makes
     # as.numeric(res$median) return microseconds (and collapses
     # as.numeric(res$time) to 0); combined with the `* 1e6` below it
-    # inflated median_us/iqr_us by 1e6. Left as seconds, so the
+    # would inflate median_us/iqr_us by 1e6. Left as seconds, the
     # `* 1e6` conversion yields correct microseconds.
     bench::mark(thunk(), iterations = BENCH_ITER, check = FALSE,
                 filter_gc = FALSE),
@@ -162,7 +209,7 @@ bench_one <- function(alpha, gamma, method, pattern_name, pattern, seed = 1L) {
   )
 }
 
-diagnostics_one <- function(alpha, gamma, n_diag = 10000L, seed = 1L) {
+diagnostics_one <- function(alpha, gamma, n_diag = 10000L, seed = SEED) {
   beta <- 1.0
   spec <- is_special_case(alpha, gamma)
   out <- list(
@@ -170,7 +217,6 @@ diagnostics_one <- function(alpha, gamma, n_diag = 10000L, seed = 1L) {
     rtdr_acc = NA_real_, sun_acc = NA_real_,
     sun_algo = NA_character_, sun_algo1_proposal = NA_character_,
     sun_algo3_used_inflex = NA, sun_algo3_m_init = NA_real_, sun_algo3_m = NA_real_,
-    newton_failure = FALSE, keff_fallback = FALSE,
     rtdr_warning = NA_character_, sun_warning = NA_character_,
     rtdr_error = NA_character_, sun_error = NA_character_,
     notes = ifelse(is.na(spec), "", spec)
@@ -187,17 +233,12 @@ diagnostics_one <- function(alpha, gamma, n_diag = 10000L, seed = 1L) {
       # Keep ONLY the first warning to avoid ballooning the CSV when a
       # particular setup repeatedly emits the same warning.
       if (is.na(out$rtdr_warning)) out$rtdr_warning <<- substr(msg, 1L, 200L)
-      if (grepl("K_eff", msg, fixed = TRUE) || grepl("region.*fallback", msg, ignore.case = TRUE)) {
-        out$keff_fallback <<- TRUE
-      }
       invokeRestart("muffleWarning")
     }
   )
   if (!is.null(rtdr_res)) {
     retries <- attr(rtdr_res, "rtdr_retries")
     if (!is.null(retries)) out$rtdr_acc <- n_diag / (n_diag + as.numeric(retries))
-  } else if (!is.na(out$rtdr_error) && grepl("Newton", out$rtdr_error, ignore.case = TRUE)) {
-    out$newton_failure <- TRUE
   }
 
   algo <- sun_algo_for(alpha, gamma)
@@ -221,8 +262,8 @@ diagnostics_one <- function(alpha, gamma, n_diag = 10000L, seed = 1L) {
         if (!is.null(retries)) out$sun_acc <- n_diag / (n_diag + as.numeric(retries))
       }
       dump <- tryCatch(mhn:::.dump_sun_algo1_cpp(alpha, beta, gamma), error = function(e) NULL)
-      if (!is.null(dump) && !is.null(dump$proposal)) {
-        out$sun_algo1_proposal <- as.character(dump$proposal)
+      if (!is.null(dump) && !is.null(dump$chosen)) {
+        out$sun_algo1_proposal <- as.character(dump$chosen)
       }
     } else if (algo == "algo3") {
       set.seed(seed)
@@ -253,6 +294,10 @@ diagnostics_one <- function(alpha, gamma, n_diag = 10000L, seed = 1L) {
   out
 }
 
+# What the timings of this run recommend under DECISION_THRESHOLD, from the
+# patterns A and B alone.  It is a reading of the data, not the shipped rule,
+# which shipped_auto() below copies and the rule check compares with the
+# package.
 decide_method <- function(rows, alpha, gamma) {
   spec <- is_special_case(alpha, gamma)
   if (!is.na(spec)) return(list(decision = "special", reason = spec))
@@ -314,17 +359,71 @@ crossover_m <- function(rows) {
   if (!length(flip)) return(NA_real_)
   ms[flip[1]]
 }
-# The shipped rmhn(method="auto") pick, mirroring src/mhn_rmhn.cpp.  For a
-# scalar-parameter rmhn(m, ...) call, samples_per_setup == m.
+# Whether RTDR's region-A setup starts its contact points next to the mode
+# (mhn::rtdr_region_a_centred and rtdr_region_a_strong_negative_tilt in
+# src/mhn_rtdr.h), at the tilt z = gamma / sqrt(beta): at z below
+# -1e10 sqrt(alpha), or on its centred path, taken where the magnitudes of
+# the three terms of log f at the mode m sum past 0.01 / DBL_EPSILON, which
+# needs a shape above 1e12 at the tilts the rule consults.  No point of this
+# grid reaches either.
+rtdr_quick <- function(alpha, z) {
+  if (alpha <= 1) return(FALSE)
+  if (z < -1e10 * sqrt(alpha)) return(TRUE)
+  if (alpha <= 1e12) return(FALSE)
+  c <- alpha - 1; d <- sqrt(z * z + 8 * c)
+  m <- if (z >= 0) (z + d) / 4 else 2 * c / (d - z)
+  !((abs(c * log(m)) + m * m + abs(z * m)) * .Machine$double.eps <= 0.01)
+}
+# The shipped rmhn(method="auto") pick, mirroring src/mhn_rmhn.cpp on this
+# grid.  Its rules for the limits of double precision (a shape above 2^59, a
+# tilt -gamma/sqrt(beta) above 1e150, a log-axis mode that rounds to 0, a
+# shape below 1e-15) never apply to the grid's points and are left out.  For
+# a scalar-parameter rmhn(m, ...) call, samples_per_setup == m.  beta = 1 on
+# this grid, so the tilt gamma / sqrt(beta) is gamma.
+# The sampler the installed package uses for rmhn(m, alpha, 1, gamma): the
+# default method draws under one seed what the method it chose would, so its
+# draws are identical to those of that method and not of the other.
+observed_auto <- function(alpha, gamma, m) {
+  draw <- function(method) {
+    set.seed(1)
+    tryCatch(mhn::rmhn(m, alpha, 1, gamma, method = method),
+             error = function(e) NULL)
+  }
+  a <- draw("auto"); r <- draw("rtdr"); s <- draw("sun")
+  if (identical(a, r) && identical(a, s)) return("special")
+  if (identical(a, r)) return("rtdr")
+  if (identical(a, s)) return("sun")
+  NA_character_
+}
+
 shipped_auto <- function(alpha, gamma, m) {
   if (!is.na(is_special_case(alpha, gamma))) return("special")
-  if (gamma > 0.0) return(if (alpha > 1.0) "sun" else "rtdr")
-  # gamma <= 0 (non-special): large batch -> RTDR, except alpha>=10 where
-  # Sun A3's per-proposal cost falls below RTDR's and wins in the batch
-  # regime too.  The "large batch" cutoff is 25, raised to 100 for
-  # alpha<0.1 where the crossover moves right (see src/mhn_rmhn.cpp).
-  n_switch <- if (alpha < 0.1) 100L else 25L
-  if (m >= n_switch && alpha < 10.0) "rtdr" else "sun"
+  sa <- sqrt(alpha)
+  # gamma > 0: RTDR for alpha < 1.  For alpha > 1, RTDR once the tilt is at
+  # most 2 sqrt(alpha) and m reaches the threshold of its shape band and tilt
+  # half, below for a tilt up to sqrt(alpha), above for one up to
+  # 2 sqrt(alpha): 5 / 25 (alpha < 10), 25 / 50 (alpha < 1e3), 50 / 100
+  # (alpha < 1e8) or 100 / 1000, and 5 / 25 where RTDR's setup starts next
+  # to the mode; Sun Algorithm 1 otherwise, whose closed-form setup wins
+  # single draws and whose draw wins at strong tilts.
+  if (gamma > 0.0) {
+    if (alpha < 1.0) return("rtdr")
+    if (gamma > 2 * sa) return("sun")
+    t <- if (alpha < 10 || rtdr_quick(alpha, gamma)) c(5L, 25L)
+         else if (alpha < 1e3) c(25L, 50L)
+         else if (alpha < 1e8) c(50L, 100L) else c(100L, 1000L)
+    return(if (m >= t[if (gamma <= sa) 1L else 2L]) "rtdr" else "sun")
+  }
+  # gamma < 0: RTDR once m reaches 25 (alpha < 0.1) or 5 (0.1 <= alpha < 1),
+  # at any m for 1 < alpha < 1e3, where RTDR won every m timed from
+  # alpha = 1.5 to 100, and from 10 (alpha < 1e5), 25 (alpha < 1e8) or 50
+  # draws above, where RTDR's setup walks its contact points in, unless it
+  # starts next to the mode; Sun Algorithm 3 below those batch sizes (see
+  # src/mhn_rmhn.cpp).
+  n_switch <- if (alpha < 0.1) 25L else if (alpha < 1.0) 5L
+              else if (alpha < 1e3) 1L else if (alpha < 1e5) 10L
+              else if (alpha < 1e8) 25L else 50L
+  if (m >= n_switch || rtdr_quick(alpha, gamma)) "rtdr" else "sun"
 }
 agree <- function(pick, measured) {
   if (pick == "special" || is.na(measured)) return(NA)
@@ -390,20 +489,19 @@ for (alpha in ALPHAS) {
     diag_rows[[length(diag_rows) + 1L]]   <- as.data.frame(diag_row, stringsAsFactors = FALSE)
     rec_rows[[length(rec_rows) + 1L]]     <- recommend_one(rows_df, diag_row, alpha, gamma)
 
-    cat(sprintf("decision=%s (%s) rtdr_acc=%s sun_acc=%s newton_fail=%s keff_fb=%s\n",
+    cat(sprintf("decision=%s (%s) rtdr_acc=%s sun_acc=%s\n",
                 dec$decision, dec$reason,
                 formatC(diag_row$rtdr_acc, digits = 3, format = "f"),
-                formatC(diag_row$sun_acc,  digits = 3, format = "f"),
-                diag_row$newton_failure, diag_row$keff_fallback))
+                formatC(diag_row$sun_acc,  digits = 3, format = "f")))
   }
 }
 
 bench_df <- do.call(rbind, bench_rows)
 diag_df  <- do.call(rbind, diag_rows)
 rec_df   <- do.call(rbind, rec_rows)
-write.csv(bench_df, RESULT_CSV, row.names = FALSE)
-write.csv(diag_df,  DIAG_CSV,   row.names = FALSE)
-write.csv(rec_df,   REC_CSV,    row.names = FALSE)
+save_csv(bench_df, RESULT_CSV)
+save_csv(diag_df,  DIAG_CSV)
+save_csv(rec_df,   REC_CSV)
 
 t_end <- Sys.time()
 elapsed_min <- as.numeric(difftime(t_end, t_start, units = "mins"))
@@ -437,15 +535,26 @@ if (nrow(mm_g) || nrow(mm_b)) {
 } else {
   cat("  No mismatches: the shipped dispatch rule agrees with the measured optimum.\n")
 }
-cat("\n[Empirical crossover m (rtdr<->sun winner flips)]  (general, gamma<=0)\n")
-xo <- gen[gen$gamma <= 0 & !is.na(gen$crossover_m), c("alpha","gamma","winner_gibbs","crossover_m","winner_batch")]
+cat("\n[Empirical crossover m (rtdr<->sun winner flips)]  (general)\n")
+xo <- gen[!is.na(gen$crossover_m), c("alpha","gamma","winner_gibbs","crossover_m","winner_batch")]
 if (nrow(xo)) print(xo, row.names = FALSE) else cat("  (no crossover cells; one kernel wins throughout)\n")
 
-cat("\n[Carry-over verification]\n")
-cat(sprintf("  Newton failures              : %d / %d points\n",
-            sum(diag_df$newton_failure, na.rm = TRUE), nrow(diag_df)))
-cat(sprintf("  K_eff fallbacks fired        : %d / %d points\n",
-            sum(diag_df$keff_fallback, na.rm = TRUE), nrow(diag_df)))
+cat("\n[Rule check: shipped_auto() against the installed package]\n")
+rule_check <- do.call(rbind, lapply(seq_len(nrow(diag_df)), function(i) {
+  a <- diag_df$alpha[i]; g <- diag_df$gamma[i]
+  do.call(rbind, lapply(PATTERNS, function(p) {
+    m <- p$n_per_call
+    data.frame(alpha = a, gamma = g, m = m, copied = shipped_auto(a, g, m),
+               observed = observed_auto(a, g, m), stringsAsFactors = FALSE)
+  }))
+}))
+mismatch <- rule_check[rule_check$copied != rule_check$observed &
+                         !is.na(rule_check$observed), , drop = FALSE]
+cat(sprintf("  cells x patterns compared: %d, mismatches: %d\n",
+            nrow(rule_check), nrow(mismatch)))
+if (nrow(mismatch)) print(mismatch, row.names = FALSE)
+
+cat("\n[Acceptance]\n")
 algo1_idx <- diag_df$sun_algo == "algo1" & diag_df$alpha %in% c(1.5, 3) & !is.na(diag_df$sun_acc)
 cat(sprintf("  Algo1 alpha in {1.5,3} acc>=0.5 : %d / %d cases\n",
             sum(diag_df$sun_acc[algo1_idx] >= 0.5, na.rm = TRUE), sum(algo1_idx)))
@@ -463,6 +572,8 @@ cat(sprintf("  Algo3 used_inflex (alpha>1.1)   : TRUE=%d FALSE=%d (of %d)\n",
 # -----------------------------------------------------------------------
 `%||%` <- function(a, b) if (is.null(a)) b else a
 si <- sessionInfo()
+# elapsed_min is the span of the grid loop; the start_time and end_time that
+# with_provenance() appends span the whole script.
 prov <- data.frame(
   timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
   r_version = paste(R.version$major, R.version$minor, sep = "."),
@@ -474,12 +585,11 @@ prov <- data.frame(
   iterations = BENCH_ITER,
   grid_points = nrow(diag_df),
   elapsed_min = round(elapsed_min, 2),
+  seed = SEED,
   stringsAsFactors = FALSE
 )
-write.csv(prov, PROV_CSV, row.names = FALSE)
+prov <- with_provenance(prov, RUN)
+save_csv(prov, PROV_CSV)
 
-cat(sprintf("\nResults written to:\n  %s\n  %s\n  %s\n  %s\n",
-            RESULT_CSV, DIAG_CSV, REC_CSV, PROV_CSV))
-cat("\nNext step: inspect the decision matrix above and update the auto path\n")
-cat("in mhn/src/mhn_rmhn.cpp / R/rmhn.R.  The auto-vs-forced equivalence\n")
-cat("regression block in tests/testthat/test-rmhn.R guards the dispatch rule.\n")
+if (SAVE) cat(sprintf("\nResults written to:\n  %s\n  %s\n  %s\n  %s\n",
+                      RESULT_CSV, DIAG_CSV, REC_CSV, PROV_CSV))

@@ -7,9 +7,9 @@
 // triple at element i depends only on i modulo L = lcm(na, nb, ng): the same L
 // triples repeat for the whole call.  A single most-recently-used cache hits
 // only when consecutive elements agree, which they do not under recycling --
-// dmhn(x, alpha = c(a1, a2)) alternates, so every element missed and every
-// element recomputed the Fox-Wright normalising constant, the most expensive
-// quantity in the package.  Keeping one slot per residue turns that into L
+// dmhn(x, alpha = c(a1, a2)) alternates, so every element would miss and
+// recompute the Fox-Wright normalising constant, the most expensive quantity
+// in the package.  Keeping one slot per residue turns that into L
 // computations for the whole call however long it is.
 //
 // The stored triple is compared before a slot is reused.  Under recycling that
@@ -18,7 +18,7 @@
 //
 // L is capped: it is a least common multiple and can run to millions for
 // coprime lengths, while the whole point is to hold a small table.  Past the cap
-// the class keeps a single slot and behaves exactly as the previous code did.
+// the class keeps a single most-recently-used slot.
 
 #include <Rcpp.h>
 #include <algorithm>

@@ -3,20 +3,9 @@
 ^\..*\.user$
 ^\.Rproj\.user$
 ^.*\.Rproj$
-# Exclude every benchmark / audit result CSV EXCEPT the
-# `cdf_series_accuracy_<date>.csv` one, which the testthat regression
-# in tests/testthat/test-pmhn.R loads at test time.
-^inst/benchmarks/results/auto_dispatch_.*$
-^inst/benchmarks/results/replicate_gw_tables_.*$
-^inst/benchmarks/results/rmhn_gof_.*$
-^inst/benchmarks/results/dispatch_crossrun_.*$
-^inst/benchmarks/results/rtdr_sun_race_.*$
-^inst/audits/results/series_breakdown_audit_.*$
-^inst/audits/results/cdf_series_accuracy_diagnostics_.*$
+^inst/benchmarks/results$
+^inst/audits/results$
 (^|/)\.DS_Store$
-# iCloud Drive duplicates a file as "name 2.ext" on a sync conflict, and this
-# project lives under a synced Desktop.  Belt and braces: even if one is
-# created and tracked, it must not reach the tarball.
 ^.* [0-9]$
 ^.* [0-9]\.
 ^.*\.tar\.gz$
@@ -25,11 +14,8 @@
 ^LICENSE\.md$
 ^doc$
 ^Meta$
-# Empty-directory placeholders for git; not needed in the tarball.
 ^.*\.gitkeep$
-# GitHub-hosted CI configuration; not part of the CRAN tarball.
 ^\.github$
-# Notes addressed to the CRAN reviewer; not part of the installed package.
 ^cran-comments\.md$
 ^_pkgdown\.yml$
 ^docs$

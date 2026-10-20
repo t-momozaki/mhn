@@ -10,30 +10,6 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// check_mhn_params_R
-SEXP check_mhn_params_R(SEXP alpha, SEXP beta, SEXP gamma);
-RcppExport SEXP _mhn_check_mhn_params_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::traits::input_parameter< SEXP >::type alpha(alphaSEXP);
-    Rcpp::traits::input_parameter< SEXP >::type beta(betaSEXP);
-    Rcpp::traits::input_parameter< SEXP >::type gamma(gammaSEXP);
-    rcpp_result_gen = Rcpp::wrap(check_mhn_params_R(alpha, beta, gamma));
-    return rcpp_result_gen;
-END_RCPP
-}
-// convert_to_gw_R
-Rcpp::List convert_to_gw_R(double alpha, double beta, double gamma);
-RcppExport SEXP _mhn_convert_to_gw_R(SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
-    Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
-    Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
-    rcpp_result_gen = Rcpp::wrap(convert_to_gw_R(alpha, beta, gamma));
-    return rcpp_result_gen;
-END_RCPP
-}
 // dmhn_cpp
 Rcpp::NumericVector dmhn_cpp(Rcpp::NumericVector x, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector gamma, bool log_p);
 RcppExport SEXP _mhn_dmhn_cpp(SEXP xSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP log_pSEXP) {
@@ -45,6 +21,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type gamma(gammaSEXP);
     Rcpp::traits::input_parameter< bool >::type log_p(log_pSEXP);
     rcpp_result_gen = Rcpp::wrap(dmhn_cpp(x, alpha, beta, gamma, log_p));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fma_soft_R
+Rcpp::NumericVector fma_soft_R(Rcpp::NumericVector x, Rcpp::NumericVector y, Rcpp::NumericVector z);
+RcppExport SEXP _mhn_fma_soft_R(SEXP xSEXP, SEXP ySEXP, SEXP zSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type z(zSEXP);
+    rcpp_result_gen = Rcpp::wrap(fma_soft_R(x, y, z));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -192,17 +180,18 @@ BEGIN_RCPP
 END_RCPP
 }
 // rmhn_cpp
-Rcpp::NumericVector rmhn_cpp(int n, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector gamma, std::string method);
-RcppExport SEXP _mhn_rmhn_cpp(SEXP nSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP methodSEXP) {
+Rcpp::NumericVector rmhn_cpp(double n, Rcpp::NumericVector alpha, Rcpp::NumericVector beta, Rcpp::NumericVector gamma, std::string method, int max_retries);
+RcppExport SEXP _mhn_rmhn_cpp(SEXP nSEXP, SEXP alphaSEXP, SEXP betaSEXP, SEXP gammaSEXP, SEXP methodSEXP, SEXP max_retriesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< double >::type n(nSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type beta(betaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type gamma(gammaSEXP);
     Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
-    rcpp_result_gen = Rcpp::wrap(rmhn_cpp(n, alpha, beta, gamma, method));
+    Rcpp::traits::input_parameter< int >::type max_retries(max_retriesSEXP);
+    rcpp_result_gen = Rcpp::wrap(rmhn_cpp(n, alpha, beta, gamma, method, max_retries));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -332,11 +321,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// vanishing_log_D
+double vanishing_log_D(double z);
+RcppExport SEXP _mhn_vanishing_log_D(SEXP zSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< double >::type z(zSEXP);
+    rcpp_result_gen = Rcpp::wrap(vanishing_log_D(z));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_mhn_check_mhn_params_R", (DL_FUNC) &_mhn_check_mhn_params_R, 3},
-    {"_mhn_convert_to_gw_R", (DL_FUNC) &_mhn_convert_to_gw_R, 3},
     {"_mhn_dmhn_cpp", (DL_FUNC) &_mhn_dmhn_cpp, 5},
+    {"_mhn_fma_soft_R", (DL_FUNC) &_mhn_fma_soft_R, 3},
     {"_mhn_mhn_mode_cpp", (DL_FUNC) &_mhn_mhn_mode_cpp, 3},
     {"_mhn_mhn_mean_cpp", (DL_FUNC) &_mhn_mhn_mean_cpp, 3},
     {"_mhn_mhn_var_cpp", (DL_FUNC) &_mhn_mhn_var_cpp, 3},
@@ -348,7 +346,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mhn_psi_series_R", (DL_FUNC) &_mhn_psi_series_R, 4},
     {"_mhn_psi_integrate_R", (DL_FUNC) &_mhn_psi_integrate_R, 4},
     {"_mhn_qmhn_cpp", (DL_FUNC) &_mhn_qmhn_cpp, 6},
-    {"_mhn_rmhn_cpp", (DL_FUNC) &_mhn_rmhn_cpp, 5},
+    {"_mhn_rmhn_cpp", (DL_FUNC) &_mhn_rmhn_cpp, 6},
     {"_mhn_rmhn_rtdr_cpp", (DL_FUNC) &_mhn_rmhn_rtdr_cpp, 4},
     {"_mhn_dump_rtdr_envelope_cpp", (DL_FUNC) &_mhn_dump_rtdr_envelope_cpp, 3},
     {"_mhn_rtdr_contact_point_newton_test_cpp", (DL_FUNC) &_mhn_rtdr_contact_point_newton_test_cpp, 5},
@@ -359,6 +357,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_mhn_rmhn_sun_algo3_cpp", (DL_FUNC) &_mhn_rmhn_sun_algo3_cpp, 4},
     {"_mhn_dump_sun_algo3_cpp", (DL_FUNC) &_mhn_dump_sun_algo3_cpp, 3},
     {"_mhn_rtnorm_robert_cpp", (DL_FUNC) &_mhn_rtnorm_robert_cpp, 3},
+    {"_mhn_vanishing_log_D", (DL_FUNC) &_mhn_vanishing_log_D, 1},
     {NULL, NULL, 0}
 };
 

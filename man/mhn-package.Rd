@@ -16,19 +16,27 @@ Modified Half-Normal (MHN) distribution.
 The MHN distribution has probability density function
 \deqn{f(x \mid \alpha, \beta, \gamma) =
   \frac{2\beta^{\alpha/2} x^{\alpha-1}
-  \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}}
-for \eqn{x > 0}, where \eqn{\Psi[a, z]} is the Fox-Wright Psi function.
+  \exp(-\beta x^2 + \gamma x)}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}}{
+  f(x | alpha, beta, gamma) = 2 beta^(alpha/2) x^(alpha-1)
+  exp(-beta x^2 + gamma x) / Psi[alpha/2, gamma/sqrt(beta)]}
+for \eqn{x > 0}, where
+\eqn{\Psi[a, z] = \sum_{n \ge 0} \Gamma(a + n/2) z^n / n!}{Psi[a, z] =
+sum_{n >= 0} Gamma(a + n/2) z^n / n!} is the Fox-Wright function
+\eqn{{}_1\Psi_1[(a, 1/2); (1, 0); z]}{1Psi1[(a, 1/2); (1, 0); z]}.
 }
 
 \section{Parameters}{
 
 \describe{
 \item{\code{alpha}}{Shape parameter (\eqn{\alpha > 0}).
-Controls the \eqn{x^{\alpha-1}} term.}
-\item{\code{beta}}{Scale (rate) parameter (\eqn{\beta > 0}).
-Controls the \eqn{\exp(-\beta x^2)} term.}
-\item{\code{gamma}}{Location (skewness) parameter (\eqn{\gamma \in R}).
-Controls the \eqn{\exp(\gamma x)} term.}
+Controls the \eqn{x^{\alpha-1}}{x^(alpha-1)} term.}
+\item{\code{beta}}{Rate-type parameter (\eqn{\beta > 0}).
+Controls the Gaussian tail \eqn{\exp(-\beta x^2)}{exp(-beta x^2)};
+larger values pull mass toward zero.}
+\item{\code{gamma}}{Tilt parameter (\eqn{\gamma \in R}{gamma in R}).
+Controls the exponential tilt \eqn{\exp(\gamma x)}{exp(gamma x)};
+larger values move mass away from zero, but \eqn{\gamma} does not
+translate the law, whose support stays \eqn{(0, \infty)}{(0, Inf)}.}
 }
 }
 
@@ -36,30 +44,35 @@ Controls the \eqn{\exp(\gamma x)} term.}
 
 \describe{
 \item{\eqn{\gamma = 0}}{Square-root Gamma distribution
-(\eqn{X^2 \sim \textrm{Gamma}(\alpha/2, \beta)})
-(Sun et al., 2023, Lemma 6a).}
+(\eqn{X^2 \sim
+    \textrm{Gamma}(\alpha/2, \beta)}{X^2 ~ Gamma(alpha/2, beta)}, with rate
+\eqn{\beta}{beta})
+(Sun et al. 2023, Lemma 6a).}
 \item{\eqn{\alpha = 1}}{Truncated normal distribution
-\eqn{\textrm{TN}(\gamma/(2\beta), 1/\sqrt{2\beta}, 0, \infty)}
-(Sun et al., 2023, Lemma 6b).}
+\eqn{\textrm{TN}(\gamma/(2\beta),
+    1/\sqrt{2\beta}, 0, \infty)}{TN(gamma/(2 beta), 1/sqrt(2 beta), 0, Inf)}
+(Sun et al. 2023, Lemma 6b).}
 \item{\eqn{\alpha = 1, \gamma = 0}}{Half-normal distribution
-\eqn{\textrm{HN}(1/\sqrt{2\beta})}
-(Sun et al., 2023, Lemma 6c).}
+\eqn{\textrm{HN}(1/\sqrt{2\beta})}{HN(1/sqrt(2 beta))}
+(Sun et al. 2023, Lemma 6c).}
 }
 }
 
-\section{References}{
-
+\references{
 Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal distribution:
 Properties and an efficient sampling scheme.
-\emph{Communications in Statistics - Theory and Methods}, 52(5), 1591-1613.
-\doi{10.1080/03610926.2021.1934700}
+\emph{Communications in Statistics - Theory and Methods}, 52(5),
+1591--1613. \doi{10.1080/03610926.2021.1934700}
 
-Gao, F. & Wang, H.-B. (2025). Generating modified-half-normal random
+Gao, F., & Wang, H.-B. (2025). Generating modified-half-normal random
 variates by a relaxed transformed density rejection method.
-\emph{Communications in Statistics - Simulation and Computation}.
-\doi{10.1080/03610918.2025.2524551}
-}
+\emph{Communications in Statistics - Simulation and Computation}, 1--25.
+Advance online publication. \doi{10.1080/03610918.2025.2524551}
 
+Robert, C. P. (1995). Simulation of truncated normal variables.
+\emph{Statistics and Computing}, 5(2), 121--125.
+\doi{10.1007/BF00143942}
+}
 \seealso{
 Useful links:
 \itemize{
@@ -70,7 +83,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Tomotaka Momozaki \email{momozaki.stat@gmail.com}
+\strong{Maintainer}: Tomotaka Momozaki \email{momozaki.stat@gmail.com} (\href{https://orcid.org/0000-0001-6735-0804}{ORCID})
 
 }
 \keyword{internal}

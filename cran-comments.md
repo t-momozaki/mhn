@@ -1,167 +1,172 @@
-# CRAN submission comments — mhn 0.1.1
+# CRAN submission comments — mhn 0.1.2
 
 Maintainer: Tomotaka Momozaki <momozaki.stat@gmail.com>
 
-This is a bug-fix release, updating the currently published version 0.1.0 (on
-CRAN since 2026-05-18). It is not a new submission. It fixes a number of
-numerical defects reachable from the public API, most of which returned a wrong
-number silently rather than raising an error. See "Changes in this version"
-below; `NEWS.md` gives the full list with the parameter values at which each
-failed.
+This is an update of mhn 0.1.1, which has been on CRAN since 2026-09-23. It
+is mainly a bug-fix release; no exported function gains or loses an argument,
+and no argument's default value changes.
 
-## Test environments
+## Why an update so soon after 0.1.1
 
-All of the results below were obtained on the tarball this file accompanies.
+0.1.1 returns wrong values without a warning in several places, some of them
+at ordinary parameter values, and a few of these came with 0.1.1 itself.
+Run on 2026-10-21 with the published 0.1.1 and with this version, against
+independent references (arbitrary-precision computations, or the exact Gamma
+law the distribution approaches):
 
-* local macOS 26.5.2 (Darwin 25.5.0), aarch64-apple-darwin20, R 4.5.1
-  (2025-06-13) — Apple clang 17.0.0. `R CMD check --as-cran` on the built
-  `mhn_0.1.1.tar.gz`. Result below.
+* `mhn_kurtosis(0.3, 1, sqrt(10))` returns -0.55609 where the excess kurtosis
+  is -0.55730 (0.1.0 was right), and `mhn_kurtosis(1000, 1, 0)` returns
+  -0.627 where it is 7.5e-7.
+* `pmhn(2e-9, 3, 1, -1e8)` returns 0.0175 where the true value is 0.00115: the
+  distribution is Gamma(3, rate 1e8) to within 1e-11 there, and 0.1.1 is wrong
+  whenever the mode or the quantile of a strongly tilted law lies below about
+  1.5e-8. `qmhn(0.2, 3, 1, -3e8)` returns 8.56e-9 instead of 5.12e-9.
+* `pmhn(q, 3, 1, 10, lower.tail = FALSE, log.p = TRUE)` at the 1e-10 quantile
+  returns -1.000195e-10 instead of -1e-10 (0.1.0 was right).
 
-* win-builder, via `devtools::check_win_devel()`, `check_win_release()` and
-  `check_win_oldrelease()` — **all three Status: OK** (0 errors, 0 warnings,
-  0 notes):
-    * R-devel   — R Under development (unstable) (2026-09-15 r90540 ucrt)
-    * R-release — R 4.6.1 (2026-06-24 ucrt)
-    * R-oldrel  — R 4.5.3 (2026-03-11 ucrt)
-
-* GitHub Actions R-CMD-check matrix: ubuntu-latest (R-devel, R-release,
-  R-oldrel-1), macos-latest (R-release), windows-latest (R-release) — **all
-  five green**. Worth noting because it is a stricter run than the others:
-  r-lib's workflow sets `NOT_CRAN=true`, so the 40 `skip_on_cran()` blocks
-  execute there as well and the full suite runs: 9268 expectations pass with
-  none skipped.
-
-* R-hub v2 on `linux` (R-devel), `windows` (R-devel), `macos-arm64` (R-devel),
-  `clang-asan`, `valgrind` and `rchk`: **five of the six pass** — linux,
-  windows, macos-arm64, clang-asan and valgrind. Valgrind's own report is
-  clean: `ERROR SUMMARY: 0 errors from 0 contexts`, `definitely lost: 0 bytes
-  in 0 blocks`.
-
-  As in 0.1.0, only `rchk` reports a problem, and it is the long-known Rcpp
-  `Shield<T>` RAII false positive: the only `[PB]`/`[UP]` findings are against
-  `Rcpp/include/Rcpp/protection/Shield.h:25` and `:31` ("has possible
-  protection stack imbalance", "unsupported form of unprotect with a
-  variable"), accompanied by rchk's own "address taken, results will be
-  incomplete" limitation notes on the Rcpp-generated wrappers. **No mhn
-  function is flagged with a protection bug** — the count of mhn-side
-  protection findings in the run log is zero.
-
-## R CMD check results
-
-Local `R CMD check --as-cran` on R 4.5.1 (macOS) on the submitted tarball
-reports
-
-  0 errors | 0 warnings | 1 note
-
-On win-builder the package is fully clean on all three R versions — 0 errors,
-0 warnings and 0 notes — so the note below is local tooling only.
-
-### NOTE — `checking HTML version of manual`
-
-`'tidy' doesn't look like recent enough HTML Tidy` and `package 'V8'
-unavailable`. The local machine lacks a recent HTML Tidy and the `V8` package;
-CRAN's machines have both, and win-builder does not raise this note.
-
-A second note, `checking for future file timestamps`, appears on runs where the
-machine cannot reach the remote clock service; it did not appear on this run.
-
-### Possible `checking CRAN incoming feasibility` note on the update
-
-CRAN's own incoming-feasibility check may flag "Possibly misspelled words in
-DESCRIPTION". These are not misspellings:
-
-* "Gao" is the surname of one of the cited authors (Gao & Wang, 2025; the
-  `Description` field carries the DOI `<doi:10.1080/03610918.2025.2524551>`).
-* "MHN" is the standard acronym for the Modified Half-Normal distribution
-  the package provides; it is defined inline in the `Description`
-  ("Modified Half-Normal (MHN)").
-
-(The "RTDR" acronym flagged in 0.1.0 no longer appears: the `Description`
-now spells out "relaxed transformed density rejection method".)
+The sampler is affected as well: in 0.1.1, `rmhn()` returns `NaN` draws from
+Sun et al.'s Algorithm 3 once `beta` exceeds about 1e24 (1998 of the 2000
+draws of `rmhn(2000, 50, 1e30, -3e15, method = "sun")`), and for `alpha < 1`
+from a standardised tilt of about 1e13 draws that fall on a coarse lattice
+(32 distinct values in `rmhn(20000, 0.7, 1, 1e14)`, against 559 in this
+version).
 
 ## Changes in this version
 
-A bug-fix release. `NEWS.md` lists the fixes individually; the summary below is
-what a reviewer or user would notice.
+`NEWS.md` lists every change against 0.1.1, with the values at which each
+defect appeared, the effect on seeded draws, and the speed changes. In
+outline:
 
-* **`rmhn()` is not seed-compatible with 0.1.0.** Over a grid of 330 parameter
-  triples, 163 return a different sequence of draws for a fixed seed. Where
-  0.1.0 sampled the wrong law --- `alpha < 1` with `gamma > 0`, and again with
-  `gamma` above roughly 100, where a Kolmogorov-Smirnov test of the old sample
-  against the true distribution gives `p = 0` --- the old draws are invalid.
-  Elsewhere the law was already correct and only the realisation moves, because
-  correcting a constant in a rejection sampler's envelope changes which variates
-  are proposed and accepted. `NEWS.md` gives the measured breakdown.
+* **Moments and mode.** Skewness and kurtosis at a large shape and for
+  `alpha < 1` with an interior peak; the variance near `alpha = 1` and `2`, at
+  a strong tilt and at a large shape; the mean at a large shape and under a
+  strong negative tilt; the mean and variance where they crossed the bounds
+  of Sun et al.'s Lemma 4 next to `alpha = 1`, and the mean where it crossed
+  them under a strong negative tilt; the mode at the boundary of Sun et al.'s
+  Lemma 3c.
+* **Density, distribution and quantile.** The normalising constant at a large
+  shape and a strong tilt; `pmhn()` for a tiny mode or quantile, far from the
+  peak, and for log tails close to zero; `qmhn()` for tiny probabilities and
+  for upper-tail probabilities close to 1; the square-root-Gamma and
+  truncated-normal special cases near the origin, and the shapes and tilts
+  within 1.5e-8 of them, which 0.1.1 answered as the special cases.
+* **Random generation.** Sun et al.'s Algorithms 1 and 3 at extreme shape,
+  scale and tilt; exact zeros from underflowing Gamma variates at small
+  shapes; the RTDR sampler at a steep tilt, when the mode is tiny, and from
+  a shape of about 3e15 under a tilt near `-alpha / e`. The
+  default method's choice between the samplers was re-derived from new
+  timings, which include shapes up to 1e14 and single draws within one
+  vectorised call, so for a fixed seed its draws change where it now picks
+  another sampler (`NEWS.md`, Seeded draws).
+* **Edges of the double range.** Where 0.1.1 stopped with an internal error
+  message (`std::bad_alloc`, quadrature-library errors) or returned a wrong
+  finite number at extreme parameter values, the functions now return the
+  value of the exact or limiting law, or `NA`, `NaN` or an error that says
+  why. The help pages of `dmhn()`, `pmhn()` and `qmhn()` state the range
+  over which their results are accurate and what is returned beyond it, and
+  that of `rmhn()` which laws it can sample in double precision.
+* **Speed.** Most functions are as fast as in 0.1.1 or faster, several by
+  orders of magnitude at a strong tilt or a large shape. Some paths are
+  slower, as `NEWS.md` details with the triples measured. The log upper tail
+  of `pmhn()` where the upper tail alone would lose its relative accuracy
+  (below a lower-tail probability of about 1e-5 at ordinary parameters) now
+  also evaluates the lower tail, and costs about what the lower tail costs.
+  Where that is the series of Sun et al., whose length grows like `gamma^2 /
+  beta` and with the shape, it takes per value, for lower-tail probabilities
+  from 1e-6 to 1e-4, from about 2 to about 80 times as long as 0.1.1 at the
+  triples measured, the ratio growing with `|gamma| / sqrt(beta)` towards 20
+  and with the shape (47 against 1.1 microseconds at `(0.5, 1, 19.5)`, 90
+  against 1.2 at `(85, 1, -19)`); where it is a quadrature, up to about 2
+  times. 0.1.1 is faster there because it takes the logarithm of the upper
+  tail alone, whose relative error reaches 0.16. The upper-tail quantile of
+  a probability within about 7e-4 of 1, whose root is refined on the lower
+  tail, takes 1.3 to 2.6 times as long for `|gamma| / sqrt(beta)` from 15 to
+  19.5, 2 to 4 times at shapes from 50 to 85, and at most 1.15 times
+  elsewhere. A shape or tilt just off `alpha = 1` or `gamma = 0` now costs
+  the general case; the lower tail of `pmhn()` below the median takes up to
+  8% longer at some parameters with `|gamma| / sqrt(beta)` up to 20; and a
+  single `dmhn()` call with scalar arguments takes up to about 0.1
+  microseconds longer. In the timings behind the default sampler choice of
+  `rmhn()`, the sampler it now picks is at most 2.3% slower than the one
+  0.1.1 picks, except at `alpha = 1.5` with
+  `gamma / sqrt(beta) = 2 * sqrt(alpha)`, where it is up to 5.4% slower.
+* **Dependencies.** `Imports` and `LinkingTo` ask for `Rcpp (>= 1.0.13)`,
+  the first version whose `List::create()` takes more than 20 elements (0.1.1
+  asked for 1.0.7 in `Imports` and for any version in `LinkingTo`); with
+  Rcpp 1.0.12 the package does not compile. `Suggests` asks for
+  `testthat (>= 3.1.5)`, which added `expect_no_error()`.
+* **Documentation.** The 0.1.1 NEWS and theory vignette attributed to Sun et
+  al. (2023) two misprints their article does not contain; both are
+  corrected, and the vignette and NEWS list the six misprints it does
+  contain in the results the package computes. `citation("mhn")` gives the
+  package's DOI.
+* **Scripts under `inst/`.** The result files that 0.1.1 installed under
+  `benchmarks/results` and `audits/results` are no longer part of the
+  package. The benchmark and audit scripts and the example write their
+  results only to a directory named by an environment variable and
+  otherwise only print a summary; none of them runs during `R CMD check` or
+  needs the network.
 
-* **The sampler's envelope no longer depends on the platform at a steep tilt.**
-  Above a standardised tilt `gamma / sqrt(beta)` of about 1e8 the envelope
-  construction was decided by the last bit of `exp()`, and the same input gave
-  different answers on different operating systems. All three envelope regions
-  carried it, including the one the default path uses for `alpha < 1/2` with a
-  positive tilt. Draws below `gamma / sqrt(beta) = 5e6` are bit-identical to
-  0.1.0 --- which covers the whole of the 330-cell grid above, whose largest
-  tilt is 1e7 --- and above it they change, with the new ones matching the
-  distribution's exact Gaussian limit: the Kolmogorov-Smirnov statistic is
-  0.004 where the old code reached 1.000, and the sample standard deviation is
-  within 0.5% of the truth where it had been 1593 times too large. The
-  acceptance rate, which Gao & Wang bound below by `1/e`, is now flat at 0.85
-  to 0.88 across the range, where it had fallen to 0.001.
+## Test environments
 
-* **The density, distribution, quantile and moment functions return corrected
-  values at extreme parameters.** `dmhn()` and `pmhn()` returned 0 for `alpha`
-  near 2 with a large tilt; for `gamma > 0` past a moderate tilt `pmhn()`
-  raised a series-truncation error rather than answering, on parameter sets as
-  ordinary as `(2.5, 1e-4, 20)`; `pmhn()` returned exactly 0 in the upper tail
-  below 1e-16; `qmhn()` was wrong by 23 orders of magnitude for small `alpha`;
-  `mhn_kurtosis()` returned a value below its theoretical minimum. Values also
-  move slightly inside the ordinary range --- 30 of 130 grid cells with
-  `|gamma|/sqrt(beta)` at most 10, by at most 7.9e-6 relative --- because the
-  Lemma 2c variance already cancels measurably there. In every case checked
-  against an arbitrary-precision reference the new value is the accurate one.
+All runs below use the tarball built from the submitted sources, or, where
+marked, an earlier candidate whose compiled code is identical (the later
+changes are to comments, documentation, test descriptions, `DESCRIPTION`
+and `inst/CITATION`).
 
-* **Three interface behaviours now match base R.** `dmhn()`/`pmhn()` returned
-  `NA` for a `NaN` input where the `d`/`p`/`q` family returns `NaN`; `rmhn()`
-  read a vector `n` as `n[1]` rather than `length(n)`; and `pmhn()`/`qmhn()`
-  tested `lower.tail` and `log.p` more strictly than base R tests them, so
-  `pmhn(1, 2, 1, 1, lower.tail = 1)` returned the upper tail.
+* macOS Tahoe 26.5.2, aarch64-apple-darwin23, R 4.6.1 (2026-06-24), Apple
+  clang 17.0.0: `R CMD build`, then `R CMD check --as-cran` of
+  `mhn_0.1.2.tar.gz`, with the remote incoming checks (2026-10-21). Also the
+  whole test suite on a build with `-ffp-contract=fast`, which lets the
+  compiler fuse a multiplication and an addition across statements, as GCC
+  does by default on targets with a fused multiply-add (earlier candidate).
+* macOS, R 4.5.1, with the lower bounds of the dependencies, Rcpp 1.0.13
+  and BH 1.78.0-0: the whole test suite (earlier candidate).
+* Linux aarch64 (Docker `rocker/r-ver:4.6.1`, g++ 13.3.0, Rcpp 1.1.2, BH
+  1.90.0-1): install without compiler warnings, the whole test suite with no
+  failure, and `R CMD check --no-manual --ignore-vignettes`: `Status: OK`
+  (2026-10-21). Linux x86_64, the same image under emulation: `Status: OK`
+  (earlier candidate).
+* Linux x86_64, R 4.0.5 (the declared minimum; Docker `rocker/r-ver:4.0.5`,
+  g++ 9.4.0, testthat 3.2.1.1): install without compiler warnings and the
+  whole test suite, with no failure (earlier candidate).
+* win-builder, R-devel (2026-10-18 r90707 ucrt) and R 4.6.1 ucrt, g++ 14.3.0:
+  `Status: OK` for both (earlier candidate); the submitted tarball was sent
+  on 2026-10-21 and its results are pending.
 
-* **`pmhn()` no longer allocates without bound.** At `gamma = -1e4` it requested
-  about 5e7 series terms; it now defers to quadrature above a ceiling. The
-  evaluators also check for a user interrupt in every driver loop.
+## R CMD check results
 
-* **DESCRIPTION.** Spelled out "Markov chain Monte Carlo" and "relaxed
-  transformed density rejection method", following CRAN reviewer feedback on
-  unexpanded acronyms in 0.1.0.
+Local `R CMD check --as-cran` of the submitted `mhn_0.1.2.tar.gz` (686,626
+bytes; installed size 1.42 MB) on 2026-10-21:
 
-No exported function gains or loses an argument, and no default changes. The
-`inst/` benchmark, example and audit scripts are not run during `R CMD check`,
-need no network, and do not materially affect the installed size: the tarball
-is 352 KB and the installed package 1.5 MB.
+    Status: 1 NOTE
+
+    * checking HTML version of manual ... NOTE
+    Skipping checking HTML validation: 'tidy' doesn't look like recent enough HTML Tidy.
+    Please obtain a recent version of HTML Tidy by downloading a binary
+    release or compiling the source code from <https://www.html-tidy.org/>.
+    Skipping checking math rendering: package 'V8' unavailable
+
+The local machine lacks a recent HTML Tidy and the V8 package; on
+win-builder the same step reports no NOTE.
+Every other step is OK, including CRAN incoming feasibility, the tests, the
+examples, the re-building of both vignettes and the PDF manual.
 
 ## Downstream dependencies
 
-There are no reverse dependencies. Verified 2026-09-16 against the CRAN
-package database (25028 packages) with
-`tools::package_dependencies("mhn", reverse = TRUE)` across `Depends`,
-`Imports`, `LinkingTo` and `Suggests`, which returns none. Because there are
-no reverse dependencies, the corrected `rmhn()` output cannot affect any
-downstream CRAN package.
+There are no reverse dependencies: on 2026-10-21,
+`tools::package_dependencies("mhn", reverse = TRUE)` over `Depends`,
+`Imports`, `LinkingTo` and `Suggests` of the CRAN package database (25,404
+packages) returned none.
 
-## Notes on tests and vignettes
+## Tests and vignettes
 
-* The default test suite (`tests/testthat/`) completes well within the CRAN
-  budget. This session, inside `R CMD check --as-cran` on the submitted
-  tarball: 6071 pass / 0 fail / 0 warn / 40 skip.
-* The 40 skips are heavier goodness-of-fit (Kolmogorov-Smirnov) and
-  large-`n` regression blocks in `tests/testthat/test-rmhn.R`,
-  `test-rmhn-sun.R`, `test-rmhn-rtdr-regions.R` and
-  `test-numerical-stability.R`, guarded with `skip_on_cran()` so they
-  exercise the package fully in local development and on CI while keeping
-  CRAN check time low. They are not untested: the GitHub Actions matrix
-  above runs with `NOT_CRAN=true`, so all five of its platforms execute
-  them. The remaining (non-skipped) tests still cover the public API,
-  special cases, vectorisation, NA propagation, the Sun et al. (2023) and
-  Gao & Wang (2025) algorithm dispatch, and the input-validation contract.
-* The two vignettes (`introduction.Rmd`, `theory.Rmd`) build in well under
-  one minute combined; both are static knitr/rmarkdown documents with no
-  network access, no random external data, and seeded RNG calls.
+* Inside `R CMD check --as-cran` the test suite reports
+  `[ FAIL 0 | WARN 0 | SKIP 30 | PASS 12420 ]` and takes 29 s. The 30
+  skipped blocks, guarded with `skip_on_cran()`, are heavier goodness-of-fit
+  and large-sample regression tests, two timing tests, a memory test and a
+  comparison to the last bit.
+* With `NOT_CRAN=true` the full suite runs: 457 blocks and 15,498
+  expectations, with no failure, warning, error or skip.
+* The two vignettes are static knitr/rmarkdown documents with no network
+  access and seeded random numbers, and build in well under a minute.

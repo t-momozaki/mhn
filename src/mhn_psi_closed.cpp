@@ -1,5 +1,5 @@
 // Closed-form Fox-Wright Psi values from Sun et al. (2023)
-// Supplementary, Lemma 9(c).
+// Supplementary Lemma 9(c).
 //
 // Lemma 9(c) states  Psi[1/2, x] = 2 sqrt(pi) exp(x^2 / 4) (1 - Phi(-x / sqrt(2))).
 // Rewriting in log-form and using the standard normal symmetry
@@ -51,8 +51,12 @@ double psi_alpha1(double gamma, double beta) {
 double psi_alpha2(double gamma, double beta) {
   const double z = gamma / std::sqrt(beta);
   if (z <= 0.0) {
-    // The bracketed term is z * (something positive), so for z <= 0 it does
-    // not dominate and the direct form is both accurate and in range.
+    // Reached from mhn_log_normalizing_const only with z = 0, when a positive
+    // gamma underflows against sqrt(beta) (gamma < 0 goes to quadrature and
+    // gamma = 0 to Gamma(1) there); kept so that z <= 0 never
+    // reaches log(z) below.  For z < 0 the product below lies in (-1, 0) and
+    // cancels against 1 (Psi[1, z] ~ 2 / z^2), and exp(z^2 / 4) overflows once
+    // z < -53.3, where this form returns NaN.
     const double pnorm_val = R::pnorm(z / M_SQRT2, 0.0, 1.0,
                                       /*lower_tail=*/1, /*log_p=*/0);
     return std::log1p(std::sqrt(M_PI) * z * std::exp(z * z / 4.0) * pnorm_val);

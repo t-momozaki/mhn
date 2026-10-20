@@ -1,11 +1,12 @@
 #!/usr/bin/env Rscript
 # vmf_gibbs.R --- von Mises-Fisher concentration Gibbs sampler via rmhn().
 #
-# Role: a self-contained worked example for Section 6 of the paper.  It
-# shows that a single mhn::rmhn() call performs the concentration-
-# parameter update of a fully Bayesian analysis of directional data, so
-# that a complete Gibbs sampler for the von Mises-Fisher (vMF) model is a
-# few lines of base R once the MHN draw is available.
+# Role: a self-contained worked example of the directional-data
+# application in Sun, Kong & Pal (2023, Section 2.3).  It shows that a
+# single mhn::rmhn() call performs the concentration-parameter update of
+# a fully Bayesian analysis of directional data, so that a complete Gibbs
+# sampler for the von Mises-Fisher (vMF) model is a few lines of base R
+# once the MHN draw is available.
 #
 # Model.  Observed unit vectors y_1, ..., y_n on the sphere S^{p-1} are
 # modelled as i.i.d. von Mises-Fisher with known mean direction mu and
@@ -17,15 +18,20 @@
 # with I_nu the modified Bessel function of the first kind.  The prior on
 # kappa is Gamma(a0, b0) (shape a0, rate b0).  The normalising constant
 # 1/I_nu(kappa)^n makes the kappa likelihood intractable, so we follow
-# the data-augmentation scheme of Sun, Kong & Pal (2023), Section 2.3
+# the modified Polya-Gamma data-augmentation scheme of Pal & Gaskins
+# (2022), in the form summarised by Sun, Kong & Pal (2023), Section 2.3
 # (their directional-data example).  Latent T_1, ..., T_n > 0 with
 #
 #     f_{T,nu}(t | kappa) = c(kappa) * sum_{k>=1} w_k * exp(-(j_{nu,k}^2 + kappa^2) t),
 #     w_k = j_{nu,k}^{nu+1} / J_{nu+1}(j_{nu,k}),
 #
 # where {j_{nu,k}} are the positive zeros of the Bessel function J_nu, are
-# introduced.  The T_i absorb the intractable 1/I_nu(kappa) factor, and
-# the resulting full conditional of kappa is a Modified Half-Normal:
+# introduced.  Here c(kappa) = 2 I_nu(kappa) / kappa^nu, which makes the
+# density integrate to 1.  Sun, Kong & Pal print the normaliser as
+# I_nu(kappa) 2^{(2+nu)/2} / (2 kappa)^nu, under which the density
+# integrates to 2^{-nu/2}.  The T_i absorb the intractable 1/I_nu(kappa)
+# factor, and the resulting full conditional of kappa is a Modified
+# Half-Normal:
 #
 #     pi(kappa | T, Y) proportional to
 #         kappa^{a0 - 1} exp(-(n*Tbar) kappa^2 + (n*mu'Ybar - b0) kappa),
@@ -37,7 +43,10 @@
 #     T_i  ~ f_{T,nu}(. | kappa)            (latent augmentation draws)
 #     kappa <- rmhn(1, a0, n*Tbar, n*mu'Ybar - b0)   (one MHN draw)
 #
-# Reference:
+# References:
+#   Pal, S., & Gaskins, J. (2022). Modified Polya-Gamma data augmentation
+#   for Bayesian analysis of directional data. Journal of Statistical
+#   Computation and Simulation, 92(16), 3430-3451.
 #   Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
 #   distribution: Properties and an efficient sampling scheme.
 #   Communications in Statistics - Theory and Methods, 52(5), 1591-1613.
@@ -46,10 +55,13 @@
 # known true kappa and a fixed mean direction, runs the Gibbs sampler
 # above, prints the posterior mean of kappa against the truth and a mixing
 # summary, and (when run standalone) writes the posterior draws to a dated
-# CSV under results/.
+# CSV.
 #
-# Invocation (from the repository root):
-#   Rscript mhn/inst/examples/vmf_gibbs.R
+# Invocation:
+#   Rscript <file>
+# where <file> is system.file("examples", "vmf_gibbs.R", package = "mhn").
+# The draws are written as a CSV to MHN_VMF_OUTDIR when it names a
+# directory, and not at all otherwise.
 #
 # Optional environment variables:
 #   MHN_VMF_N=N       number of retained Gibbs draws (chain length; default 1500)
@@ -65,7 +77,7 @@
 
 suppressPackageStartupMessages({
   if (!requireNamespace("mhn", quietly = TRUE))
-    stop("vmf_gibbs.R requires the 'mhn' package. Run R CMD INSTALL mhn first.")
+    stop("vmf_gibbs.R requires the 'mhn' package; install it first.")
 })
 
 ## ---- configuration -------------------------------------------------------
@@ -90,8 +102,13 @@ N_GRID     <- getenv_int("MHN_VMF_GRID",  512L)
 SEED       <- getenv_int("MHN_VMF_SEED",  1L)
 
 # Weakly informative Gamma(shape, rate) prior on kappa (prior mean 100).
-PRIOR_SHAPE <- 1.0   # a0  (= MHN alpha in the full conditional)
-PRIOR_RATE  <- 0.01  # b0
+# The shape a0 is the MHN alpha of the full conditional.  a0 = 1 would make
+# that conditional a truncated normal, a closed-form special case of rmhn();
+# a0 = 2 exercises a general MHN kernel (Sun et al. 2023, Algorithm 1, since
+# the tilt n*mu'Ybar - b0 is positive here and each update draws a single
+# variate).
+PRIOR_SHAPE <- 2.0   # a0
+PRIOR_RATE  <- 0.02  # b0
 
 stopifnot(P_DIM >= 2L, KAPPA_TRUE > 0, N_DATA >= 2L, N_TERMS >= 8L)
 
@@ -160,8 +177,11 @@ rvmf <- function(n, mu, kappa) {
 ## ---- latent augmentation: sampler for T | kappa -------------------------
 
 # Precompute the Bessel zeros and the (signed) series weights w_k.  Only
-# their relative values matter: the kappa-dependent normaliser cancels in
-# the inverse-CDF below, as does the global constant 2^{(2+nu)/2}.
+# their relative values matter: the normaliser c(kappa) = 2 I_nu(kappa) /
+# kappa^nu (Pal & Gaskins 2022, Eq. (8)) cancels in the inverse-CDF below.
+# This c(kappa) makes f_{T,nu} integrate to 1; the normaliser printed by
+# Sun et al. (2023, Section 2.3), I_nu(kappa) 2^{(2+nu)/2} / (2 kappa)^nu,
+# would make it integrate to 2^{-nu/2}.
 NU      <- P_DIM / 2 - 1
 J_ZERO  <- bessel_zeros(NU, N_TERMS)
 J_SQ    <- J_ZERO^2
@@ -200,8 +220,8 @@ run_vmf_gibbs <- function(Y, mu, prior_shape, prior_rate,
   proj  <- sum(y_sum * mu)                  # n * mu'Ybar
   total <- n_draws + n_burn
 
-  # Start at the Banerjee et al. (2005) moment estimate of kappa from the
-  # mean resultant length, so the chain begins in the region of the
+  # Start at the Banerjee et al. (2005) approximation to the maximum-likelihood
+  # estimate of kappa from the mean resultant length, so the chain begins in the region of the
   # posterior rather than in the diffuse prior tail.
   r_bar <- sqrt(sum(y_sum^2)) / n
   r_bar <- min(r_bar, 1 - 1e-8)
@@ -233,9 +253,11 @@ effective_size <- function(x) {
   if (stats::var(x) <= 0) return(NA_real_)
   ac  <- as.numeric(acf(x, lag.max = min(n - 1L, 200L), plot = FALSE)$acf)
   rho <- ac[-1]                              # autocorrelations at lags >= 1
-  # Initial-positive-sequence truncation (Geyer 1992).
+  # The sum runs up to the first negative autocorrelation, a simple form of
+  # the truncation in Geyer's (1992) initial sequence estimators; a negative
+  # autocorrelation at lag 1 leaves none.
   cutoff <- which(rho < 0)[1]
-  if (!is.na(cutoff) && cutoff > 1) rho <- rho[seq_len(cutoff - 1L)]
+  if (!is.na(cutoff)) rho <- rho[seq_len(cutoff - 1L)]
   n / (1 + 2 * sum(rho))
 }
 
@@ -277,15 +299,9 @@ cat(sprintf("  effective size    : %.1f  (%.1f%% of draws)\n",
 
 # TRUE under `Rscript vmf_gibbs.R`, FALSE when source()'d interactively.
 run_standalone <- !interactive() && sys.nframe() == 0L
-if (run_standalone) {
-  outdir <- Sys.getenv("MHN_VMF_OUTDIR", unset = "")
-  if (!nzchar(outdir)) {
-    here <- tryCatch(dirname(sub("^--file=", "",
-                grep("^--file=", commandArgs(FALSE), value = TRUE)[1])),
-                error = function(e) ".")
-    if (is.na(here) || !nzchar(here)) here <- "."
-    outdir <- file.path(here, "results")
-  }
+# The draws are written only where MHN_VMF_OUTDIR names a directory.
+outdir <- Sys.getenv("MHN_VMF_OUTDIR", unset = "")
+if (run_standalone && nzchar(outdir)) {
   dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
   csv <- file.path(outdir, sprintf("vmf_gibbs_%s.csv", format(Sys.Date(), "%Y%m%d")))
   write.csv(post, csv, row.names = FALSE)
