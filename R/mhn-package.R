@@ -5,6 +5,10 @@
 #' random generation (\code{\link{rmhn}}), and moments / mode of the
 #' Modified Half-Normal (MHN) distribution.
 #'
+#' \code{vignette("introduction", package = "mhn")} shows the functions in
+#' use, and \code{vignette("theory", package = "mhn")} sets out the theory
+#' they implement; its Appendix A describes the numerical methods.
+#'
 #' @section MHN Distribution:
 #' The MHN distribution has probability density function
 #' \deqn{f(x \mid \alpha, \beta, \gamma) =

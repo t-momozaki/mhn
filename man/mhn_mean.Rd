@@ -32,36 +32,26 @@ By Sun et al. (2023, Lemma 2a) the mean is a ratio of Fox-Wright
   \Psi[\alpha/2,\, z]}, \qquad z = \gamma/\sqrt{\beta}.}{%
   E(X) = Psi[(alpha+1)/2, z] / (sqrt(beta) Psi[alpha/2, z]),
   z = gamma/sqrt(beta).}
-The ratio is used for \eqn{z \le 12}{z <= 12} as long as the two
-logarithms it is formed from are small enough to leave it accurate. For a
-larger positive tilt, or a very large \eqn{\alpha}, both logarithms are
-large while their difference is not, and the mean is instead obtained by
-numerical integration of the unnormalised density about its peak, which
-needs no \eqn{\Psi}{Psi} value. (For \eqn{z > 12} and a shape so small
-that most of the mass lies by the origin, that integration holds the mean
-as a small difference; where it finds the mean below a thousandth of the
-peak, the ratio is used instead.) Under a strong negative tilt,
-\eqn{z < -30}{z < -30}, the ratio serves only for
-\eqn{\alpha < 6}{alpha < 6}, and there it is capped at the upper bound
-\eqn{(\gamma + \sqrt{\gamma^2 + 8\alpha\beta})/(4\beta)}{(gamma +
-sqrt(gamma^2 + 8 alpha beta)) / (4 beta)} of Sun et al. (2023, Lemma 4a),
-which holds for every \eqn{\alpha > 0}{alpha > 0} by the remark after
-the lemma; from
-\eqn{\alpha = 6}{alpha = 6} on the mean is integrated there. At
-\eqn{\gamma = 0} the ratio is
+At \eqn{\gamma = 0} the ratio is
 \eqn{\Gamma((\alpha+1)/2) / (\sqrt{\beta}\,
 \Gamma(\alpha/2))}{Gamma((alpha+1)/2) / (sqrt(beta) Gamma(alpha/2))}
-(Sun et al. 2023, Lemma 6a), which for \eqn{\alpha \ge 1}{alpha >= 1} is
-computed as
-\eqn{\sqrt{\pi} / (\sqrt{\beta}\, B(\alpha/2,
-1/2))}{sqrt(pi) / (sqrt(beta) B(alpha/2, 1/2))}, with \eqn{B} the beta
-function, whose logarithm R's \code{lbeta} forms without the
-cancellation between the two log-gamma values that loses digits at a
-large \eqn{\alpha}.
+(Sun et al. 2023, Lemma 6a). For every \eqn{\alpha > 0}{alpha > 0} the
+mean is at most
+\eqn{(\gamma + \sqrt{\gamma^2 + 8\alpha\beta})/(4\beta)}{(gamma +
+sqrt(gamma^2 + 8 alpha beta)) / (4 beta)} (Sun et al. 2023, Lemma 4a and
+the remark after it).
+
+The ratio is used where it can be evaluated accurately. Where it cannot,
+mainly under a strong tilt or at a very large \eqn{\alpha}{alpha}, the
+mean is instead obtained by numerical integration of the unnormalised
+density, which needs no \eqn{\Psi}{Psi} value.
 
 The function is not vectorised in its parameters: \code{alpha},
 \code{beta} and \code{gamma} must each be a single number. To evaluate
 several parameter triples, use \code{\link{mapply}}, as in the examples.
+
+The numerical methods are described in Appendix A of
+\code{vignette("theory", package = "mhn")}.
 }
 \examples{
 mhn_mean(alpha = 2, beta = 1, gamma = 0)

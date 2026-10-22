@@ -104,9 +104,8 @@ TOL <- sqrt(.Machine$double.eps)
 # Sun et al. (2023, Supplementary Lemma 10) truncation helpers (R ports of
 # lemma10_C and lemma10_K in mhn/src/mhn_psi_series.cpp).  Inputs always
 # use abs(z) so the formulas are well-defined for either sign of gamma.
-# The Errata correction (alpha_adj * z^2, not alpha_adj * z) is applied;
-# see the "Errata in Sun et al. (2023)" subsection of the package's theory
-# vignette for the derivation.
+# The misprint correction (alpha_adj * z^2, not alpha_adj * z) is applied;
+# see Appendix B.1 of the package's theory vignette for the derivation.
 # -----------------------------------------------------------------------
 lemma10_C <- function(alpha_adj, z2, q, c1, c2) {
   denom <- 8 * q

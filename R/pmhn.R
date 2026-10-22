@@ -7,8 +7,9 @@
 #' Modified Half-Normal (MHN) distribution with parameters \code{alpha},
 #' \code{beta}, and \code{gamma}.
 #'
-#' In the general case the lower tail is computed, over the part of the
-#' parameter space given below, from the series representation
+#' In the general case the lower tail is computed, where that is accurate
+#' (see below), from the series representation (Sun et al. 2023,
+#' Lemma 1b)
 #' \deqn{F(x \mid \alpha, \beta, \gamma) =
 #'   \frac{1}{\Psi[\alpha/2, \gamma/\sqrt{\beta}]}
 #'   \sum_{i=0}^{\infty} \frac{z^i}{i!}\, \Gamma(s_i)\, P(s_i, \beta x^2)}{
@@ -16,88 +17,7 @@
 #'   sum_(i >= 0) z^i / i! Gamma(s_i) P(s_i, beta x^2)}
 #' where \eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)},
 #' \eqn{s_i = (\alpha + i)/2}, and \eqn{P(s, y)} is the regularized lower
-#' incomplete gamma function (Sun et al. 2023, Lemma 1b: there each term
-#' \eqn{2\beta^{\alpha/2}\gamma^i\beta^{-(\alpha+i)/2}/(2\, i!)}{2
-#' beta^(alpha/2) gamma^i beta^(-(alpha+i)/2) / (2 i!)} reduces to
-#' \eqn{z^i/i!}{z^i / i!}, and
-#' \eqn{\Gamma(s)\, P(s, y) = \gamma(s, y)}{Gamma(s) P(s, y) = gamma(s, y)},
-#' where \eqn{\gamma(s, y)} is the lower incomplete gamma function used in
-#' the paper).  The infinite sum is truncated at an upper bound on the
-#' length \eqn{K = \max\{K_1, K_2\}}{K = max(K1, K2)} of Sun et al.
-#' (2023), Supplementary Lemma 10(d), from the geometric decay of the terms
-#' that Lemma 10(a, b) establish, which makes the truncation residual
-#' bounded by the working tolerance \code{sqrt(.Machine$double.eps)} divided by
-#' \eqn{\Psi}; for \eqn{\gamma > 0}, where every term is positive, it is
-#' truncated earlier where that bound is below the rounding of the sum,
-#' so that the residual is below the larger of that and
-#' \eqn{2^{-53} F}{2^-53 F}.  The series is tried first for
-#' \eqn{\alpha < 1} at every tilt up to \eqn{z = 1000}, and for
-#' \eqn{\alpha \ge 1}{alpha >= 1} only where \eqn{|z| \le 20}{|z| <= 20}
-#' and \eqn{\alpha \le 100}{alpha <= 100}.  There a numerical integration
-#' of the density on \eqn{[0, q]} replaces it where, for \eqn{\gamma < 0},
-#' the rounding of the alternating terms, set against the cancellation
-#' between them, could make its relative error exceed
-#' \code{sqrt(.Machine$double.eps)}; where it would need more than
-#' \eqn{10^6} terms, which happens for \eqn{|z|} above about 830, and so
-#' only for \eqn{\alpha < 1}; and where \eqn{\beta q^2}{beta q^2} is below
-#' the smallest normal double.  Elsewhere, outside the ranges measured from
-#' the peak (see below), the integration is used directly, being the
-#' faster of the two there.  It is Gauss-Kronrod for
-#' \eqn{\alpha \ge 1}{alpha >= 1}, and for \eqn{\alpha < 1}, where the
-#' density is unbounded at the origin, a closed form next to the origin,
-#' then tanh-sinh up to \eqn{q} or up to the interior peak that a positive
-#' tilt can give the density, whichever comes first, and Gauss-Kronrod past
-#' that peak.  For
-#' \eqn{z > 1000} the integral and \eqn{\Psi} are both taken with
-#' \eqn{\gamma^2/(4\beta)}{gamma^2/(4 beta)} removed from their logarithms,
-#' which are otherwise too large for their difference to be accurate.
-#'
-#' The upper tail \eqn{P(X > q)} is computed directly, by Gauss-Kronrod
-#' quadrature of the density over \eqn{(q, \infty)} on a logarithmic
-#' axis, and not as \eqn{1 - F}, which would round to 0 once it falls
-#' below about \eqn{10^{-16}}{1e-16}.  Each tail is computed directly on
-#' its own side of the peak of the density of \eqn{\log X}{log X}, the
-#' positive root of
-#' \eqn{2\beta x^2 - \gamma x - \alpha = 0}{2 beta x^2 - gamma x - alpha = 0},
-#' which lies at or above the median; above it the lower tail is returned
-#' as one minus the upper tail.  With \code{log.p = TRUE} both tails are
-#' formed on the log scale throughout, so that \eqn{\log F}{log F} is still
-#' resolved where \eqn{F} rounds to 1 or is below the smallest positive
-#' double.  At or below the median \eqn{\log P(X > q)}{log P(X > q)} is
-#' about \eqn{-F}, and the logarithm of the quadrature carries an absolute
-#' error of about \eqn{\epsilon}{eps} times the size of the terms it is
-#' assembled from, \eqn{|\log\Psi| + (\alpha/2)|\log\beta| +
-#' m(1 + |\log v^*|)}{|log Psi| + (alpha/2) |log(beta)| + m (1 + |log v*|)}
-#' (\eqn{m}{m} and \eqn{v^*}{v*} as in \strong{Range}), with
-#' \eqn{\gamma^2/(4\beta)}{gamma^2/(4 beta)} removed from
-#' \eqn{\log\Psi}{log Psi} for \eqn{z > 1000}, as in the quadratures.
-#' Wherever that could pass \eqn{10^{-9}}{1e-9} of \eqn{F}, it is formed
-#' instead as \eqn{\log(1 - F)}{log(1 - F)} from \eqn{\log F}{log F},
-#' which keeps the relative accuracy of \eqn{F}: for parameters of order one
-#' only below \eqn{F}{F} of about \eqn{10^{-5}}{1e-5}.  For
-#' \eqn{\alpha < 1}{alpha < 1} with \eqn{|z| > 20}{|z| > 20}, where the
-#' series costs milliseconds, \eqn{F} is taken for this from the numerical
-#' integration wherever that agrees with the upper tail to within the error
-#' of the latter.  The lower tail has the matching switch.  Below that peak
-#' \eqn{F}{F} can still exceed one half, and for a small shape it is close
-#' to 1 over most of the range below the peak, one less a tail proportional
-#' to \eqn{\alpha}{alpha}.  There \eqn{\log F}{log F}, about
-#' \eqn{-P(X > q)}, is assembled from terms of the size of
-#' \eqn{\log\Psi}{log Psi},
-#' \eqn{(\alpha/2)\log\beta}{(alpha/2) log(beta)} and
-#' \eqn{(\alpha - 1)\log q}{(alpha - 1) log(q)} that cancel, and carries
-#' an absolute error of about \eqn{\epsilon}{eps} times their size.
-#' Wherever that could pass \eqn{10^{-9}}{1e-9} of \eqn{\log F}{log F}
-#' and the error of the upper tail, carried into \eqn{\log F}{log F}, is
-#' estimated at less than half as much, it is formed instead as
-#' \eqn{\log(1 - P(X > q))}{log(1 - P(X > q))} from the upper tail, which
-#' keeps the relative accuracy of \eqn{P(X > q)}{P(X > q)}.  Without that
-#' switch the error would pass \eqn{10^{-9}}{1e-9} of \eqn{\log F}{log F}
-#' for a shape below about \eqn{10^{-6}}{1e-6} under a small tilt, and
-#' below a smaller shape under a large one.  A subnormal shape, below the
-#' smallest normal double, is served apart (see
-#' \code{\link{dmhn}}), and there \eqn{\log F}{log F} keeps its relative
-#' accuracy too.
+#' incomplete gamma function.
 #'
 #' @param q Numeric vector of quantiles.
 #' @param alpha Shape parameter (\eqn{\alpha > 0}). Scalar or numeric vector.
@@ -137,6 +57,10 @@
 #'   carried over.
 #'
 #' @details
+#' The default parameters \code{alpha = 1, beta = 1, gamma = 0} correspond
+#' to the half-normal distribution
+#' \eqn{\mathrm{HN}(1/\sqrt{2})}{HN(1/sqrt(2))}.
+#'
 #' At \eqn{\gamma = 0}{gamma = 0} and at \eqn{\alpha = 1}{alpha = 1}
 #' exactly the distribution function is computed from the law it reduces to;
 #' a shape or a tilt merely close to those values is a different law, and is
@@ -144,63 +68,37 @@
 #' \itemize{
 #'   \item \eqn{\gamma = 0}: \eqn{F(q) = P(\alpha/2, \beta q^2)}{F(q) =
 #'     P(alpha/2, beta q^2)}, the regularized incomplete gamma function of
-#'     the square-root-Gamma law (Sun et al. 2023, Lemma 6a), by
-#'     \code{pgamma}, or as its leading term
-#'     \eqn{(\beta q^2)^{\alpha/2} / \Gamma(\alpha/2 + 1)}{(beta
-#'     q^2)^(alpha/2) / Gamma(alpha/2 + 1)}, exact to double precision,
-#'     where \eqn{\beta q^2} is below the smallest normal double; for
-#'     \eqn{\alpha \le 10^6}{alpha <= 1e6}.  Above it the Gamma law is so
-#'     narrow that rounding \eqn{\beta q^2}{beta q^2} moves it by a visible
-#'     part of its width (up to about \eqn{10^{-6}}{1e-6} of
-#'     \eqn{F} at \eqn{\alpha = 10^{20}}{alpha = 1e20}), and
-#'     \eqn{\gamma = 0}{gamma = 0} is measured from the peak as below.
+#'     the square-root-Gamma law (Sun et al. 2023, Lemma 6a), for
+#'     \eqn{\alpha \le 10^6}{alpha <= 1e6}; a larger shape is computed as in
+#'     the general case.
 #'   \item \eqn{\alpha = 1}: the truncated-normal CDF (Sun et al. 2023,
-#'     Lemma 6b), by \code{pnorm}, or through the scaled complementary error
-#'     function where the truncation point 0 lies three or more standard
-#'     deviations above the mean \eqn{\gamma/(2\beta)}{gamma/(2 beta)} of
-#'     the untruncated normal,
-#'     \eqn{-\gamma/\sqrt{2\beta} \ge 3}{-gamma / sqrt(2 beta) >= 3}.  Near
-#'     the truncation point the lower tail is summed from a short series, so
-#'     that it keeps its relative accuracy however small it is.
+#'     Lemma 6b).  Near the truncation point the lower tail keeps its
+#'     relative accuracy however small it is.  Where
+#'     \eqn{-\gamma/\sqrt{2\beta}}{-gamma / sqrt(2 beta)} overflows the law
+#'     is Exponential with rate \eqn{|\gamma|}{|gamma|}.
 #' }
 #'
-#' For a shape \eqn{\alpha}{alpha} or a scale-free tilt
-#' \eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} above \eqn{10^6}{1e6},
-#' and wherever the terms of the ordinary forms grow too large (see
-#' \strong{Range}), both tails are measured from the peak \eqn{v^*}{v*} of
-#' the density of \eqn{\log X}{log X}, the positive root of
-#' \eqn{2\beta x^2 - \gamma x - \alpha = 0}{2 beta x^2 - gamma x - alpha = 0},
-#' in the variable \eqn{w = \log(x/v^*)}{w = log(x / v*)}: the tail on the
-#' side of \eqn{\log(q/v^*)}{log(q / v*)} away from the peak is the integral
-#' of \eqn{\exp(-\alpha(e^w - 1 - w) - \beta v^{*2}(e^w - 1)^2)}{exp(-alpha
-#' (e^w - 1 - w) - beta v*^2 (e^w - 1)^2)} over that side, taken by
-#' Gauss-Kronrod quadrature in offsets from \code{q}, over the same integral
-#' on the whole line, and the other tail is its complement.  Nothing of
-#' the size of \eqn{\alpha \log x}{alpha log x} or
-#' \eqn{\gamma^2/(4\beta)}{gamma^2/(4 beta)} is formed, whose rounding would
-#' otherwise leave the tails \eqn{10^{-7}}{1e-7} off at
-#' \eqn{\alpha = 10^8}{alpha = 1e8} and farther off as \eqn{z} grows,
-#' and no abscissa is rounded to the doubles
-#' next to the peak, which are a fraction \eqn{z\,2^{-53}}{z 2^-53} of the
-#' law's standard deviation apart.  \eqn{v^*}{v*} is held as a double
-#' next to it plus its offset from that double.
+#' The series is used, where it is accurate, for
+#' \eqn{\alpha \le 100}{alpha <= 100} with \eqn{|z| \le 20}{|z| <= 20}, and
+#' for \eqn{\alpha < 1}{alpha < 1} up to \eqn{|z|}{|z|} of about 830 (for
+#' \eqn{|z| > 20}{|z| > 20} it costs milliseconds per value); elsewhere
+#' the lower tail is computed by numerical integration of the density.  The
+#' upper tail \eqn{P(X > q)} is computed directly, by numerical integration
+#' of the density over \eqn{(q, \infty)}{(q, Inf)}, and not as
+#' \eqn{1 - F}, which would round to 0 once it falls below about
+#' \eqn{10^{-16}}{1e-16}.  Each tail is computed directly on its own side of
+#' the peak of the density of \eqn{\log X}{log X}, which lies at or above
+#' the median, and as one minus the other tail beyond it.  For a large shape
+#' or tilt, where the terms of these forms grow too large, both tails are
+#' measured from that peak instead.  With \code{log.p = TRUE} both tails are
+#' formed on the log scale throughout, so that \eqn{\log F}{log F} is still
+#' resolved where \eqn{F} rounds to 1 or is below the smallest positive
+#' double, and a log probability close to 0, about minus the other tail,
+#' keeps the relative accuracy of that other tail to within about
+#' \eqn{10^{-9}}{1e-9} (Appendix A.4 of the vignette cited below).
 #'
-#' \strong{Range.}  The ordinary forms are used only while the larger
-#' \eqn{m} of \eqn{\alpha}{alpha} and \eqn{z} is at most \eqn{10^6}{1e6}
-#' and \eqn{m (1 + |\log v^*|)}{m (1 + |log v*|)}, the size of their largest
-#' terms (\eqn{\alpha \log x}{alpha log x},
-#' \eqn{(\alpha/2) \log\beta}{(alpha/2) log(beta)}, and the rounding of
-#' quadrature abscissae placed in \eqn{\log x}{log x}), is at most
-#' \eqn{10^7}{1e7}: at \eqn{\beta = 1}{beta = 1} up to a shape of
-#' \eqn{10^6}{1e6} or a tilt of about \eqn{7.3 \times 10^5}{7.3e5}, and at
-#' \eqn{\beta = 10^{\pm 300}}{beta = 1e-300 or 1e300} up to about
-#' \eqn{3 \times 10^4}{3e4} for either.  That keeps their error within 10
-#' standard deviations of the peak below \eqn{10^{-8}}{1e-8}; measured from
-#' the peak it is about \eqn{10^{-14}}{1e-14}.  Farther out in the upper
-#' tail the error of the ordinary forms grows with the distance from the
-#' peak, and close to that bound it reaches about
-#' \eqn{3 \times 10^{-8}}{3e-8} at 36 standard deviations, where the tail is
-#' of order \eqn{10^{-284}}{1e-284}.  So for
+#' \strong{Accuracy and range.}  With
+#' \eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} as above, for
 #' \eqn{\alpha \le 10^{15}}{alpha <= 1e15},
 #' \eqn{|z| \le 10^{15}}{|z| <= 1e15} and \eqn{\beta}{beta} in
 #' \eqn{[10^{-300}, 10^{300}]}{[1e-300, 1e300]} both tails are accurate to
@@ -213,46 +111,44 @@
 #' step from 0 to 1 between two adjacent doubles, whose value at the double
 #' nearest the peak is set by where the peak lies within its spacing.  Two
 #' cases give \code{NA} with a warning instead: within 45 standard
-#' deviations of the peak of a law
-#' narrower than the spacing by a factor of order \eqn{10^{19}}{1e19}
-#' (\eqn{z}{z} beyond about \eqn{10^{35}}{1e35}, \eqn{\alpha}{alpha} beyond
-#' about \eqn{10^{70}}{1e70}), where the position of the peak cannot be
-#' resolved finely enough; and where the whole law lies beyond the largest
+#' deviations of the peak of a law whose peak cannot be placed to within
+#' \eqn{10^{-11}}{1e-11} of its standard deviation, which needs a law
+#' narrower than the spacing by a factor of order \eqn{10^{19}}{1e19} or
+#' more and then happens for some parameters only (as at
+#' \eqn{\alpha = \beta = \gamma = 10^{200}}{alpha = beta = gamma = 1e200});
+#' and where the whole law lies beyond the largest
 #' double without a positive tilt to place it (a shape near the largest
 #' double against a subnormal \eqn{\beta}{beta}).  A third case lies at the
 #' other end of the range: where \eqn{\beta}{beta} and the tilt are both
 #' close to the largest double (\eqn{\beta}{beta} from about
 #' \eqn{2 \times 10^{307}}{2e307} with \eqn{\gamma}{gamma} near the
 #' largest double, or from about \eqn{5 \times 10^{307}}{5e307} with
-#' \eqn{\gamma}{gamma} from about \eqn{10^{306}}{1e306}), at points
-#' \eqn{q}{q} above the peak where \eqn{\beta q}{beta q} passes about half
-#' the largest double, the upper tail is \code{NA} with a warning or, with
-#' \code{log.p = TRUE}, \code{-Inf} where the log probability is finite.  Where \eqn{z}{z} itself
-#' overflows, the law is its limit: Gamma(\eqn{\alpha}{alpha}, rate
-#' \eqn{|\gamma|}{|gamma|}) under a negative tilt, and normal about its mode
-#' with variance \eqn{1/(2\beta)}{1/(2 beta)} under a positive one.  For
-#' \eqn{\alpha = 1}{alpha = 1} with the truncation point
-#' \eqn{z_0 = -\gamma/\sqrt{2\beta}}{z0 = -gamma/sqrt(2 beta)} far beyond 3,
-#' the same forms hold up to \eqn{z_0 = \infty}{z0 = Inf}, where the law is
-#' Exponential with rate \eqn{|\gamma|}{|gamma|}; below \eqn{-10^3}{-1e3}
-#' the standardised offset is formed from \eqn{2\beta q - \gamma}{2 beta q -
-#' gamma} in one rounding (as \eqn{\beta q - \gamma/2}{beta q - gamma / 2},
-#' so also where \eqn{2\beta}{2 beta} overflows), not from a rounded mean
-#' \eqn{\gamma/(2\beta)}{gamma / (2 beta)}; the lower tail within
-#' \eqn{|z_0|/2}{|z0| / 2} standard deviations of 0, where that offset is
-#' resolved only to about \eqn{\epsilon |z_0|}{eps |z0|} of one, is taken
-#' from the ratio of the two normal lower tails written with the exact
-#' distance \eqn{q\sqrt{2\beta}}{q sqrt(2 beta)} from the truncation
-#' point.
+#' \eqn{\gamma}{gamma} from about \eqn{10^{306}}{1e306}), at some points
+#' \eqn{q}{q} above the peak where \eqn{\beta q}{beta q} is above about half
+#' the largest double, the log upper tail is \code{-Inf} where it is finite
+#' (the upper tail itself is then 0, which is its value in double
+#' precision), and next to the point where \eqn{\beta q}{beta q} overflows
+#' both are \code{NA} with a warning.
+#' Where \eqn{z}{z} itself overflows, the law is its limit:
+#' Gamma(\eqn{\alpha}{alpha}, rate \eqn{|\gamma|}{|gamma|}) under a negative
+#' tilt, and normal about its mode with variance
+#' \eqn{1/(2\beta)}{1/(2 beta)} under a positive one.  A subnormal shape,
+#' below the smallest normal double, is computed apart (see
+#' \code{\link{dmhn}}), and there \eqn{\log F}{log F} keeps its relative
+#' accuracy too; below a tilt \eqn{z} of about 52 (53 at the smallest
+#' shapes) \code{pmhn} is then 1 at every positive \code{q}.
 #'
 #' When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the CDF
 #' is evaluated element-wise.  The Fox-Wright \eqn{\Psi} normalizing
-#' constant is computed once for each position of the recycling cycle while that cycle
-#' is at most 256 long, and otherwise once for each run of consecutive
-#' elements that share the \eqn{(\alpha, \beta, \gamma)} triple.  So
-#' recycled parameters, and parameter vectors in which equal triples are
-#' adjacent, are much faster than triples that alternate along a long
-#' vector, and than calling \code{pmhn} inside an R loop.
+#' constant is computed once for each position of the recycling cycle while
+#' that cycle is at most 256 long, and otherwise once for each run of
+#' consecutive elements that share the \eqn{(\alpha, \beta, \gamma)}
+#' triple.  So recycled parameters, and parameter vectors in which equal
+#' triples are adjacent, are much faster than triples that alternate along a
+#' long vector, and than calling \code{pmhn} inside an R loop.
+#'
+#' The numerical methods, and the reasons for the ranges above, are
+#' described in Appendix A of \code{vignette("theory", package = "mhn")}.
 #'
 #' @references
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal

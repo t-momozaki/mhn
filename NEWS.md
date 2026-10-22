@@ -233,8 +233,8 @@ they gave before.
   (0.1.1: up to 9.7e-6 in the density), and above it to within the ordinary
   accuracy of the general forms, 9e-11 at `alpha = 1e5`, which there exceeds
   the error of taking a tilt below about 1e-12 as 0. `rmhn()` still draws
-  from those laws within the same window, which its help page describes as
-  `alpha ~ 1` and `gamma ~ 0`: the law drawn is within a total variation
+  from those laws within the same window, as its help page says: the law
+  drawn is within a total variation
   distance of 8.6e-9 of the one requested, and the draws for a fixed seed do
   not change. (The general samplers draw the exact law there, but of Sun et
   al.'s samplers only Algorithm 2, which the package does not implement,
@@ -736,8 +736,9 @@ Measured on an Apple M4 Max against 0.1.1, as medians of repeated calls:
   from Algorithm 3 takes about 13% less time.
 
 * `rmhn()` with the default method chooses between RTDR and Sun et al.'s
-  Algorithms 1 and 3 by thresholds re-derived from timings of the current
-  samplers (Apple M1 Ultra). For `gamma < 0` it uses RTDR from 25 draws per
+  Algorithms 1 and 3 by thresholds derived from timings of the current
+  samplers (Apple M1 Ultra), and checked by timing the code of this release.
+  For `gamma < 0` it uses RTDR from 25 draws per
   setup for `alpha < 0.1` (0.1.1: from 100), from 5 for `0.1 <= alpha < 1`
   (0.1.1: from 25), at any number of draws for `1 < alpha < 1000`, and from
   10, 25 or 50 for `alpha` from 1000 to 1e5, from 1e5 to 1e8 and above
@@ -756,13 +757,13 @@ Measured on an Apple M4 Max against 0.1.1, as medians of repeated calls:
   and above, or 5 or 25 where RTDR's setup starts next to the mode, and
   Algorithm 1 otherwise (0.1.1: Algorithm 1 always). Over a paired timing
   race of the two samplers in 560 cells the chosen sampler is 0.025% slower
-  than the faster one on average and 7.1% at worst, against 6.7% and 72%
+  than the faster one on average and 6.7% at worst, against 6.4% and 69%
   under the rule of 0.1.1; over a second race of 1458 cells, with shapes up
   to 1e14, tilts up to `3 * sqrt(alpha)` and single draws within one
-  vectorised call (one setup per draw), it is 0.11% slower on average and
-  13% at worst, and never slower in the vectorised calls, against 7.9% and
-  49%; in three runs of `inst/benchmarks/auto_dispatch.R` it is at most
-  3.8% slower, against 66%. The draws per setup are counted as `n` for
+  vectorised call (one setup per draw), it is 0.1% slower on average and
+  12% at worst, and never slower in the vectorised calls, against 7.6% and
+  47%; in three runs of `inst/benchmarks/auto_dispatch.R` it is at most
+  0.7% slower, against 65%. The draws per setup are counted as `n` for
   scalar parameters and, where short recycled parameter vectors keep a setup
   for each position within the period after which their triples repeat (a
   period of at most 256 draws, recycled at least four times), as `n` divided
@@ -863,6 +864,13 @@ Measured on an Apple M4 Max against 0.1.1, as medians of repeated calls:
 
 ## Documentation
 
+* The help pages state what each function returns and over which range its
+  results are accurate, and leave the numerical methods to the theory
+  vignette. The main text of the vignette keeps to the theory and to how
+  `method = "auto"` chooses a sampler; a new Appendix A gives the numerical
+  methods, the handling of extreme parameters and the timings behind
+  `method = "auto"`, and Appendix B the misprints in the source papers.
+
 * The NEWS entry of 0.1.1 attributed to Sun et al. (2023) a misprint in the
   constant `K_1` of the first part of Theorem 1 (printed "a."), and the
   theory vignette of 0.1.1 one in the Gamma argument of the mixture weights
@@ -912,10 +920,11 @@ Measured on an Apple M4 Max against 0.1.1, as medians of repeated calls:
   vignette describes the normalising constant, the distribution function and
   the quantile as they are now computed.
 
-* The help page of `pmhn()` gives the accuracy of the ordinary forms as
-  measured: below 1e-8 within 10 standard deviations of the peak, and about
-  3e-8 at 36 standard deviations in the upper tail close to the bound at
-  which the forms measured from the peak take over. It names a third case
+* Appendix A of the theory vignette gives the accuracy of the ordinary forms
+  of `pmhn()` as measured: below 1e-8 within 10 standard deviations of the
+  peak, and about 3e-8 at 36 standard deviations in the upper tail close to
+  the bound at which the forms measured from the peak take over. The help
+  page of `pmhn()` names a third case
   outside the stated range, `beta` from about 2e307, in
   which a point far above the peak gives `NA` with a warning or `-Inf`.
 

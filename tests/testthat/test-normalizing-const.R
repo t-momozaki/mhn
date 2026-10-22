@@ -259,8 +259,8 @@ test_that("very large alpha works", {
 # lengths that follow from the critical indices of lemma10_C
 # (mhn_psi_series.cpp).  Their discriminant carries alpha_adj * z^2, as in the
 # proof in the Supplementary Material; the statement of Lemma 10 prints
-# alpha_adj * z (see the "Errata in Sun et al. (2023)" subsection of the
-# package's theory vignette).  stats::integrate at rel.tol = 1e-12 is the
+# alpha_adj * z (see Appendix B.1 of the package's theory vignette).
+# stats::integrate at rel.tol = 1e-12 is the
 # independent check.
 # ============================================================
 

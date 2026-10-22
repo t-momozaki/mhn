@@ -8,92 +8,9 @@
 #' \code{beta}, and \code{gamma}.
 #'
 #' For the general case, \eqn{q = F^{-1}(p)}{q = F^-1(p)} is obtained by a
-#' TOMS 748 root-finder applied to the distribution function computed as in
+#' root-finder applied to the distribution function computed as in
 #' \code{\link{pmhn}}, or for \code{lower.tail = FALSE} to the logarithm of
-#' its directly computed upper tail.  Near 1 that logarithm is about
-#' \eqn{-(1 - p)}{-(1 - p)}, and its error, set by the size of the terms it
-#' is assembled from (see \code{pmhn}), is a relative error in
-#' \eqn{1 - p}{1 - p}.  Where that could pass \eqn{10^{-9}}{1e-9}, within
-#' about \eqn{3 \times 10^{-6}}{3e-6} of 1 at the least and further out for
-#' a large shape, tilt or \eqn{|\log\beta|}{|log(beta)|}, the distribution
-#' function is solved for one minus the probability instead, which is exact.
-#' Where \code{pmhn} takes that distribution function from the series of Sun
-#' et al. (2023), which can cost far more than the upper tail
-#' (\eqn{\alpha < 1}{alpha < 1} with \eqn{|z|}{|z|} up to about 830, and
-#' \eqn{\alpha \le 100}{alpha <= 100} with \eqn{|z| \le 20}{|z| <= 20},
-#' \eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)}), the root of the
-#' upper tail is refined instead by Newton steps on the logarithm of the
-#' distribution function (taken as in \code{pmhn} for the log upper tail).
-#' A lower-tail \code{p} there is solved on the series itself, and for
-#' \eqn{\alpha < 1}{alpha < 1} with \eqn{|z|}{|z|} from about 100 one
-#' quantile can take from a tenth of a second to seconds (about 1 s at
-#' \eqn{\alpha = 0.8}{alpha = 0.8}, \eqn{z = 829}{z = 829} and
-#' \eqn{p = 0.5}{p = 0.5}); where \eqn{1 - p}{1 - p} is known exactly,
-#' \code{lower.tail = FALSE} gives the same quantile at once.
-#' Within \eqn{10^{-7}}{1e-7} of 1, where the upper tail may not resolve
-#' one minus the probability at all, that root is taken for a probability
-#' it does resolve where needed, and the steps start from it.  Likewise
-#' a lower-tail \code{p} close to 1 (within \eqn{10^{-7}}{1e-7} of 1 at
-#' least; see \strong{Range}), where the
-#' distribution function is resolved only to the rounding of 1, is solved
-#' on the logarithm of the upper tail for one minus it, which is exact.  A
-#' lower-tail \code{log.p} probability below
-#' \code{log(.Machine$double.xmin)}, about -708.4, whose exponential is no
-#' longer a normal double, is solved on the logarithm of the distribution
-#' function.  The initial bracket is
-#' \eqn{[s\sqrt{\epsilon},\; s]}{[s sqrt(eps), s]} with
-#' \eqn{s = E(X) + 8 \sqrt{\mathrm{Var}(X)}}{s = E(X) + 8 sqrt(Var(X))},
-#' which scales with the distribution.  Its left end is halved (down to the
-#' smallest positive double) and its right end doubled (up to the largest
-#' double) until it brackets the target probability, each step keeping the
-#' bracket a factor of two wide.  Where the root-finder does not reach its
-#' tolerance on that bracket, as for a tiny lower-tail \code{p} with a
-#' large \eqn{\alpha}, the equation is solved again for \eqn{\log q}{log q}
-#' on the logarithm of the distribution function, and where that fails too,
-#' or the bracket lies near the largest double, the bracket is bisected.
-#' The root is found to a relative \eqn{2^{-46}}{2^-46}, and where
-#' \code{pmhn} measures the law from its peak (see there) also to within
-#' \eqn{2^{-46}}{2^-46} of the law's standard deviation, which can be
-#' narrower.  A quantile below
-#' \code{.Machine$double.xmin} is resolved to the spacing of the subnormal
-#' doubles there, about \eqn{4.9 \times 10^{-324}}{4.9e-324}, and one below
-#' that spacing is returned as 0, as \code{\link[stats]{qgamma}} returns a
-#' quantile that underflows; a quantile beyond the largest double is
-#' returned as \code{Inf}, as \code{qgamma} returns one that overflows.
-#'
-#' \strong{Range.}  The quantile inverts \code{\link{pmhn}}, whose range of
-#' accuracy it inherits: for \eqn{\alpha \le 10^{15}}{alpha <= 1e15},
-#' \eqn{|z| \le 10^{15}}{|z| <= 1e15} and \eqn{\beta}{beta} in
-#' \eqn{[10^{-300}, 10^{300}]}{[1e-300, 1e300]} it is the root, to the
-#' tolerance above or to the spacing of the doubles near it, whichever is
-#' larger, of an equation that resolves the smaller of the two tail
-#' probabilities to about \eqn{2 \times 10^{-9}}{2e-9} of itself or better
-#' (see there), which places it within about that many of the law's
-#' standard deviations.  Next to the origin, where
-#' \eqn{F(x)}{F(x)} is about a multiple of \eqn{x^\alpha}{x^alpha}, its
-#' relative error is that of the smaller tail probability divided by about
-#' \eqn{\alpha}{alpha}.  A lower-tail
-#' \code{p} close to 1 is solved on the upper tail, as the root of
-#' \eqn{P(X > x) = 1 - p}{P(X > x) = 1 - p} with \eqn{1 - p}{1 - p} formed
-#' exactly, wherever the error of \eqn{F} near 1 could pass
-#' \eqn{10^{-9}}{1e-9} of \eqn{1 - p}{1 - p} and the upper tail resolves it
-#' more accurately: \eqn{F} is resolved there only to the rounding of 1, and
-#' for a small shape, where it is close to 1 over most of the range, to the
-#' error of the lower tail (see
-#' \code{\link{pmhn}}).  At parameters of order one that is so within about
-#' \eqn{10^{-5}}{1e-5} of 1, and farther for a small or large shape, a
-#' large tilt or an extreme \eqn{\beta}{beta}.  Where the law
-#' is narrower than the spacing of the doubles (for \eqn{z}{z} above about
-#' \eqn{10^{16}}{1e16}, or \eqn{\alpha}{alpha} above about
-#' \eqn{10^{31}}{1e31}) its distribution function is a step between two
-#' adjacent doubles, and the quantile of every \code{p} strictly inside
-#' \eqn{(0, 1)} is the one of the two nearer to the true quantile, placed
-#' from the exact offset of the law's peak.  Where \code{pmhn} is \code{NA}
-#' (see there), so is the quantile, with a warning.  Where the log upper
-#' tail of \code{pmhn} is \code{-Inf} in place of a finite value
-#' (\eqn{\beta}{beta} and the tilt both close to the largest double, see
-#' there), the quantile of a \code{log.p} probability beyond that point is
-#' the point at which it turns \code{-Inf}, without a warning.
+#' its directly computed upper tail.
 #'
 #' @param p Numeric vector of probabilities.
 #' @param alpha Shape parameter (\eqn{\alpha > 0}). Scalar or numeric vector.
@@ -137,6 +54,10 @@
 #'   carried over.
 #'
 #' @details
+#' The default parameters \code{alpha = 1, beta = 1, gamma = 0} correspond
+#' to the half-normal distribution
+#' \eqn{\mathrm{HN}(1/\sqrt{2})}{HN(1/sqrt(2))}.
+#'
 #' At \eqn{\gamma = 0}{gamma = 0} and at \eqn{\alpha = 1}{alpha = 1}
 #' exactly the quantile is computed from the law it reduces to; a shape or a
 #' tilt merely close to those values is a different law, and is computed as
@@ -144,26 +65,70 @@
 #' \itemize{
 #'   \item \eqn{\gamma = 0}: \eqn{q = \sqrt{y / \beta}}{q = sqrt(y / beta)},
 #'     where \eqn{P(\alpha/2, y) = p} for the regularized incomplete gamma
-#'     function \eqn{P} (Sun et al. 2023, Lemma 6a); \eqn{y} is taken from
-#'     \code{qgamma}, or from the leading term of \eqn{P} where it is below
-#'     the smallest normal double; for \eqn{\alpha \le 10^6}{alpha <= 1e6}.
-#'     Above it \eqn{\gamma = 0}{gamma = 0} is solved on the distribution
-#'     function measured from the peak, as for any other tilt (see
-#'     \code{\link{pmhn}}).
+#'     function \eqn{P} (Sun et al. 2023, Lemma 6a), for
+#'     \eqn{\alpha \le 10^6}{alpha <= 1e6}; a larger shape is computed as in
+#'     the general case.
 #'   \item \eqn{\alpha = 1}: the truncated-normal inverse (Sun et al. 2023,
-#'     Lemma 6b), by \code{qnorm}, refined by one Newton step on the scaled
-#'     complementary error function where the truncation point 0 lies three
-#'     or more standard deviations above the mean
-#'     \eqn{\gamma/(2\beta)}{gamma/(2 beta)} of the untruncated normal,
-#'     \eqn{-\gamma/\sqrt{2\beta} \ge 3}{-gamma / sqrt(2 beta) >= 3}, and
-#'     by Newton's method on that function alone where it lies more than 30
-#'     standard deviations above it.  Near
-#'     the truncation point it is solved by Halley's method on a short
-#'     series, so that the quantile of a small lower-tail probability keeps
-#'     its relative accuracy.  Where \eqn{-\gamma/\sqrt{2\beta}}{-gamma /
+#'     Lemma 6b).  The quantile of a small lower-tail probability keeps its
+#'     relative accuracy.  Where \eqn{-\gamma/\sqrt{2\beta}}{-gamma /
 #'     sqrt(2 beta)} overflows the law is Exponential with rate
 #'     \eqn{|\gamma|}{|gamma|}, and its quantile is that one's.
 #' }
+#'
+#' A probability close to 1 is solved, where that is more accurate, on the
+#' other tail for one minus it, which is formed exactly: a lower-tail
+#' \code{p} on the upper tail, as the root of
+#' \eqn{P(X > x) = 1 - p}{P(X > x) = 1 - p}, since the distribution
+#' function is resolved there only to the rounding of 1 (and, for a small
+#' shape, to the error of the lower tail; see \code{\link{pmhn}}), and an
+#' upper-tail \code{p} on the distribution function.  Where \code{pmhn}
+#' takes the distribution function from its series
+#' (\eqn{\alpha < 1}{alpha < 1} with \eqn{|z|}{|z|} up to about 830, and
+#' \eqn{\alpha \le 100}{alpha <= 100} with \eqn{|z| \le 20}{|z| <= 20},
+#' \eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)}), a lower-tail
+#' \code{p} is solved on the series itself, and for
+#' \eqn{\alpha < 1}{alpha < 1} with \eqn{|z|}{|z|} from about 100 one
+#' quantile can take from a tenth of a second to seconds (about 1 s at
+#' \eqn{\alpha = 0.8}{alpha = 0.8}, \eqn{z = 829}{z = 829} and
+#' \eqn{p = 0.5}{p = 0.5}); where \eqn{1 - p}{1 - p} is known exactly,
+#' \code{lower.tail = FALSE} gives the same quantile at once.
+#'
+#' \strong{Accuracy and range.}  The root is found to a relative
+#' \eqn{2^{-46}}{2^-46}, and where \code{pmhn} measures the law from its
+#' peak (see there) also to within \eqn{2^{-46}}{2^-46} of the law's
+#' standard deviation, which can be narrower.  The quantile inverts
+#' \code{\link{pmhn}}, whose range of accuracy it inherits: for
+#' \eqn{\alpha \le 10^{15}}{alpha <= 1e15},
+#' \eqn{|z| \le 10^{15}}{|z| <= 1e15} and \eqn{\beta}{beta} in
+#' \eqn{[10^{-300}, 10^{300}]}{[1e-300, 1e300]} it is the root, to that
+#' tolerance or to the spacing of the doubles near it, whichever is larger,
+#' of an equation whose tail probabilities are as accurate as those of
+#' \code{pmhn} (to the working tolerance within 10 standard deviations of
+#' the peak, and to about twice that beyond; see there), which places it
+#' within about that many of the law's standard deviations.
+#' Next to the origin, where \eqn{F(x)}{F(x)} is about a multiple of
+#' \eqn{x^\alpha}{x^alpha}, its relative error is that of the smaller tail
+#' probability divided by about \eqn{\alpha}{alpha}.  A quantile below
+#' \code{.Machine$double.xmin} is resolved to the spacing of the subnormal
+#' doubles there, about \eqn{4.9 \times 10^{-324}}{4.9e-324}, and one below
+#' that spacing is returned as 0, as \code{\link[stats]{qgamma}} returns a
+#' quantile that underflows; a quantile beyond the largest double is
+#' returned as \code{Inf}, as \code{qgamma} returns one that overflows.
+#' Where the law is narrower than the spacing of the doubles (for
+#' \eqn{z}{z} above about \eqn{10^{16}}{1e16}, or \eqn{\alpha}{alpha} above
+#' about \eqn{10^{31}}{1e31}) its distribution function is a step between
+#' two adjacent doubles, and the quantile of every \code{p} strictly inside
+#' \eqn{(0, 1)} is the one of the two nearer to the true quantile, placed
+#' from the exact offset of the law's peak.  Where \code{pmhn} is \code{NA}
+#' (see there), so is the quantile, with a warning.  Where the log upper
+#' tail of \code{pmhn} is \code{-Inf} in place of a finite value
+#' (\eqn{\beta}{beta} and the tilt both close to the largest double, see
+#' there), the quantile of a \code{log.p} probability beyond that point is
+#' the point at which it turns \code{-Inf}, without a warning.  For a
+#' subnormal shape (see \code{\link{dmhn}}) and a tilt \eqn{z} below about
+#' 52 (53 at the smallest shapes), \code{qmhn} is 0 for every lower-tail
+#' probability below 1 given on the probability scale; the upper tail, or
+#' \code{log.p = TRUE}, still gives the quantiles of the far upper tail.
 #'
 #' When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the
 #' quantile is evaluated element-wise.  The Fox-Wright \eqn{\Psi}
@@ -172,6 +137,9 @@
 #' computed once for each position of the recycling cycle while that cycle
 #' is at most 256 long, and otherwise once for each run of consecutive
 #' elements that share the \eqn{(\alpha, \beta, \gamma)} triple.
+#'
+#' The numerical methods, and the reasons for the ranges above, are
+#' described in Appendix A of \code{vignette("theory", package = "mhn")}.
 #'
 #' @references
 #' Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal

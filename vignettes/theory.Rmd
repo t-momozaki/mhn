@@ -29,19 +29,22 @@ library(mhn)
 This vignette is the theoretical companion to *Introduction to the mhn
 Package*. The *Introduction* shows what the four exported functions
 (`dmhn` / `pmhn` / `qmhn` / `rmhn`) and their moment helpers do; this
-note develops the mathematical and algorithmic theory the package
-implements. We summarise the Modified Half-Normal (MHN) family, the
-Fox–Wright $\Psi$ function that appears in its normalising constant,
-and the two sampling schemes the package draws on — Sun, Kong & Pal
-(2023) and Gao & Wang (2025).
+note explains the mathematics and the algorithms behind them. We
+summarise the Modified Half-Normal (MHN) family, the Fox–Wright $\Psi$
+function that appears in its normalising constant, the two sampling
+schemes the package draws on — Sun, Kong & Pal (2023) and Gao & Wang
+(2025) — and how `rmhn(method = "auto")` chooses between them.
 
-We deliberately keep the treatment compact. Full proofs and the
-finer numerical considerations live in the original papers (see
-References). Two implementation-relevant points — the typesetting
-errata in Sun et al. (2023) and how the package handles them,
-and the benchmark-driven rationale for the
-`rmhn(method = "auto")` crossovers — are inserted in §4 and
-§7 where they are most relevant.
+The main text keeps to what is needed to understand the results and to
+choose a method; the proofs are in the original papers (see
+References). Two appendices serve readers who want to check the
+implementation against those papers. Appendix A collects the numerical
+details: how the package keeps its results accurate where the textbook
+formulas lose digits, its handling of extreme parameters, and the
+timings behind `method = "auto"`. Appendix B lists the misprints in
+the papers that bear on what the package computes, and the forms it
+uses instead. The help page of each function states what it returns
+and, where it has been measured, how accurate it is.
 
 ## The MHN($\alpha$, $\beta$, $\gamma$) family
 
@@ -68,16 +71,16 @@ special cases (Sun et al. 2023, Lemma 6):
 | Constraint                 | Reduction |
 |------|----------------------|
 | $\gamma = 0$               | $X^2 \sim \mathrm{Gamma}(\alpha/2,\, \beta)$ with rate $\beta$, i.e.\ sqrt-Gamma |
-| $\alpha = 1$               | Truncated normal $\mathrm{TN}(\gamma/(2\beta),\, 1/\sqrt{2\beta},\, 0,\, \infty)$ |
-| $\alpha = 1,\, \gamma = 0$ | Half-normal $\lvert Z \rvert$ with $Z \sim N(0,\, 1/(2\beta))$ |
+| $\alpha = 1$               | Truncated normal $\mathrm{TN}(\mu = \gamma/(2\beta),\, \sigma = 1/\sqrt{2\beta},\, 0,\, \infty)$ |
+| $\alpha = 1,\, \gamma = 0$ | Half-normal $\lvert Z \rvert$ with $Z \sim N(0,\, \sigma^2 = 1/(2\beta))$ |
 
 `rmhn()` draws the truncated normal of the second row by the method of
 Robert (1995).
 
-There is also a degenerate *boundary* limit, not listed in the
-table: as $\beta \to 0^+$ with $\gamma < 0$, the MHN density
-converges to $\mathrm{Gamma}(\alpha,\, -\gamma)$ (Sun et al. 2023,
-remark after Lemma 6). The package does
+There is also a degenerate *boundary* case, not listed in the
+table: Sun et al. (2023, remark after Lemma 6) note that with
+$\beta = 0$ and $\gamma < 0$ the law is $\mathrm{Gamma}(\alpha,\, -\gamma)$,
+and the MHN density tends to it as $\beta \to 0^+$. The package does
 not handle this limit specially because $\beta > 0$ is required by
 the MHN parameter space; for a Gamma draw with $\beta = 0$, use
 `stats::rgamma` directly.
@@ -87,32 +90,13 @@ $\gamma = 0$, $\alpha = 1$, and both together — the exported
 functions work through the corresponding standard law — the Gamma law
 of $\beta X^2$ for $\gamma = 0$, the normal law for $\alpha = 1$ —
 bypassing the general series-and-rejection machinery. `dmhn`, `pmhn`
-and `qmhn` do so at those values exactly. A shape or a tilt merely
-close to them is a different law: at $\alpha = 1 + \delta$ the log
-density moves by about $\delta(\log(\sqrt{\beta}x) - E\log U)$,
-$U = \sqrt{\beta}X$, which next to $x = 10^{-300}$ is about
-$10^{-5}$ for $\delta = 1.5 \times 10^{-8}$, so such a triple takes the
-general route, which holds its accuracy up to the special values.
-`rmhn` draws from the standard laws also where $|\alpha - 1|$ or the
+and `qmhn` do so at those values exactly: a shape or a tilt merely
+close to them is a different law and takes the general route. `rmhn`
+draws from the standard laws also where $|\alpha - 1|$ or the
 scale-free tilt $|\gamma|/\sqrt{\beta}$ is below
-`sqrt(.Machine$double.eps)`: the law drawn is then within a total
-variation distance of about $|\delta|\,E|\log U - E\log U|/2$ or
-$|z|\,E|U - EU|/2$ of the one requested, and of $E|\delta L + zV|/2$, with
-$L$ and $V$ those two centred terms, where both are that small and the
-half-normal is drawn; this is below $8.6 \times 10^{-9}$,
-and of Sun et al.'s samplers only Algorithm 2, which the package does
-not implement (§5.3), covers $\alpha < 1$ with $\gamma > 0$, a case
-`method = "sun"` would otherwise meet next to $\alpha = 1$ from below
-under a positive tilt, and next to $\gamma = 0$ from above for any
-$\alpha < 1$. The one exception to the use of the standard laws is a
-zero or negligible tilt at a very large shape. The Gamma law then has a
-relative width of about $\sqrt{2/\alpha}$, and the rounding of
-$\beta x^2$, or of R's `rgamma`, would move it by a visible part of that
-width. So `dmhn`, `pmhn` and `qmhn` use it only up to
-$\alpha = 10^6$, beyond which they treat $\gamma = 0$ like any other
-tilt (see the last paragraph before §4.1), and `rmhn` only up to
-$\alpha = 2^{60}$, beyond which a rejection sampler placed at the mode
-takes over (§7).
+`sqrt(.Machine$double.eps)`, which changes the law drawn by less than
+$8.6 \times 10^{-9}$ in total variation. Appendix A.1 gives the
+reasons, and the exception at very large shapes.
 
 ```{r density-shape, echo = -c(2, 8), fig.cap = "MHN density as alpha crosses the log-concavity threshold; beta = 1, gamma = 1 fixed."}
 x  <- seq(0.001, 4, length.out = 400)
@@ -177,21 +161,18 @@ $$X_{\mathrm{mode}}
 
 For $\alpha = 1$ the mode is $\max(0,\, \gamma/(2\beta))$
 (the truncated-normal mode, Sun et al. 2023, Lemma 6b). For
-$\gamma \leq 0$ this is the boundary point $0$. Sun et al. (2023,
-Lemma 3d) state that no mode exists for $\gamma < 0$ and
-$\alpha \leq 1$; at $\alpha = 1$ the density is bounded and
-decreases from its supremum at $x = 0$, and `mhn_mode()` returns
-that point. For
+$\gamma \leq 0$ this is the boundary point $0$, from which the bounded
+density decreases; for $\gamma < 0$ Sun et al. (2023, Lemma 3d) say
+that no mode exists (the statement leaves out $\gamma = 0$, which the
+proof in their Supplementary Section 2.7 includes), and `mhn_mode()`
+returns that point. For
 $\alpha < 1$ the density is monotone decreasing unless $\gamma > 0$
 and $\alpha > 1 - \gamma^2/(8\beta)$, in which case it has a local
 minimum followed by an interior local maximum (Sun et al. 2023,
-Lemma 3c). Sun et al. (2023, Lemma 3d) state the decrease for
-$\gamma < 0$ and for $\gamma > 0$ with
-$\alpha < 1 - \gamma^2/(8\beta)$; at $\gamma = 0$ the derivative
-of $\log f$, $-(2\beta x^2 + 1 - \alpha)/x$, is negative, and at
-$\alpha = 1 - \gamma^2/(8\beta)$ the two stationary points of
-Lemma 3c merge into an inflection point.
-The helper
+Lemmas 3c and 3d). Lemma 3d leaves out $\gamma = 0$, where the
+derivative of $\log f$, $-(2\beta x^2 + 1 - \alpha)/x$, is negative,
+and Lemma 3c includes the boundary $\alpha = 1 - \gamma^2/(8\beta)$,
+where there is no local maximum (§2). The helper
 `mhn_mode()` implements this case split. It returns `NA` for
 $\alpha < 1$ without an interior local maximum, and the boundary mode 0
 at $\alpha = 1$ with $\gamma \leq 0$.
@@ -207,23 +188,13 @@ Together with the closed-form ratio for $E(X)$ in terms of
 $\Psi$ (Sun et al. 2023, Lemma 2a), this gives every higher
 moment in exact arithmetic. In double precision it does not: central
 moments formed from raw ones cancel as soon as the standard deviation
-is small next to the mean, and the ratio of two $\Psi$ values whose
-logarithms are each about $z^2/4$, $z = \gamma/\sqrt{\beta}$, loses
-digits under a strong positive tilt. The helpers therefore use the
-closed forms only where they are accurate. `mhn_mean()` takes the
-Lemma 2a ratio (for $z$ up to 12, while a bound on its rounding stays
-small; for $z < -30$ only below $\alpha = 6$, and there capped at the
-upper bound of Sun et al. (2023, Lemma 4a), which holds for every
-$\alpha > 0$ by the remark after the lemma), and `mhn_var()` the Lemma 2c form
-$\alpha/(2\beta) + \gamma E(X)/(2\beta) - E(X)^2$ where a bound on its
-error, from the rounding of its terms and from the error of the mean,
-stays below $10^{-8}$ of the result (only for $z$ between $-30$ and 12
-and, unless $\gamma = 0$, for $\alpha$ below 1000). Elsewhere, and for
-`mhn_skewness()` and `mhn_kurtosis()`, the moments are integrated
-numerically against the density kernel — in the offset from
-its peak where it has one, and on a logarithmic axis out from the origin
-where it has none — which needs no $\Psi$ at all. The
-*Introduction* vignette shows the helpers in action. A useful sanity bound
+is small next to the mean, and the ratio of two $\Psi$ values loses
+digits under a strong positive tilt. So `mhn_mean()` and `mhn_var()`
+use the closed forms only where they are accurate, and elsewhere, like
+`mhn_skewness()` and `mhn_kurtosis()` throughout, integrate the
+moments numerically against the density kernel, which needs no $\Psi$
+at all (Appendix A.2). The *Introduction* vignette shows the helpers
+in action. A useful sanity bound
 (Sun et al. 2023, Lemma 4c) is $\mathrm{Var}(X) \leq 1/(2\beta)$
 for every
 $\alpha \geq 1$, $\gamma \in \mathbb{R}$.
@@ -257,6 +228,613 @@ $\Psi$ — accumulated rounding in `lgamma`, or truncation error
 in the series — can only affect `d/p/q` and the mean and variance; they
 cannot leak into the sampler, apart from the weight $1/(1 + w)$ of the
 origin that it draws for a subnormal shape (see `?rmhn`).
+
+For evaluation, the package uses the closed forms and the series of
+Sun et al. (2023, Supplementary Lemmas 9 and 10) where they are
+accurate, and numerical integration elsewhere:
+
+- At $z = 0$ exactly $\Psi[\alpha/2, 0] = \Gamma(\alpha/2)$. At
+  $\alpha = 1$ exactly, and at $\alpha = 2$ exactly with
+  $\gamma > 0$, $\Psi$ has a closed form involving $\Phi$ (Sun et al.
+  2023, Supplementary Lemma 9(c)). A shape or a tilt merely close to
+  these values takes the general route below.
+- For $0 < z \leq 20$ with $\alpha \leq 100$ the package uses the
+  series of Sun et al. (2023, Supplementary Lemma 10). All its terms
+  are positive, so there is no catastrophic cancellation.
+- Everywhere else — for $\gamma < 0$, for $z > 20$ and for
+  $\alpha > 100$ — it integrates
+  $\Psi[\alpha/2, z] = 2\int_0^\infty u^{\alpha-1} e^{-u^2 + z u}\,du$,
+  the normalisation of the density in Sun et al. (2023, Lemma 1a).
+  Past $z = 20$ the series needs hundreds of terms or more, and the
+  quadrature is both faster and more accurate.
+
+Appendix A.3 describes the integration, and Appendix A.4 how the
+density, distribution and quantile functions avoid forming terms of the size of
+$\alpha \log x$ or $z^2/4$ under a strong tilt or at a large shape. A
+few results of Sun et al. (2023) that the package uses are misprinted;
+Appendix B lists them, with the forms the package uses.
+
+## Sampling: Sun et al. (2023)
+
+Sun et al. (2023) propose three Accept–Reject schemes, indexed by
+the sign of $\gamma$ and a coarse split on $\alpha$. Two of
+them — Algorithm 1 and Algorithm 3 — are implemented in the package
+and reachable via `rmhn(method = "sun")`. Algorithm 2 is not, and
+this section explains the reason.
+
+### Algorithm 1 — $\gamma > 0$, $\alpha > 1$
+
+For each parameter triple, Algorithm 1 constructs **two** proposal
+distributions — a Normal with mean
+$\mu_{\mathrm{opt}}$ and variance $1/(2\beta)$, and a
+$\sqrt{\mathrm{Gamma}(\alpha/2,\, \delta_{\mathrm{opt}})}$ —
+each with a multiplicative envelope constant
+$K_{1}$ and $K_{2}$. Setup chooses whichever envelope is
+tighter ($K_{1} \leq K_{2}$ or the reverse). The two optima
+$\mu_{\mathrm{opt}}$ and $\delta_{\mathrm{opt}}$ have closed
+forms (Sun et al. 2023, Theorem 1), so setup is cheap. The
+acceptance probability is bounded below by 0.8 for $\alpha \geq 4$
+(Sun et al. 2023, Theorem 2e). For $1 \leq \alpha < 4$ no
+uniform lower bound is proved, but Figure 2 of Sun et al. (2023),
+computed numerically, shows high acceptance throughout that range.
+At extreme shapes the package departs from the choice between the two
+proposals (Appendix A.5).
+
+### Algorithm 3 — $\gamma \leq 0$
+
+When the tilt is non-positive, Theorem 3 of Sun et al. (2023)
+supplies a proposal kernel based on an AM–GM-type inequality. (Sun et
+al. print Algorithm 3 for $\gamma < 0$, Theorem 4 and Figure 4 for
+$\gamma \leq 0$; at $\gamma = 0$ the package uses the square-root-Gamma
+closed form.) With a
+tuning point $m > 0$ and the exponent
+$r = (\beta m + |\gamma|)/(2\beta m + |\gamma|)$, the candidate is
+
+$$T \sim \mathrm{Gamma}\!\big(\alpha \cdot r,\, m(\beta m + |\gamma|)\big),
+\qquad X = m \cdot T^{r}.$$
+
+The construction works for every $\alpha > 0$ (the package uses it up
+to $\alpha = 2^{59}$; Appendix A.5). For $\alpha > 1$,
+Sun et al. (2023, Theorem 4c) prove an acceptance probability of at
+least $1/\sqrt{2} \approx 0.707$ (the theorem is stated for
+$\alpha > 1$; its proof in the Supplementary Material treats
+$\alpha \geq 3$) at the optimal matching point and
+at the explicit point
+$m_{\star} = (\gamma + \sqrt{\gamma^{2} + 8\alpha\beta})/(4\beta)$;
+for $\alpha \leq 1$ the procedure still samples correctly, but no
+bound is proved. The matching point is initialised from a heuristic
+adapted from Sun et al. (2023, Section 4.2):
+$m_{\mathrm{init}} = \alpha^{2}/\{(1 + \alpha)\sqrt{\beta}\}$ for
+$\alpha \leq 1.1$ (Sun et al. print $\alpha^{2}/(1+\alpha)$, which
+is the same point at $\beta = 1$; the package divides by
+$\sqrt{\beta}$ so that the matching point scales with $X$, since
+$\sqrt{\beta}X \sim \mathrm{MHN}(\alpha, 1, \gamma/\sqrt{\beta})$),
+and a combination of the mode and the rightmost inflection point
+for $\alpha > 1.1$ (the inflection point is a quartic root, which
+the package locates by bisection). The package then applies a
+single Newton-Raphson refinement step in both regimes, producing
+$m_{\mathrm{recommend}}$, whose acceptance probability is within
+0.002 of the optimum across the parameter range tabulated in
+Sun et al. (2023, Table 1). For this matching point the
+$1/\sqrt{2}$ level is observed, not proved.
+
+### Why Algorithm 2 is not implemented
+
+Algorithm 2, stated for every $\alpha > 0$ with $\gamma > 0$ and meant
+for $\alpha < 1$ (Sun et al. 2023, Section 4.1.2), samples via the
+mixture representation
+
+$$f_{\mathrm{MHN}}(x \mid \alpha, \beta, \gamma)
+ \;=\; \sum_{i=0}^{\infty} p_{i}\, f_{i}(x \mid \alpha, \beta),
+\qquad
+f_{i} \;\sim\; \sqrt{\mathrm{Gamma}\!\big((\alpha + i)/2,\, \beta\big)}.$$
+
+The mixture-index sampler keeps the first $M+1$ weights and bounds
+the rest by a geometric envelope, which needs
+$M \geq M^{\dagger} = \max\{\lfloor\alpha\rfloor,
+\lfloor\gamma^{2}/(\varepsilon_{1}^{2}\beta)\rfloor\}$, the point
+beyond which successive weights shrink by at least a factor
+$\varepsilon_{1}$ (Sun et al. 2023, Lemma 8). With
+$\varepsilon_{1} = 1/2$, as in their example,
+$M^{\dagger} = \lfloor 4\gamma^{2}/\beta\rfloor$ for $\alpha < 1$,
+so for large $\gamma^{2}/\beta$
+the whole scheme degrades catastrophically — Gao & Wang (2025,
+Table 1) report a slowdown of up to $\sim 3 \times 10^{4}\times$
+against RTDR in the most extreme case
+$(\alpha, \gamma) = (0.01, 10000)$. The package therefore declines to implement
+Algorithm 2 and routes $(\alpha < 1, \gamma > 0)$ to RTDR, whose
+acceptance Gao & Wang (2025) bound below by $1/e$ (next section).
+
+## Sampling: Gao & Wang (2025) RTDR
+
+Gao & Wang (2025) introduce a *Relaxed* Transformed Density
+Rejection (RTDR) sampler that comes with a uniform lower bound on
+the acceptance probability across the *entire* parameter space.
+
+Gao & Wang (2025) write the density as proportional to
+$x^{\lambda-1}\exp(-\alpha x^{2}-\beta x)$: their
+$(\lambda, \alpha, \beta)$ are the package's $(\alpha, \beta, -\gamma)$,
+so their $\beta < 2(\sqrt{1-2\lambda}-1)$, stated for their density
+scaled to their $\alpha = 1$ (their Eqs. (2) and (3)), reads
+$\gamma/\sqrt{\beta} > 2(1-\sqrt{1-2\alpha})$ here. Below, the symbols
+are the package's. Three ideas drive the construction.
+
+### $T_{c}$-concavity
+
+Transformed density rejection (TDR) builds an envelope from tangents
+of $T[f]$, a monotone transform of the density, and needs optimal
+contact points for its tangents. Gao & Wang (2025, Section 2) review it,
+with the earlier literature, for the family of transforms of their
+Eq. (6),
+
+$$T_{c}[x] = \mathrm{sign}(c) \cdot x^{c} \quad (c > -1,\, c \neq 0),
+\qquad T_{0}[x] = \log x,$$
+
+and relax its condition on the contact points (below). A density $f$ is
+*$T_{c}$-concave* if $T_{c}[f]$ is concave; logarithmic concavity is
+the $c = 0$ special case. In regions (b) and (c) below, which transform
+the package's RTDR implementation uses on the log-axis density
+turns on the sign of the tilt: for $\gamma > 0$ it takes
+$c = -1/2$,
+because $\log g$ is then convex on
+$(-\infty, \log(\gamma/\sqrt{\beta}/4))$, on the axis
+$y = \log(\sqrt{\beta}\,x)$, and a log-tangent hat
+would fail to dominate there, while $T_{-1/2}[x] = -x^{-1/2}$
+still does. For $\gamma \leq 0$ the log-axis density is
+log-concave and the ordinary $c = 0$ tangent hat is used. In
+region (d) the sufficient condition of their Theorem 3.2 no longer
+holds, and the envelope of Gao & Wang (2025, Section 4) is used
+instead.
+
+### Working on the log axis when $\alpha < 1$
+
+When $\alpha < 1$ the density $f(x \mid \alpha, \gamma)$ on
+$(0, \infty)$ blows up at the left endpoint and is not amenable
+to direct envelope construction. The change of variable
+$y = \log x$ yields
+
+$$g(y \mid \alpha, \gamma)
+ \;=\; \exp\!\big( \alpha y - e^{2y} + \gamma e^{y} \big),
+\qquad y \in \mathbb{R},$$
+
+which is bounded and unimodal (Gao & Wang 2025, Lemma 3.3). Gao &
+Wang's RTDR operates on $g$ for $\alpha < 1$ and on $f$ directly for
+$\alpha \geq 1$; the package moves $\alpha = 1$ itself to $g$, so that
+it works on $g$ for $\alpha \leq 1$ and on $f$ for $\alpha > 1$ (see
+region (b) below).
+
+### The four regions
+
+After scale normalisation $\sqrt{\beta} X \to X$
+(so we may assume $\beta = 1$), the RTDR envelope construction
+splits into four regions based on $(\alpha, \gamma)$. The $\gamma$
+in the table below is the normalised tilt
+$\gamma_{\mathrm{norm}} = \gamma/\sqrt{\beta}$; for a general
+$\beta$ the package's `rmhn(method = "rtdr")` rescales internally
+and compares $\gamma_{\mathrm{norm}}$ against the boundary
+$2(1 - \sqrt{1 - 2\alpha})$.
+
+| Region | $\alpha$        | $\gamma$             | Envelope target              | Reference                                          |
+|:------:|-----------------|----------------------|------------------------------|----------------------------------------------------|
+| (a)    | $> 1$ $^{\dagger}$ | any               | $f$ log-concave              | Gao & Wang (2025, Theorem 3.1)                     |
+| (b)    | $[1/2,\, 1]$ $^{\dagger}$ | any          | $g$ log-concave if $\gamma \leq 0$, else $T_{-1/2}$-concave | Gao & Wang (2025, Corollary 3.1; Theorem 3.2)      |
+| (c)    | $(0,\, 1/2)$    | $\leq 2(1 - \sqrt{1 - 2\alpha})$ | $g$ log-concave if $\gamma \leq 0$, else $T_{-1/2}$-concave | Gao & Wang (2025, Lemma 3.5; Theorem 3.2)        |
+| (d)    | $(0,\, 1/2)$    | $> 2(1 - \sqrt{1 - 2\alpha})$    | $g$, with $\log g$ inflected at $y^{*} = \log(\gamma/4)$ | Gao & Wang (2025, Theorem 4.4)      |
+
+$^{\dagger}$ The boundary between (a) and (b) is the package's: Gao &
+Wang (2025) put $\alpha = 1$ in region (a).
+
+Region (a) is the easiest: $f$ is log-concave, and two tangent lines
+and a constant segment suffice (Gao & Wang 2025, Eq. (11)); for
+$\alpha \le e$ and
+$\gamma/\sqrt{\beta} \le \sqrt{8\{\sqrt{(e-1)(\alpha-1)}-(\alpha-1)\}}$
+the left tangent is dropped and the constant runs from 0 (their
+Eq. (10)). Gao & Wang put the boundary $\alpha = 1$ in region (a)
+(their Theorem 3.1, and `if(lambda >= 1)` in the R code of their
+Appendix B). The package handles it in region (b) instead, which their
+Theorem 3.2 also covers ($g$ is $T_{-1/2}$-concave for
+$\alpha \geq 1/2$): $f$ is log-concave at $\alpha = 1$ too, but the
+envelope of region (a) is built around an interior mode in $x$, and at
+$\alpha = 1$ with $\gamma \leq 0$ the density's maximum is at the
+boundary $x = 0$, not at an interior mode. On the log axis $g$ has a
+finite mode for every $\alpha > 0$ (its $x = e^{y}$ is positive), so
+the region (b) construction applies without a special case. Regions
+(b) and (c) share one
+construction on $g$; the sign of $\gamma$ picks the transform. Since
+$\mathrm{d}^{2} \log g / \mathrm{d} y^{2} = \gamma e^{y} - 4 e^{2y}$ is
+negative for every $y$ exactly when $\gamma \leq 0$, a $T_0$ log-tangent
+hat serves on that side, while for $\gamma > 0$ only $T_{-1/2}$-concavity
+survives and the hat switches to inverse-square pieces. Region (d) is the
+hardest — $\log g$ has an inflection point, and the envelope adds a chain
+of secant segments on the log-convex side. In the envelope of
+Gao & Wang (2025, Eqs. (14)-(15)), which their Theorem 4.4 validates,
+$K = \lceil\rho\rceil$ breakpoints sit on that side,
+and $\rho$ grows roughly linearly in $\gamma$ ($K = 127909$ at
+$\gamma = 10^{5}$ with the package's contact points; $\rho$ depends on
+where $t_l$ falls in its band). When the envelope has a left tangent
+line, the package stops the chain as soon as a breakpoint falls on or
+below it, the
+test used in the R code of their Appendix B; without one, which
+happens only for $\gamma$ below about 6.3, $\lceil\rho\rceil$ is at
+most eight. So only a handful of breakpoints is ever built, and just
+one once $\gamma$ exceeds about 32. The left tangent covers the
+breakpoints the package leaves out; their Eq. (15) misprints its
+interval (Appendix B.2).
+
+### Why "relaxed"
+
+The classical TDR construction asks for *optimal* tangent contact
+points, which generally have no closed form and must be found
+numerically, by bisection or Newton–Raphson (Gao & Wang 2025,
+Section 2). Gao & Wang (2025, Corollary 2.1 and Eq. (7)) show
+that the rejection constant stays $\leq e \approx 2.718$
+(equivalently, acceptance probability $\geq 1/e \approx 0.368$) as
+long as the contact points lie *anywhere* inside a fixed interval — namely
+
+$$\log\!\frac{f(m)}{f(t)} \in
+ \begin{cases}
+   [0.46,\, 2.49] & f \text{ log-concave (region (a))}, \\
+   [0.46,\, 2.49] & g \text{ log-concave (regions (b), (c), } \gamma \leq 0), \\
+   [0.93,\, 1.99] & g \text{ $T_{-1/2}$-concave (regions (b), (c), } \gamma > 0).
+ \end{cases}$$
+
+Setup is therefore a handful of cheap iterations that terminate as
+soon as the bracket is hit, with no need for a precise Newton
+solution. This is why Gao & Wang (2025) call the setup fast:
+compared with classical TDR, which must solve for optimal contact
+points, or with generic methods such as adaptive rejection sampling
+and numerical inversion, it suits varying-parameter settings such
+as a Gibbs sampler, where $(\alpha, \beta, \gamma)$ changes every
+iteration and each setup serves a single draw. They make no such
+claim against Sun et al. (2023), whose generator they find
+comparable for $\gamma < 0$ or $\alpha > 1$ (their Section 5).
+Algorithm 1's setup costs less than RTDR's, so `method = "auto"` keeps
+it for single draws with $\gamma > 0$, $\alpha > 1$, and §7 explains how
+it splits both signs of $\gamma$ between the Sun algorithms and RTDR by
+batch size and, for $\gamma > 0$, by tilt. RTDR's own advantages are a
+lighter per-proposal cost, which wins every large $\gamma < 0$ batch and
+the large $\gamma > 0$ batches at mild tilt (§7), and the $1/e$
+bound below; it is also the package's only sampler for $\alpha < 1$,
+$\gamma > 0$.
+
+Composing the bounds of Gao & Wang (2025) — Theorem 3.1 for
+region (a), Corollary 2.1 with Eq. (7) for regions (b) and (c),
+whose concavity their Theorem 3.2 establishes, and Theorem 4.4 for
+region (d) — yields the
+headline guarantee of RTDR: for **every**
+$(\alpha, \beta, \gamma)$ with $\alpha > 0$,
+$\beta > 0$, $\gamma \in \mathbb{R}$, the acceptance
+probability of their construction is at least $1/e \approx 0.368$,
+provided its contact points lie in the band of their Eq. (7). The
+package's search for those points does not always reach that band
+(see `?rmhn`), and the acceptance measured stays above $1/e$ there
+too. Sun et al.'s (2023) bounds are uniform only on parts of the
+parameter space: at least 0.8 for Algorithm 1 when $\alpha \geq 4$
+(Theorem 2e), at least $1/\sqrt{2}$ for Algorithm 3 when $\alpha > 1$
+at the optimal matching point $m_{\mathrm{opt}}$ and at $m_{\star}$
+(Theorem 4c; the package's one-step Newton $m$ is not covered), and
+no uniform one for Algorithm 2, whose bound on its index step needs $M$
+to grow with $\gamma^{2}/\beta$ (§5.3).
+
+A quick sanity check that the RTDR sampler converges to the right
+distribution in all four regions — empirical means from RTDR vs
+theoretical means across regions (a), (b), (c), (d), each based on
+5000 draws:
+
+```{r rtdr-regions}
+cases <- data.frame(
+  region = c("(a)", "(b)", "(c)", "(d)"),
+  alpha  = c(2.0,    0.7,    0.3,    0.3),
+  gamma  = c(0.5,    1.0,    0.5,    5.0)
+)
+set.seed(42)
+empirical <- mapply(
+  function(a, g) mean(rmhn(5000, alpha = a, beta = 1, gamma = g, method = "rtdr")),
+  cases$alpha, cases$gamma
+)
+theoretical <- mapply(mhn_mean, cases$alpha, beta = 1, cases$gamma)
+data.frame(cases,
+           empirical_mean   = round(empirical,   4),
+           theoretical_mean = round(theoretical, 4))
+```
+
+The four rows hit the right means to within about two Monte-Carlo
+standard errors — at $n = 5000$ those errors run from $0.005$ to
+$0.011$, and the gaps are all below $0.012$.
+
+## The `rmhn(method = "auto")` dispatch
+
+`rmhn` exposes three values of `method`: `"sun"` (the Sun
+Algorithm 1 / 3 path), `"rtdr"` (the Gao & Wang RTDR path),
+and `"auto"` (default). The first two select the sampler used for the
+general case; the closed-form special cases below are taken first
+whatever `method` is set to, since they are exact and need next to no
+setup. The `"auto"` route is the package's
+recommendation; it combines the special cases and the three samplers
+into one decision tree, whose ordinary thresholds come from timing the
+samplers against each other:
+
+```
+                  rmhn(n, alpha, beta, gamma, method = "auto")
+                                    │
+                                    ▼
+       ┌─ alpha = 1, gamma = 0  →  half-normal       (Sun et al. 2023, Lemma 6c)
+       │
+       ├─ gamma = 0             →  sqrt-Gamma        (Sun et al. 2023, Lemma 6a)
+       │      (above alpha = 2^60: the Normal proposal of Sun Algorithm 1)
+       │
+       ├─ alpha = 1             →  truncated normal  (Sun et al. 2023, Lemma 6b)
+       │
+       ├─ alpha < 1 and gamma > 0
+       │      →  RTDR  (regions (b) / (c) / (d), Gao & Wang 2025, Theorems 3.2, 4.4)
+       │
+       ├─ alpha > 1 and gamma > 0
+       │      ├─ alpha ≤ 2^59, gamma / sqrt(beta) ≤ 2 sqrt(alpha),
+       │      │  samples_per_setup ≥ N+         →  RTDR    (region (a))
+       │      └─ otherwise                      →  Sun Algorithm 1
+       │                                           (Sun et al. 2023, Theorems 1, 2)
+       │         where N+, for gamma / sqrt(beta) ≤ sqrt(alpha) / above it, is
+       │           5 / 25  (alpha < 10),          25 / 50   (10 ≤ alpha < 1e3),
+       │          50 / 100 (1e3 ≤ alpha < 1e8),  100 / 1000 (alpha ≥ 1e8),
+       │         and 5 / 25 where RTDR's setup starts next to the mode (*)
+       │
+       └─ gamma < 0
+              ├─ alpha > 2^59                   →  RTDR
+              ├─ -gamma / sqrt(beta) > 1e150    →  Sun Algorithm 3
+              ├─ alpha < 2.5e-324 * (-gamma / sqrt(beta))
+              │      →  Sun Algorithm 3  (the log-axis mode rounds to 0)
+              ├─ samples_per_setup ≥ N*, or RTDR's setup
+              │  starts next to the mode (*)    →  RTDR    (regions (a)-(c))
+              └─ otherwise                      →  Sun Algorithm 3
+                 where N* = 25 for alpha < 0.1, 5 for 0.1 ≤ alpha < 1,
+                 1 for 1 < alpha < 1e3, 10 for 1e3 ≤ alpha < 1e5,
+                 25 for 1e5 ≤ alpha < 1e8, 50 for alpha ≥ 1e8
+
+  (*) region (a), alpha > 1: gamma / sqrt(beta) < -1e10 sqrt(alpha), or the
+      centred construction, from a shape of about 2.4e12 to 3.1e12 at
+      moderate tilts, of about 2.3e13 near a tilt of -alpha / e and of
+      about 4.5e13 at any tilt; the default method asks the setup's own
+      test, and these shapes are approximate
+
+  alpha = 1 and gamma = 0 above are taken to within
+  sqrt(.Machine$double.eps), as described in Section 2
+```
+
+Write $S$ for the `samples_per_setup` quantity that the branches above
+compare with $N^{+}$ and $N^{*}$,
+
+$$S \;=\; \begin{cases}
+  n, & L_{\alpha} = L_{\beta} = L_{\gamma} = 1, \\
+  \lfloor n / P \rfloor, & 2 \le P \le 256 \text{ and } 4P \le n, \\
+  1, & \text{otherwise},
+\end{cases}$$
+
+where $L_{\alpha}$, $L_{\beta}$, $L_{\gamma}$ are the lengths of the
+three parameter vectors and $P = \operatorname{lcm}(L_{\alpha},
+L_{\beta}, L_{\gamma})$ is the period after which the recycled triples
+repeat. In the middle case `rmhn` keeps a setup for each position within
+the period, and each serves $\lfloor n/P \rfloor$ draws; otherwise
+consecutive draws may need different setups, and a call with parameter
+vectors of length $n$ counts one draw per setup, as the loop of single
+draws in a Gibbs sampler does. The intuition
+follows from decomposing the expected time per draw as
+
+$$E[\text{time}/\text{draw}]
+ \;=\; \frac{T_{\text{setup}}}{S}
+       \;+\; C_{\text{reject}} \times T_{\text{per-proposal}},$$
+
+where $T_{\text{setup}}$ is the one-off cost of preparing the
+proposal (the $m_{\text{init}}$ heuristic plus at most one
+Newton step for Sun Algorithm 3; an iterative contact-point search
+for RTDR), $C_{\text{reject}} = 1/\text{acceptance}$ is the
+expected number of proposals per accepted draw, and
+$T_{\text{per-proposal}}$ is the cost of one proposal cycle (sample
+plus acceptance log-ratio evaluation).
+
+For $\gamma < 0$ and $\alpha < 1$ the two samplers sit on opposite
+ends of this trade-off:
+
+- **Sun Algorithm 3** has a *cheap setup* — $m_{\text{init}}$ is
+  explicit for these shapes, followed by a single Newton
+  refinement — but a *more expensive per-proposal*: every proposal
+  calls `rgamma` and evaluates the fractional power $X = m \cdot T^{r}$.
+- **RTDR** (regions (b) and (c) for these shapes) has a *more
+  expensive setup*: each contact point $t_{l}$, $t_{r}$ is found by an
+  iterative search that terminates as soon as the log-ratio of the
+  density at the mode to the density at the contact point lands in the
+  bracket $[0.46,\, 2.49]$. But the *per-proposal* is light: a draw
+  from the piecewise envelope and the acceptance test need only three
+  uniform variates and a few `log` and `exp` evaluations.
+
+When $S$ is large the per-proposal term dominates and RTDR wins; when it
+is small — the Gibbs case where each iteration redraws
+$(\alpha, \beta, \gamma)$ — the setup term does. The crossovers in the
+tree come from timing the samplers against each other on an Apple M1
+Ultra, and they move from machine to machine; Appendix A.6 gives the
+timings and the margins. The branches that start at extreme values —
+shapes above $2^{59}$, tilts beyond $10^{150}$, and laws RTDR cannot
+place — come from the limits of double precision instead, and ordinary
+parameters never reach them; Appendix A.5 explains them.
+
+A small concrete demonstration: with `set.seed` aligned,
+`method = "auto"` and the *expected* forced method produce
+bit-identical draws on each branch.
+
+```{r auto-dispatch}
+# Branch: alpha < 1 and gamma > 0  -->  expects RTDR
+set.seed(7); auto1 <- rmhn(20, alpha = 0.7, beta = 1, gamma = 2)
+set.seed(7); rtdr1 <- rmhn(20, alpha = 0.7, beta = 1, gamma = 2, method = "rtdr")
+identical(auto1, rtdr1)
+
+# Branch: alpha > 1, gamma > 2 sqrt(alpha beta)  -->  expects Sun Algorithm 1
+set.seed(7); auto2 <- rmhn(20, alpha = 3,   beta = 1, gamma = 5)
+set.seed(7); sun2  <- rmhn(20, alpha = 3,   beta = 1, gamma = 5, method = "sun")
+identical(auto2, sun2)
+
+# Branch: alpha > 1, gamma <= sqrt(alpha beta), 5 or more draws per setup
+#   -->  expects RTDR
+set.seed(7); auto3 <- rmhn(20, alpha = 3,   beta = 1, gamma = 1.5)
+set.seed(7); rtdr3 <- rmhn(20, alpha = 3,   beta = 1, gamma = 1.5, method = "rtdr")
+identical(auto3, rtdr3)
+
+# Branch: gamma < 0, 0.1 <= alpha < 1, fewer than 5 draws per setup
+#   -->  expects Sun Algorithm 3
+set.seed(7); auto4 <- rmhn(4,  alpha = 0.5, beta = 1, gamma = -1)
+set.seed(7); sun4  <- rmhn(4,  alpha = 0.5, beta = 1, gamma = -1, method = "sun")
+identical(auto4, sun4)
+```
+
+The four `TRUE` outputs are the same invariant that the package's tests
+enforce as a regression test.
+
+## References
+
+Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
+distribution: Properties and an efficient sampling scheme.
+*Communications in Statistics - Theory and Methods*, 52(5),
+1591--1613. <https://doi.org/10.1080/03610926.2021.1934700>
+
+Gao, F., & Wang, H.-B. (2025). Generating modified-half-normal random
+variates by a relaxed transformed density rejection method.
+*Communications in Statistics - Simulation and Computation*, 1--25.
+Advance online publication.
+<https://doi.org/10.1080/03610918.2025.2524551>
+
+Robert, C. P. (1995). Simulation of truncated normal variables.
+*Statistics and Computing*, 5(2), 121--125.
+<https://doi.org/10.1007/BF00143942>
+
+## Appendix A. Numerical details {-}
+
+This appendix is for readers who want to check the implementation
+against the papers. It describes how the package keeps its results
+accurate where the textbook formulas lose digits, how it treats
+parameters at the edges of double precision, and the timings behind
+`method = "auto"`. None of it is needed to use the package; the help
+pages state what each function returns and, where it has been
+measured, how accurate it is.
+
+### A.1 Special cases and their neighbourhoods {-}
+
+`dmhn`, `pmhn` and `qmhn` use the standard laws of §2 only at
+the special values exactly. A shape or a tilt merely close to them is a
+different law: at $\alpha = 1 + \delta$ the log density moves by about
+$\delta(\log(\sqrt{\beta}x) - E\log U)$, $U = \sqrt{\beta}X$, which next
+to $x = 10^{-300}$ is about $10^{-5}$ for $\delta = 1.5 \times 10^{-8}$,
+so such a triple takes the general route, which holds its accuracy up
+to the special values.
+
+`rmhn` draws from the standard laws also where $|\alpha - 1|$ or the
+scale-free tilt $|z|$, $z = \gamma/\sqrt{\beta}$, is below
+`sqrt(.Machine$double.eps)`. The law drawn is then within a total
+variation distance of about $|\delta|\,E|\log U - E\log U|/2$ or
+$|z|\,E|U - EU|/2$ of the one requested, and of $E|\delta L + zV|/2$, with
+$L$ and $V$ those two centred terms, where both are that small and the
+half-normal is drawn; this is below $8.6 \times 10^{-9}$. The band also
+spares `method = "sun"` a case it cannot draw: of Sun et al.'s samplers
+only Algorithm 2, which the package does not implement (§5.3), covers
+$\alpha < 1$ with $\gamma > 0$, a case `method = "sun"` would otherwise
+meet next to $\alpha = 1$ from below under a positive tilt, and next to
+$\gamma = 0$ from above for any $\alpha < 1$.
+
+The one exception to the use of the standard laws is a
+zero or negligible tilt at a very large shape. The Gamma law then has a
+relative width of about $\sqrt{2/\alpha}$, and the rounding of
+$\beta x^2$, or of R's `rgamma`, would move it by a visible part of that
+width. So `dmhn`, `pmhn` and `qmhn` use it only up to
+$\alpha = 10^6$, beyond which they treat $\gamma = 0$ like any other
+tilt (see Appendix A.4), and `rmhn` only up to
+$\alpha = 2^{60}$, beyond which a rejection sampler placed at the mode
+takes over (Appendix A.5).
+
+### A.2 Moments and mode {-}
+
+Throughout, $z = \gamma/\sqrt{\beta}$. The recurrence of §3,
+together with the closed-form ratio for $E(X)$ in terms of $\Psi$ (Sun
+et al. 2023, Lemma 2a), gives every moment in exact arithmetic. In
+double precision it does not: central moments formed from raw ones
+cancel as soon as the standard deviation is small next to the mean, and
+the ratio of two $\Psi$ values whose logarithms are each about $z^2/4$
+loses digits under a strong positive tilt. The helpers therefore use the
+closed forms only where they are accurate, and elsewhere integrate the
+moments numerically against the density kernel — in the offset from
+its peak where it has one, and on a logarithmic axis out from the origin
+where it has none — which needs no $\Psi$ at all.
+
+**Mean.** `mhn_mean()` forms the ratio
+$E(X) = \Psi[(\alpha+1)/2,\, z] / (\sqrt{\beta}\,\Psi[\alpha/2,\, z])$
+from the logarithms of the two $\Psi$ values. It uses the ratio for
+$z \le 12$ as long as these two logarithms are small enough to leave it
+accurate. For a larger positive tilt, or a very large $\alpha$, both
+logarithms are large while their difference is not, and the mean is
+integrated instead. For $z > 12$ and a shape so small that most of the
+mass lies by the origin, that integration holds the mean as a small
+difference; where it finds the mean below a thousandth of the peak it is
+centred on, the ratio is used instead. Under a strong negative tilt,
+$z < -30$, the ratio serves only for $\alpha < 6$, and there it is
+capped at the upper bound $(\gamma + \sqrt{\gamma^2 + 8\alpha\beta})/(4\beta)$
+of Sun et al. (2023, Lemma 4a), which holds for every $\alpha > 0$ by the
+remark after the lemma; from $\alpha = 6$ on, the mean is integrated
+there as well. At $\gamma = 0$ the ratio reduces to
+$\Gamma((\alpha+1)/2) / \big(\sqrt{\beta}\, \Gamma(\alpha/2)\big)$
+(Sun et al. 2023, Lemma 6a). For $\alpha \ge 1$ it is computed as
+$\sqrt{\pi} / \big(\sqrt{\beta}\, B(\alpha/2,\, 1/2)\big)$, with $B$ the
+beta function, whose logarithm R's `lbeta` forms without the
+cancellation between the two log-gamma values that loses digits at a
+large $\alpha$.
+
+**Variance.** `mhn_var()` uses the form of Sun et al. (2023, Lemma 2c),
+$\mathrm{Var}(X) = \alpha/(2\beta) + E(X)\,\big(\gamma/(2\beta) - E(X)\big)$,
+where it is accurate. Its terms cancel under a strong tilt of either
+sign, where the form also magnifies any error in $E(X)$ by about
+$z^2/2$; at a large $\alpha$ it magnifies that error by about $4\alpha$.
+Wherever the combined error, from the rounding of its terms and from the
+error of the mean, would exceed about $10^{-8}$ of the result, the
+variance is integrated instead. This is so for $z > 12$, where the mean
+itself is integrated, for $z < -30$, and for $\alpha \ge 1000$ unless
+$\gamma = 0$.
+
+**Skewness and kurtosis.** `mhn_skewness()` and `mhn_kurtosis()`
+integrate the central moments. The raw moments of the Lemma 2b
+recurrence, started from the mean of Lemma 2a, serve only where the
+integration cannot be set up, as for a shape so small, under a positive
+tilt, that the mean falls far below the peak on which the integration is
+centred; the standard deviation of such a law is many times its mean, and
+the raw moments do not cancel there.
+
+**Subnormal shapes.** For a shape below the smallest normal double,
+$2.2 \times 10^{-308}$, the moments are taken from the forms in which the
+shape only multiplies, the same forms as the density takes there
+(Appendix A.4), with $w$ the mass at the peak of the kernel against the
+mass by the origin. While $w$ is well below 1, up to a tilt $z$ of about
+53 at the largest subnormal shape and 54.5 at the smallest, the skewness
+grows like $1/\sqrt{\alpha}$ and the excess kurtosis like $1/\alpha$ as
+the shape falls. Where $w$ is about 1, for $z$ from about 53.3 to 54.7,
+the skewness turns negative and in the kurtosis the peak takes over.
+Past the tilt where the forms hand over, 55 to 56.3, neither depends on
+$\alpha$.
+
+**Mode.** The mode is a closed form in every case (§3), and what
+matters is how it is evaluated. For $\alpha > 1$ it is the positive root
+of $2\beta x^2 - \gamma x - c = 0$, $c = \alpha - 1$. The printed form
+$(\gamma + \sqrt{\gamma^2 + 8\beta c})/(4\beta)$ subtracts two nearly
+equal quantities when $\gamma < 0$, since $\sqrt{\gamma^2 + 8\beta c}$
+tends to $|\gamma|$ as $|\gamma|$ grows; multiplied through by the
+conjugate it becomes $2c/(\sqrt{\gamma^2 + 8\beta c} - \gamma)$, which
+only adds for $\gamma < 0$, and each sign takes the form that only adds.
+Where the squares and products of these forms would overflow, or lose
+digits below the smallest normal double, while the root itself lies well
+inside the range of doubles, the root is formed from ratios instead: with
+$r = \sqrt{8\beta c}$, the larger of $|\gamma|$ and $r$ is factored out,
+leaving a quantity within a factor $1 + \sqrt{2}$ of the root times one
+of order one. The interior maximum of Sun et al. (2023, Lemma 3c), for
+$\alpha < 1$ and $\gamma > 0$, is treated alike. The truncated-normal
+mode $\max(0, \gamma/(2\beta))$ is taken at $\alpha = 1$ itself only,
+with no tolerance band around 1: the root of Lemma 3b tends to it as
+$\alpha \to 1^{+}$, and for $\gamma > 0$ so does the root of Lemma 3c
+from below.
+
+### A.3 Evaluating $\Psi$ {-}
 
 For evaluation, the package uses the closed forms and the series of
 Sun et al. (2023, Supplementary Lemmas 9 and 10) where they are
@@ -332,21 +910,467 @@ The density, distribution and quantile functions need $\Psi$ only
 through the difference between its logarithm and the kernel exponent
 $(\alpha - 1)\log x - \beta x^2 + \gamma x$. Under a strong positive
 tilt both are about $z^2/4$ while that difference is of order one, so
-for $z > 10^3$ both are formed with $z^2/4$ removed analytically. For
-$\alpha > 10^6$ or $z > 10^6$, and wherever the terms of the ordinary
-forms, of size about $\max(\alpha, z)(1 + |\log v^{*}|)$, grow past
-$10^7$, `dmhn`, `pmhn` and `qmhn` measure the law instead from the peak
-$v^{*} = u^{*}/\sqrt{\beta}$ of the density of $\log X$, the positive
-root of $2\beta x^2 - \gamma x - \alpha = 0$, and normalise it by the
-integral over $w$ above. The two tails are then integrals of the same
-integrand over the two sides of $w = \log(q / v^{*})$, and nothing of
-the size of $\alpha \log x$ or $z^2/4$ is formed. $v^{*}$ is held as a
-double next to it plus its offset from that double, so that the offset
-of $x$ from the peak is exact even where the law is narrower than the
-spacing of the doubles near its peak. The help pages of these
-functions state the range over which the results are accurate.
+for $z > 10^3$ both are formed with $z^2/4$ removed analytically. Where
+even that does not suffice, at a very large shape or tilt, those
+functions measure the law from its peak instead, with the integral over
+$w$ above as its normalisation (Appendix A.4).
 
-### Errata in Sun et al. (2023)
+### A.4 Density, distribution and quantile functions {-}
+
+#### Shared by the three functions {-}
+
+Throughout, $z = \gamma/\sqrt{\beta}$ is the scale-free tilt and $m$ is the
+larger of $\alpha$ and $z$. The three functions evaluate the law in one of
+two ways.
+
+The *ordinary forms* are the logarithm of the density formula, the series
+of Sun et al. (2023, Lemma 1b) for the distribution function, and the
+quadratures of the density. They are used only while $m \le 10^6$ and
+$m(1 + |\log v^{*}|)$, the size of their largest terms, is at most $10^7$.
+At $\beta = 1$ this allows a shape up to $10^6$ or a tilt up to about
+$7.3 \times 10^5$; at $\beta = 10^{-300}$ or $\beta = 10^{300}$ it allows
+up to about $3 \times 10^4$ for either.
+
+For a shape or a tilt above $10^6$, and wherever the terms of the ordinary
+forms grow past that bound, the law is *measured from the peak*
+$v^{*}$ of the density of $\log X$, the positive root of
+$$2\beta x^2 - \gamma x - \alpha = 0,$$
+which lies at or above the median. With $x = v^{*} e^{w}$, the kernel
+$x^{\alpha - 1} e^{-\beta x^2 + \gamma x}$ divided by its value at the peak,
+taken against $dx$, becomes $v^{*}$ times
+$$\exp\!\big(-\alpha(e^{w} - 1 - w) - \beta v^{*2}(e^{w} - 1)^2\big)$$
+against $dw$. Both terms of the exponent are at most 0 and vanish at the
+peak, so nothing of the size of $\alpha \log x$, $(\alpha/2)\log\beta$ or
+$\gamma^2/(4\beta)$ is formed. The integral of this function over the whole
+line, times $v^{*}$, is the peak-normalised integral of the law, which
+normalises the density and both tails. $v^{*}$ is held as a double next to
+it plus its offset from that double, so that the offset $d = x - v^{*}$ of a
+point from the peak is exact, even where the law is narrower than the
+spacing of the doubles near its peak. The integral over $w$ is the one of
+Appendix A.3 with $u^{*} = \sqrt{\beta}\,v^{*}$.
+
+A subnormal shape, below the smallest normal double
+$2.2 \times 10^{-308}$, is computed apart, at $\gamma = 0$ too. There half
+of $\alpha$ is not always a double and $1/\alpha$ can overflow, while
+$t^{\alpha} = 1$ to double precision at every positive double $t$. The law
+then takes a form in which $\alpha$ only multiplies. Its density is
+$$f(x) = \frac{\alpha\, e^{-\beta x^2 + \gamma x}}{x\,(1 + w)},
+  \qquad w = \alpha K_0(z),$$
+with
+$$K_0(z) = \int_0^1 \frac{e^{-t^2 + z t} - 1}{t}\,dt
+         + \int_1^\infty \frac{e^{-t^2 + z t}}{t}\,dt,$$
+and $1/(1 + w)$ is the probability that $X$ lies below the smallest
+positive double. `pmhn()`, `qmhn()`, `rmhn()` and the moment functions take
+the same form. For a large tilt $w$ is the mass at the peak of the kernel
+against the mass by the origin; it is below $10^{-200}$ in size for
+$z \le 30$, and negative below $z$ of about 0.3. Below a tilt of about 52
+(53 at the smallest shapes) $1/(1 + w)$ is 1 in double precision, with the
+consequences for `pmhn()`, `qmhn()` and `rmhn()` that the help page of
+`dmhn()` lists. The form serves the whole law up to a tilt
+between about 55 and 56.3, as $\alpha$ falls. Above it the mass by the
+origin is at most $2^{-64}$, about $5.4 \times 10^{-20}$, of the whole, and
+the density, the upper tail, the moments and the law of the draws no
+longer depend on $\alpha$; the lower tail far below the peak, of which that
+mass is more than $2^{-64}$, is still taken from the same form up to where
+it reaches one half.
+
+#### Density {-}
+
+The density is computed in log space, to avoid underflow and overflow.
+
+At $\gamma = 0$ exactly, the closed form of the square-root-Gamma law is
+used only for $\alpha \le 10^6$. Above that the Gamma law of $\beta X^2$
+is so narrow that rounding $\beta x^2$ moves it by a visible part of its
+width, by up to about $10^{-5}$ of the log density at $\alpha = 10^{20}$,
+and $\gamma = 0$ is measured from the peak like any other tilt.
+
+At $\alpha = 1$ exactly the law is the normal law of mean
+$\mu = \gamma/(2\beta)$ and standard deviation $\sigma = 1/\sqrt{2\beta}$
+restricted to $(0, \infty)$. Write $z_0 = -\gamma/\sqrt{2\beta}$ for the
+truncation point 0 in standard units. Where 0 lies within 1000 standard
+deviations of the mean, $|\gamma|/\sqrt{2\beta} \le 1000$, the density is
+`dnorm` divided by its upper tail at 0. Farther out the same ratio is
+written in one of two other ways. Where 0 lies above the mean,
+$z_0 > 10^3$, it is written with the normal hazard
+$\phi(z_0)/\bar\Phi(z_0)$, so that two logarithms of about
+$-\gamma^2/(4\beta)$ are not subtracted. Where 0 lies below the mean,
+$z_0 < -10^3$, it is written from the standardised point
+$(x - \mu)/\sigma$, formed directly: the offset $2\beta x - \gamma$ is
+formed in one rounding, as $\beta x - \gamma/2$, and so also where $2\beta$
+overflows. In this way the density holds to the Exponential and normal
+limits it tends to.
+
+In the ordinary form the log density adds terms of size $\alpha \log x$
+and $(\alpha/2)\log\beta$, and for $z > 10^3$ measures $x$ from the centre
+$\gamma/(2\beta)$ rounded to a double. Their rounding passes $10^{-7}$ at
+$\alpha = 10^8$, and $10^{-6}$ at $z = 10^{10}$ unless $\beta$ is a power
+of 2. The bound of $10^7$ on the size of the largest terms (see the shared
+section) keeps that rounding to about $2 \times 10^{-9}$.
+
+Measured from the peak, with $d = x - v^{*}$ and $\rho = d/v^{*}$, the log
+density is
+$$\log f(x) = (\alpha - 1)\big(\log(1 + \rho) - \rho\big) - \rho
+  - \beta d^2 - \log\!\Big(v^{*} \int_{-\infty}^{\infty}
+  \exp\!\big(-\alpha(e^{w} - 1 - w) - \beta v^{*2}(e^{w} - 1)^2\big)\,dw
+  \Big),$$
+the last term being the logarithm of $v^{*}$ times the peak-normalised
+integral of the law. Neither of the large terms of the ordinary form is
+formed, and $d$ is exact. The error is then about $10^{-12}$, relative to
+the size of the log density where that is large. Together, the two bounds
+give the range stated on the help page: for $\alpha \le 10^{15}$,
+$|z| \le 10^{15}$ and $\beta$ in $[10^{-300}, 10^{300}]$ the log density
+is accurate to the working tolerance `sqrt(.Machine$double.eps)`.
+
+#### Distribution function {-}
+
+The series on the help page is that of Sun et al. (2023, Lemma 1b) written
+in the package's notation. There each term carries the factor
+$2\beta^{\alpha/2}\gamma^{i}\beta^{-(\alpha+i)/2}/(2\, i!)$, which reduces
+to $z^{i}/i!$, and the paper's lower incomplete gamma function
+$\gamma(s, y)$ equals $\Gamma(s)\,P(s, y)$. The infinite sum is truncated
+at an upper bound on the length $K = \max\{K_1, K_2\}$ of Sun et al.
+(2023), Supplementary Lemma 10(d), obtained from the geometric decay of the
+terms that Lemma 10(a, b) establish; this makes the truncation residual
+bounded by the working tolerance `sqrt(.Machine$double.eps)` divided by
+$\Psi$. For $\gamma > 0$, where every term is positive, the sum is
+truncated earlier, where that bound is below the rounding of the sum, so
+that the residual is below the larger of that and $2^{-53} F$.
+
+The series is tried first for $\alpha < 1$ at every tilt up to
+$z = 1000$, and for $\alpha \ge 1$ only where $|z| \le 20$ and
+$\alpha \le 100$. There a numerical integration of the density on
+$[0, q]$ replaces it in three cases: for $\gamma < 0$, where the rounding
+of the alternating terms, set against the cancellation between them, could
+make its relative error exceed `sqrt(.Machine$double.eps)`; where it would
+need more than $10^6$ terms, which happens for $|z|$ above about 830, and so
+only for $\alpha < 1$; and where $\beta q^2$ is below the smallest normal
+double. Elsewhere, outside the ranges measured from the peak, the
+integration is used directly, being the faster of the two there. It is
+Gauss–Kronrod for $\alpha \ge 1$. For $\alpha < 1$, where the density is
+unbounded at the origin, it is a closed form next to the origin, then
+tanh-sinh up to $q$ or up to the interior peak that a positive tilt can
+give the density, whichever comes first, and Gauss–Kronrod past that peak.
+For $z > 1000$ the integral and $\Psi$ are both taken with
+$\gamma^2/(4\beta)$ removed from their logarithms, which are otherwise too
+large for their difference to be accurate.
+
+The upper tail $P(X > q)$ is computed by Gauss–Kronrod quadrature of the
+density over $(q, \infty)$ on a logarithmic axis. Each tail is computed
+directly on its own side of the peak $v^{*}$, and above the peak the lower
+tail is returned as one minus the upper tail.
+
+With `log.p = TRUE` both tails are formed on the log scale throughout. At
+or below the median $\log P(X > q)$ is about $-F$, and the logarithm of the
+quadrature carries an absolute error of about $\epsilon$ times the size of
+the terms it is assembled from,
+$$|\log\Psi| + (\alpha/2)\,|\log\beta| + m\,(1 + |\log v^{*}|),$$
+with $\gamma^2/(4\beta)$ removed from $\log\Psi$ for $z > 1000$, as in the
+quadratures. Wherever that could pass $10^{-9}$ of $F$, the log upper tail
+is formed instead as $\log(1 - F)$ from $\log F$, which keeps the relative
+accuracy of $F$; for parameters of order one this happens only below $F$ of
+about $10^{-5}$. For $\alpha < 1$ with $|z| > 20$, where the series costs
+milliseconds, $F$ is taken for this from the numerical integration wherever
+that agrees with the upper tail to within the error of the latter.
+
+The lower tail has the matching switch. Below the peak $F$ can still
+exceed one half, and for a small shape it is close to 1 over most of the
+range below the peak, one less a tail proportional to $\alpha$. There
+$\log F$, about $-P(X > q)$, is assembled from terms of the size of
+$\log\Psi$, $(\alpha/2)\log\beta$ and $(\alpha - 1)\log q$ that cancel, and
+carries an absolute error of about $\epsilon$ times their size. Wherever
+that could pass $10^{-9}$ of $\log F$, and the error of the upper tail,
+carried into $\log F$, is estimated at less than half as much, $\log F$ is
+formed instead as $\log(1 - P(X > q))$ from the upper tail, which keeps
+the relative accuracy of $P(X > q)$. Without that switch the error would
+pass $10^{-9}$ of $\log F$ for a shape below about $10^{-6}$ under a small
+tilt, and below a smaller shape under a large one. For a subnormal shape
+the form of the shared section keeps the relative accuracy of $\log F$ as
+well.
+
+At $\gamma = 0$ exactly, $F(q) = P(\alpha/2, \beta q^2)$ is taken from
+`pgamma`, or, where $\beta q^2$ is below the smallest normal double, as its
+leading term $(\beta q^2)^{\alpha/2}/\Gamma(\alpha/2 + 1)$, which is exact
+to double precision there. This is done for $\alpha \le 10^6$. Above it
+the Gamma law is so narrow that rounding $\beta q^2$ moves it by a visible
+part of its width, by up to about $10^{-6}$ of $F$ at $\alpha = 10^{20}$,
+and $\gamma = 0$ is measured from the peak.
+
+At $\alpha = 1$ exactly the truncated-normal distribution function is
+taken from `pnorm`, or through the scaled complementary error function
+where the truncation point 0 lies three or more standard deviations above
+the mean $\gamma/(2\beta)$ of the untruncated normal,
+$z_0 = -\gamma/\sqrt{2\beta} \ge 3$. Near the truncation point the lower
+tail is summed from a short series, so that it keeps its relative accuracy
+however small it is. For $z_0$ far beyond 3 the same forms hold up to
+$z_0 = \infty$, where the law is Exponential with rate $|\gamma|$. For
+$z_0$ below $-10^3$ the standardised offset is formed from
+$2\beta q - \gamma$ in one rounding (as $\beta q - \gamma/2$, so also where
+$2\beta$ overflows), not from a rounded mean $\gamma/(2\beta)$. The lower
+tail within $|z_0|/2$ standard deviations of 0, where that offset is
+resolved only to about $\epsilon |z_0|$ of one, is taken from the ratio of
+the two normal lower tails written with the exact distance $q\sqrt{2\beta}$
+from the truncation point.
+
+Measured from the peak, both tails are integrals in the variable
+$w = \log(x/v^{*})$. The tail on the side of $\log(q/v^{*})$ away from the
+peak is the integral of
+$\exp\!\big(-\alpha(e^{w} - 1 - w) - \beta v^{*2}(e^{w} - 1)^2\big)$ over
+that side, taken by Gauss–Kronrod quadrature in offsets from $q$, divided
+by the same integral over the whole line; the other tail is its
+complement. Nothing of the size of $\alpha \log x$ or $\gamma^2/(4\beta)$
+is formed, whose rounding would otherwise leave the tails $10^{-7}$ off at
+$\alpha = 10^8$ and farther off as $z$ grows, and no abscissa is rounded to
+the doubles next to the peak, which are a fraction $z\,2^{-53}$ of the
+law's standard deviation apart.
+
+In the ordinary forms the largest terms are $\alpha \log x$,
+$(\alpha/2)\log\beta$ and the rounding of quadrature abscissae placed in
+$\log x$, all of size about $m(1 + |\log v^{*}|)$. The bound of $10^7$ on
+that size keeps their error within 10 standard deviations of the peak below
+$10^{-8}$; measured from the peak the error is about $10^{-14}$. Farther out
+in the upper tail the error of the ordinary forms grows with the distance
+from the peak, and close to that bound it reaches about $3 \times 10^{-8}$
+at 36 standard deviations, where the tail is of order $10^{-284}$. This is
+the range stated on the help page: for $\alpha \le 10^{15}$,
+$|z| \le 10^{15}$ and $\beta$ in $[10^{-300}, 10^{300}]$ both tails are
+accurate to the working tolerance within 10 standard deviations of the
+peak, and to about twice that beyond.
+
+#### Quantile function {-}
+
+In the general case $q = F^{-1}(p)$ is found by the TOMS 748 root-finder,
+applied to the distribution function computed as in `pmhn()`, or, for
+`lower.tail = FALSE`, to the logarithm of its directly computed upper tail.
+The initial bracket is $[s\sqrt{\epsilon},\, s]$ with
+$s = E(X) + 8\sqrt{\mathrm{Var}(X)}$, which scales with the distribution.
+Its left end is halved (down to the smallest positive double) and its right
+end doubled (up to the largest double) until it brackets the target
+probability, each step keeping the bracket a factor of two wide. Where the
+root-finder does not reach its tolerance on that bracket, as for a tiny
+lower-tail $p$ with a large $\alpha$, the equation is solved again for
+$\log q$ on the logarithm of the distribution function; where that fails
+too, or the bracket lies near the largest double, the bracket is bisected.
+A lower-tail `log.p` probability below `log(.Machine$double.xmin)`, about
+$-708.4$, whose exponential is no longer a normal double, is solved on the
+logarithm of the distribution function.
+
+Near 1 the logarithm of the upper tail is about $-(1 - p)$, and its error,
+set by the size of the terms it is assembled from (see Distribution function above), is a
+relative error in $1 - p$. Where that could pass $10^{-9}$, which happens
+within about $3 \times 10^{-6}$ of 1 at the least, and further out for a
+large shape, tilt or $|\log\beta|$, the distribution function is solved for
+one minus the probability instead, which is exact. Likewise a lower-tail
+$p$ close to 1, where the distribution function is resolved only to the
+rounding of 1, is solved on the logarithm of the upper tail for one minus
+it, which is exact. That is done within $10^{-7}$ of 1 at least, and in
+general wherever the error of $F$ near 1 could pass $10^{-9}$ of $1 - p$
+and the upper tail resolves it more accurately: $F$ is resolved there only
+to the rounding of 1, and, for a small shape, where it is close to 1 over
+most of the range, to the error of the lower tail. At parameters of order
+one that is so within about $10^{-5}$ of 1, and farther for a small or
+large shape, a large tilt or an extreme $\beta$.
+
+Where `pmhn()` takes the distribution function from the series of Sun et
+al. (2023), which can cost far more than the upper tail, the root of the
+upper tail is refined instead by Newton steps on the logarithm of the
+distribution function, taken as in `pmhn()` for the log upper tail. Within
+$10^{-7}$ of 1, where the upper tail may not resolve one minus the
+probability at all, that root is taken for a probability it does resolve
+where needed, and the steps start from it.
+
+At $\gamma = 0$ exactly, $y$ in $q = \sqrt{y/\beta}$ is taken from
+`qgamma`, or from the leading term of $P(\alpha/2, y)$ where it is below
+the smallest normal double. Above $\alpha = 10^6$, $\gamma = 0$ is solved
+on the distribution function measured from the peak, as for any other
+tilt.
+
+At $\alpha = 1$ exactly the truncated-normal inverse is taken from
+`qnorm`, refined by one Newton step on the scaled complementary error
+function where the truncation point 0 lies three or more standard
+deviations above the mean $\gamma/(2\beta)$ of the untruncated normal,
+$-\gamma/\sqrt{2\beta} \ge 3$, and by Newton's method on that function
+alone where it lies more than 30 standard deviations above it. Near the
+truncation point it is solved by Halley's method on a short series, so that
+the quantile of a small lower-tail probability keeps its relative accuracy.
+
+### A.5 Random generation at extreme parameters {-}
+
+The branches of the decision tree in §7 that start at extreme
+values come from the limits of double precision, and ordinary parameters
+never reach them. `?rmhn` states which sampler such a call uses and
+which calls stop with an error; this section gives the reasons.
+
+**Rounding in R's `rgamma`.** R's `rgamma`, from which the
+square-root-Gamma closed form and Sun et al.'s Algorithm 3 draw, rounds
+$\sqrt{a - 1/2}$ and the scale of a Gamma variate of shape $a$, and so
+shifts every variate alike by up to about $3 \times 2^{-53}\sqrt{a}$ of
+its standard deviation: $2.5 \times 10^{-7}$ at $a = 2^{59}$. Algorithm
+3's own setup, which rounds the shape, the power and the rate of its
+Gamma proposal, adds a shift of the same kind; its draws were measured to
+shift by up to about $4.5 \times 2^{-53}\sqrt{\alpha}$ standard
+deviations in all ($3.8 \times 10^{-7}$ at $\alpha = 2^{59}$). The
+package keeps such common shifts to a few times $10^{-7}$ of a standard
+deviation. So the closed form, whose Gamma variate has shape $\alpha/2$,
+is used only up to $\alpha = 2^{60}$, and Algorithm 3 only up to
+$\alpha = 2^{59}$ (about $5.8 \times 10^{17}$). For the same reason,
+above $\alpha = 10^{18}$ Algorithm 1 is used with its Normal proposal
+whatever the constants of Theorem 1: its square-root-of-Gamma proposal
+would be built from $\sqrt{\alpha/2 - 1/2}$ rounded to double precision,
+a shift the acceptance test cannot see. Under a small tilt the Normal
+proposal accepts about $1/\sqrt{2}$ of its proposals there (0.706 at
+$\alpha = 2 \times 10^{18}$), below the 0.8 of Theorem 2e, and the law
+drawn stays exact.
+
+**Draws placed from the mode.** As $\alpha$ or the tilt grows, the law
+narrows around its mode relative to the mode itself, and a rounding error
+that moved every draw alike, such as that of a computed mode, would
+become a visible part of its standard deviation. Beyond the shapes
+above, the draws are therefore placed from the mode computed to about
+twice double precision, so that each is the exact draw rounded once, at
+any batch size: by the Normal proposal of Algorithm 1, centred at the
+mode, for a zero or negligible tilt of either sign
+($|\gamma|/\sqrt{\beta}$ below `sqrt(.Machine$double.eps)`) above
+$\alpha = 2^{60}$, or by RTDR under `method = "rtdr"`; and by RTDR for
+any other $\gamma < 0$ above $\alpha = 2^{59}$. Sun et al. state
+Algorithm 1 for $\gamma > 0$ and Theorem 1 for $\gamma \geq 0$, but
+centred at the mode the Normal envelope holds for either sign. A positive
+tilt goes to Algorithm 1 above $\alpha = 2^{59}$, also at any batch size:
+no timing reaches that far, and RTDR cannot represent the law from a
+shape of about $10^{31}$ on (see below), while Algorithm 1 draws it.
+
+**Strong negative tilts.** Past a tilt $-\gamma/\sqrt{\beta} = 10^{150}$,
+where the law is its $\mathrm{Gamma}(\alpha, -\gamma)$ limit to double
+precision, Algorithm 3 proposes that limit itself and accepts
+practically every proposal, at a setup cost no envelope construction can
+undercut, so it is used there at any batch size. Its matching point for
+$\alpha \leq 1.1$ is then simply the mean $\alpha/|\gamma|$ of that
+limit, without a Newton step.
+
+**Where RTDR stops.** RTDR stops with an error for the whole call once
+the standard deviation of the law is no larger than the spacing of the
+doubles at its mode $m$, so that its draws could take only a few
+distinct values. Relative to $m$, the standard deviation is about
+$1/\sqrt{2\alpha}$ at $\gamma = 0$, and $1/\sqrt{\alpha}$ under a strong
+negative tilt, where the law is close to $\mathrm{Gamma}(\alpha, -\gamma)$;
+the doubles at $m$ are between $2^{-53} m$ and $2^{-52} m$ apart. So on
+the shape axis the stop comes between $2^{103}$ and $2^{105}$
+($4.1 \times 10^{31}$) at $\gamma = 0$, and between $2^{104}$ and
+$2^{106}$ ($8.1 \times 10^{31}$) under a strong negative tilt, depending
+on where $m$ falls between two powers of two. Under a positive tilt it
+comes from $\gamma/\sqrt{\beta}$ of about $9 \times 10^{15}$ ($2^{53}$ at
+$\beta = 1$). There the law is normal to far below double precision,
+with mean $m$ and variance $1/((\alpha - 1)/m^{2} + 2\beta)$, and can be
+drawn from directly. Algorithm 1 and the truncated normal for
+$\alpha \approx 1$ do not stop there: their draws are placed at the mode
+to within a few units in the last place, so that they take only a few
+distinct values near it. The default method uses Algorithm 1 for such
+laws with $\gamma > 0$ and $\alpha > 1$: up to $\alpha = 2^{59}$ their
+tilt exceeds $2\sqrt{\alpha}$, and above that shape Algorithm 1 serves at
+any tilt.
+
+**Where RTDR cannot place the law.** For $\alpha \le 1$ RTDR works with
+$\log(\sqrt{\beta} X)$, whose mode is the logarithm of about
+$\alpha\sqrt{\beta}/|\gamma|$ under a negative tilt. Below a shape of
+about $2.5 \times 10^{-324}\,|\gamma|/\sqrt{\beta}$, half the smallest
+positive double times the tilt, that number rounds to 0; this needs
+$\alpha$ below $4.4 \times 10^{-16}$, and almost all the mass of $X$ then
+lies below the smallest positive double. Algorithm 3 samples the law
+exactly there and is used instead, under `method = "rtdr"` too. RTDR
+cannot place the law either where $-\gamma/\sqrt{\beta}$ passes the
+largest double, or comes within a small factor of it at a shape of a
+few; `?rmhn` gives the sampler used, or the error raised, in each case.
+
+**Subnormal shapes.** `rmhn` draws the peak of a law with a subnormal
+shape (see `?rmhn`) through a proxy, the law of the shape $2^{-60}$
+above $\sqrt{\beta}\,x = 1$, which has the peak's density there to within
+a relative $4 \times 10^{-18}$.
+
+### A.6 Timings behind `method = "auto"` {-}
+
+§7 sets each sampler's setup against its cost per proposal. The
+implementation adds the following to those costs.
+
+- **Sun Algorithm 3.** For $\alpha > 1.1$ the initial matching point
+  needs a bisection for the inflection point, and the single Newton
+  refinement uses two `boost::math::digamma` evaluations and one
+  `boost::math::trigamma`. The acceptance log-ratio reuses
+  $T = (X/m)^{1/r}$ directly. Its three terms are each of the order of
+  the Gamma rate $R$ and cancel to order one, so above $R = 10^{6}$,
+  where their rounding would no longer be negligible, it is evaluated
+  in the form $R\,w\,[(1+v)^{p} - 1 - p v]$, with $w = X/m$,
+  $v = w - 1$ and $p = \beta m/(\beta m + |\gamma|)$.
+- **RTDR in region (a).** The search for each contact point starts
+  from $m/2$ and $m + \max(1, m/2)$ — not from
+  $m \mp \sqrt{-2/(\log f)''(m)}$, which Gao & Wang (2025) recommend
+  after their Eq. (8) and use in the $\lambda \geq 1$ branch of the R
+  code of their Appendix B — and walks in, in about $\log_2 m$ Newton
+  steps,
+  except where the construction is centred at the mode (once the
+  magnitudes of the three terms of $\log f(m)$, which set the scale of its
+  rounding error, sum past $0.01$ divided by the machine epsilon: from a shape of
+  about $2.4 \times 10^{12}$ to $3.1 \times 10^{12}$ at moderate tilts,
+  of about $2.3 \times 10^{13}$ near a tilt of $-\alpha/e$, and of about
+  $4.5 \times 10^{13}$ at any tilt) or
+  $\gamma/\sqrt{\beta}$ is below $-10^{10}\sqrt{\alpha}$; there it
+  starts next to the mode, at the offset that Gao & Wang (2025,
+  Section 2) recommend. Each proposal then takes three uniform variates
+  and a few `log` evaluations.
+
+The crossovers come
+from two paired timing races of the two samplers, whose scripts and
+results are not shipped with the package, and from three runs of
+[inst/benchmarks/auto_dispatch.R](https://github.com/t-momozaki/mhn/blob/main/inst/benchmarks/auto_dispatch.R)
+(installed at `system.file("benchmarks", "auto_dispatch.R", package = "mhn")`),
+whose grid starts at $\alpha = 0.3$; all were timed on an Apple M1 Ultra
+with the code of this release, and the crossings move from machine to
+machine. The first race covers $\alpha$
+from 0.01 to $10^4$ and $|\gamma|/\sqrt{\beta}$ from 0.5 to $10^4$; the
+second covers shapes from $10^3$ to $10^{14}$ under tilts of both
+signs, positive tilts from 1.25 to 3 times $\sqrt{\alpha\beta}$ at
+shapes from 1.5 to 1000, and single draws within one vectorised
+call, which pays a setup per draw without R's cost per call. For
+$\gamma < 0$ Algorithm 3 wins single draws for $\alpha < 1$ (by 11--23%
+at $\alpha = 0.01$, by at most 2% for $\alpha$ from 0.3 to 0.8), and
+RTDR takes over from $S = 5$, or $S = 25$ at $\alpha = 0.01$, where the
+spike at the origin makes Algorithm 3's setup relatively cheapest. For
+$\alpha > 1$ Algorithm 3 locates its matching point by bisection and
+Newton steps, and RTDR wins at every $S$ from $\alpha = 1.5$ to 100.
+From $\alpha = 10^3$, where RTDR's search walks in, its setup is the
+dearer: Algorithm 3 wins single draws, RTDR taking up to 1.4 times as
+long, and up to 5.2 times in a vectorised call, and RTDR takes over
+from $S = 5$ or 10 at $\alpha = 10^3$, 10 or 25 at $10^4$, 25 from
+$10^5$ to $10^7$, 25 or 50 at $10^8$ and 50 beyond. Where its search
+starts next to the mode, RTDR wins at every $S$, single draws included
+(by 3.6--5.0%, and by 17--34% in a vectorised call). For $\gamma > 0$,
+$\alpha > 1$ Algorithm 1 wins or ties single draws at every shape and
+tilt timed (RTDR takes 1.6 to 12 times as long in a vectorised call),
+and its
+per-proposal cost depends on $\gamma/\sqrt{\alpha\beta}$. Up to about 1
+it proposes from the square root of a Gamma law, one `rgamma` call per
+proposal, and RTDR wins from $S = 5$ ($\alpha \le 5$), 10
+($\alpha = 10$), 25 ($\alpha = 100$), 25 or 50 ($\alpha$ from $10^3$
+to $10^7$), 50 or 100 ($\alpha = 10^8$) or 50 to 200
+($\alpha = 10^{10}$ and $10^{12}$), by up to 69%. Above it, up to 2,
+Algorithm 1 proposes from a Normal law that accepts only 0.81--0.92 of
+its proposals, and RTDR still wins most large batches, from a larger
+$S$ and by up to 12% (32% at $\alpha = 10^7$, where Algorithm 1's
+acceptance test is dear); at the edge of that band,
+$\gamma/\sqrt{\alpha\beta} = 2$, it wins no $S$ at $\alpha = 1.5$,
+$10^{10}$ and $10^{12}$ (it is 3.0%, 2.0% and 2.3% slower at best).
+From about 2.5--3 on Algorithm 1 wins nearly every $S$: beyond 2, RTDR
+gains at most 2.3% at shapes up to 1000 and 0.4% at larger ones, but
+12% at $\alpha = 10^7$. The rule cuts at
+$\gamma/\sqrt{\beta} = 2\sqrt{\alpha}$ and splits its thresholds at
+$\sqrt{\alpha}$, near Algorithm 1's own switch of proposal (at the tilt
+$\Delta_{\mathrm{crit}} \geq \sqrt{\alpha}$ where $K_{1} = K_{2}$, with
+$\Delta_{\mathrm{crit}}/\sqrt{\alpha} \to 1$ as $\alpha \to \infty$;
+Sun et al. 2023, Section 4.1.1): 5 and 25 below
+$\alpha = 10$, 25 and 50 up to $10^3$, 50 and 100 up to $10^8$, 100 and
+1000 beyond, and 5 and 25 where RTDR's search starts next to the mode.
+
+## Appendix B. Misprints in the source papers {-}
+
+### B.1 Sun et al. (2023) {-}
 
 The published paper has six typesetting errors in results this
 vignette draws on that affect what is computed from them: four in the
@@ -415,9 +1439,8 @@ and the package uses the correct form.
   (marked with an `// ERRATA` comment). With the printed form,
   $C_{1}$ and $C_{2}$ can fall below the index from which the
   ratio is actually at most $q$, so the geometric tail bound of
-  part (d) no longer follows. Under the package's truncation rule
-  the effect on the computed $\Psi$ is negligible; the corrected
-  form is used because it is the one the proof supports.
+  part (d) no longer follows. The package uses the corrected form,
+  which is the one the proof supports.
 
 - **Gamma shape in step 2 of Algorithm 3.** Algorithm 3 proposes
   $X = m T^{r}$ with $r = (\beta m + |\gamma|)/(2\beta m + |\gamma|)$.
@@ -448,542 +1471,11 @@ and the package uses the correct form.
   $m = 0.223$, $l''$ is $-20.9$ and the printed form gives $+1.9$.
   The package uses the minus sign.
 
-## Sampling: Sun et al. (2023)
+### B.2 Gao & Wang (2025) {-}
 
-Sun et al. (2023) propose three Accept–Reject schemes, indexed by
-the sign of $\gamma$ and a coarse split on $\alpha$. Two of
-them — Algorithm 1 and Algorithm 3 — are implemented in the package
-and reachable via `rmhn(method = "sun")`. Algorithm 2 is not, and
-this section explains the reason.
-
-### Algorithm 1 — $\gamma > 0$, $\alpha > 1$
-
-For each parameter triple, Algorithm 1 constructs **two** proposal
-distributions — a Normal with mean
-$\mu_{\mathrm{opt}}$ and variance $1/(2\beta)$, and a
-$\sqrt{\mathrm{Gamma}(\alpha/2,\, \delta_{\mathrm{opt}})}$ —
-each with a multiplicative envelope constant
-$K_{1}$ and $K_{2}$. Setup chooses whichever envelope is
-tighter ($K_{1} \leq K_{2}$ or the reverse). The two optima
-$\mu_{\mathrm{opt}}$ and $\delta_{\mathrm{opt}}$ have closed
-forms (Sun et al. 2023, Theorem 1), so setup is cheap. The
-acceptance probability is bounded below by 0.8 for $\alpha \geq 4$
-(Sun et al. 2023, Theorem 2e). Above $\alpha = 10^{18}$ the package
-takes the Normal proposal whatever the constants of Theorem 1: R's
-Gamma generator builds its variate from $\sqrt{\alpha/2 - 1/2}$ rounded
-to double precision, which would shift the square-root-of-Gamma proposal
-by an amount the acceptance test cannot see (§7). Under a small tilt the
-Normal proposal accepts about $1/\sqrt{2}$
-of its proposals there (0.706 at $\alpha = 2 \times 10^{18}$), below
-that bound, and the law drawn stays exact. For $1 \leq \alpha < 4$ no
-uniform lower bound is proved, but Figure 2 of Sun et al. (2023),
-computed numerically, shows high acceptance throughout that range.
-
-### Algorithm 3 — $\gamma \leq 0$
-
-When the tilt is non-positive, Theorem 3 of Sun et al. (2023)
-supplies a proposal kernel based on an AM–GM-type inequality. (Sun et
-al. print Algorithm 3 for $\gamma < 0$, Theorem 4 and Figure 4 for
-$\gamma \leq 0$; at $\gamma = 0$ the package uses the square-root-Gamma
-closed form.) With a
-tuning point $m > 0$ and the exponent
-$r = (\beta m + |\gamma|)/(2\beta m + |\gamma|)$, the candidate is
-
-$$T \sim \mathrm{Gamma}\!\big(\alpha \cdot r,\, m(\beta m + |\gamma|)\big),
-\qquad X = m \cdot T^{r}.$$
-
-The construction works for every $\alpha > 0$; the package uses it up
-to $\alpha = 2^{59}$, beyond which the rounding of R's `rgamma` would
-shift its proposals alike by more than a few times $10^{-7}$ of a
-standard deviation (§7). For $\alpha > 1$,
-Sun et al. (2023, Theorem 4c) prove an acceptance probability of at
-least $1/\sqrt{2} \approx 0.707$ (the theorem is stated for
-$\alpha > 1$; its proof in the Supplementary Material treats
-$\alpha \geq 3$) at the optimal matching point and
-at the explicit point
-$m_{\star} = (\gamma + \sqrt{\gamma^{2} + 8\alpha\beta})/(4\beta)$;
-for $\alpha \leq 1$ the procedure still samples correctly, but no
-bound is proved. The matching point is initialised from a heuristic
-adapted from Sun et al. (2023, Section 4.2):
-$m_{\mathrm{init}} = \alpha^{2}/\{(1 + \alpha)\sqrt{\beta}\}$ for
-$\alpha \leq 1.1$ (Sun et al. print $\alpha^{2}/(1+\alpha)$, which
-is the same point at $\beta = 1$; the package divides by
-$\sqrt{\beta}$ so that the matching point scales with $X$, since
-$\sqrt{\beta}X \sim \mathrm{MHN}(\alpha, 1, \gamma/\sqrt{\beta})$),
-and a combination of the mode and the rightmost inflection point
-for $\alpha > 1.1$ (the inflection point is a quartic root, which
-the package locates by bisection). The package then applies a
-single Newton-Raphson refinement step in both regimes, producing
-$m_{\mathrm{recommend}}$, whose acceptance probability is within
-0.002 of the optimum across the parameter range tabulated in
-Sun et al. (2023, Table 1). For this matching point the
-$1/\sqrt{2}$ level is observed, not proved. Past a tilt
-$-\gamma/\sqrt{\beta} = 10^{150}$, where the law is its
-$\mathrm{Gamma}(\alpha, -\gamma)$ limit to double precision, the
-matching point for $\alpha \leq 1.1$ is simply the mean
-$\alpha/|\gamma|$ of that limit, without a Newton step.
-
-### Why Algorithm 2 is not implemented
-
-Algorithm 2 targets $\gamma > 0$ with $\alpha < 1$ via the
-mixture representation
-
-$$f_{\mathrm{MHN}}(x \mid \alpha, \beta, \gamma)
- \;=\; \sum_{i=0}^{\infty} p_{i}\, f_{i}(x \mid \alpha, \beta),
-\qquad
-f_{i} \;\sim\; \sqrt{\mathrm{Gamma}\!\big((\alpha + i)/2,\, \beta\big)}.$$
-
-The mixture-index sampler keeps the first $M+1$ weights and bounds
-the rest by a geometric envelope, which needs
-$M \geq M^{\dagger} = \max\{\lfloor\alpha\rfloor,
-\lfloor\gamma^{2}/(\varepsilon_{1}^{2}\beta)\rfloor\}$, the point
-beyond which successive weights shrink by at least a factor
-$\varepsilon_{1}$ (Sun et al. 2023, Lemma 8). With
-$\varepsilon_{1} = 1/2$, as in their example,
-$M^{\dagger} = \lfloor 4\gamma^{2}/\beta\rfloor$ for $\alpha < 1$,
-so for large $\gamma^{2}/\beta$
-the whole scheme degrades catastrophically — Gao & Wang (2025,
-Table 1) report a slowdown of up to $\sim 3 \times 10^{4}\times$
-against RTDR in the most extreme case
-$(\alpha, \gamma) = (0.01, 10000)$. The package therefore declines to implement
-Algorithm 2 and routes $(\alpha < 1, \gamma > 0)$ to RTDR, whose
-acceptance Gao & Wang (2025) bound below by $1/e$ (next section).
-
-## Sampling: Gao & Wang (2025) RTDR
-
-Gao & Wang (2025) introduce a *Relaxed* Transformed Density
-Rejection (RTDR) sampler that comes with a uniform lower bound on
-the acceptance probability across the *entire* parameter space.
-
-Gao & Wang (2025) write the density as proportional to
-$x^{\lambda-1}\exp(-\alpha x^{2}-\beta x)$: their
-$(\lambda, \alpha, \beta)$ are the package's $(\alpha, \beta, -\gamma)$,
-so their $\beta < 2(\sqrt{1-2\lambda}-1)$ reads
-$\gamma/\sqrt{\beta} > 2(1-\sqrt{1-2\alpha})$ here. Below, the symbols
-are the package's. Three ideas drive the construction.
-
-### $T_{c}$-concavity
-
-Standard TDR builds piecewise-linear envelopes on top of a
-log-transformed density. RTDR generalises to the $T_{c}$ family
-
-$$T_{c}[x] = \mathrm{sign}(c) \cdot x^{c} \quad (c > -1,\, c \neq 0),
-\qquad T_{0}[x] = \log x.$$
-
-A density $f$ is *$T_{c}$-concave* if $T_{c}[f]$ is concave.
-Logarithmic concavity (the usual TDR setting) is the
-$c = 0$ special case. In regions (b) and (c) below, which transform
-the package's RTDR implementation uses on the log-axis density
-turns on the sign of the tilt: for $\gamma > 0$ it takes
-$c = -1/2$,
-because $\log g$ is then convex on
-$(-\infty, \log(\gamma/\sqrt{\beta}/4))$ and a log-tangent hat
-would fail to dominate there, while $T_{-1/2}[x] = -x^{-1/2}$
-still does. For $\gamma \leq 0$ the log-axis density is
-log-concave and the ordinary $c = 0$ tangent hat is used. In
-region (d), $g$ is in general not $T_{-1/2}$-concave, and the
-envelope of Gao & Wang (2025, Section 4) is used instead.
-
-### Working on the log axis when $\alpha < 1$
-
-When $\alpha < 1$ the density $f(x \mid \alpha, \gamma)$ on
-$(0, \infty)$ blows up at the left endpoint and is not amenable
-to direct envelope construction. The change of variable
-$y = \log x$ yields
-
-$$g(y \mid \alpha, \gamma)
- \;=\; \exp\!\big( \alpha y - e^{2y} + \gamma e^{y} \big),
-\qquad y \in \mathbb{R},$$
-
-which is bounded and unimodal (Gao & Wang 2025, Lemma 3.3). Gao &
-Wang's RTDR operates on $g$ for $\alpha < 1$ and on $f$ directly for
-$\alpha \geq 1$; the package moves $\alpha = 1$ itself to $g$, so that
-it works on $g$ for $\alpha \leq 1$ and on $f$ for $\alpha > 1$ (see
-region (b) below).
-
-### The four regions
-
-After scale normalisation $\sqrt{\beta} X \to X$
-(so we may assume $\beta = 1$), the RTDR envelope construction
-splits into four regions based on $(\alpha, \gamma)$. The $\gamma$
-in the table below is the normalised tilt
-$\gamma_{\mathrm{norm}} = \gamma/\sqrt{\beta}$; for a general
-$\beta$ the package's `rmhn(method = "rtdr")` rescales internally
-and compares $\gamma_{\mathrm{norm}}$ against the boundary
-$2(1 - \sqrt{1 - 2\alpha})$.
-
-| Region | $\alpha$        | $\gamma$             | Envelope target              | Reference                                          |
-|:------:|-----------------|----------------------|------------------------------|----------------------------------------------------|
-| (a)    | $> 1$ $^{\dagger}$ | any               | $f$ log-concave              | Gao & Wang (2025, Theorem 3.1)                     |
-| (b)    | $[1/2,\, 1]$ $^{\dagger}$ | any          | $g$ log-concave if $\gamma \leq 0$, else $T_{-1/2}$-concave | Gao & Wang (2025, Corollary 3.1; Theorem 3.2)      |
-| (c)    | $(0,\, 1/2)$    | $\leq 2(1 - \sqrt{1 - 2\alpha})$ | $g$ log-concave if $\gamma \leq 0$, else $T_{-1/2}$-concave | Gao & Wang (2025, Lemma 3.5; Theorem 3.2)        |
-| (d)    | $(0,\, 1/2)$    | $> 2(1 - \sqrt{1 - 2\alpha})$    | $g$ with inflection at $y^{*} = \log(\gamma/4)$ | Gao & Wang (2025, Theorem 4.4)      |
-
-$^{\dagger}$ The boundary between (a) and (b) is the package's: Gao &
-Wang (2025) put $\alpha = 1$ in region (a).
-
-Region (a) is the easiest: $f$ is log-concave, and two tangent lines
-and a constant segment suffice (Gao & Wang 2025, Eq. (11)); for
-$\alpha \le e$ and
-$\gamma/\sqrt{\beta} \le \sqrt{8\{\sqrt{(e-1)(\alpha-1)}-(\alpha-1)\}}$
-the left tangent is dropped and the constant runs from 0 (their
-Eq. (10)). Gao & Wang put the boundary $\alpha = 1$ in region (a)
-(their Theorem 3.1, and `if(lambda >= 1)` in the R code of their
-Appendix B). The package handles it in region (b) instead, which their
-Theorem 3.2 also covers ($g$ is $T_{-1/2}$-concave for
-$\alpha \geq 1/2$): $f$ is log-concave at $\alpha = 1$ too, but the
-envelope of region (a) is built around an interior mode in $x$, and at
-$\alpha = 1$ with $\gamma \leq 0$ the density's maximum is at the
-boundary $x = 0$, not at an interior mode. On the log axis $g$ has a
-finite mode for every $\alpha > 0$ (its $x = e^{y}$ is positive), so
-the region (b) construction applies without a special case. Regions
-(b) and (c) share one
-construction on $g$; the sign of $\gamma$ picks the transform. Since
-$\mathrm{d}^{2} \log g / \mathrm{d} y^{2} = \gamma e^{y} - 4 e^{2y}$ is
-negative for every $y$ exactly when $\gamma \leq 0$, a $T_0$ log-tangent
-hat serves on that side, while for $\gamma > 0$ only $T_{-1/2}$-concavity
-survives and the hat switches to inverse-square pieces. Region (d) is the
-hardest — $g$ has an inflection point, and the envelope adds a chain
-of secant segments on the log-convex side. In the envelope of
-Gao & Wang (2025, Eqs. (14)-(15)), which their Theorem 4.4 validates,
-$K = \lceil\rho\rceil$ breakpoints sit on that side,
-and $\rho$ grows roughly linearly in $\gamma$ ($K = 127909$ at
-$\gamma = 10^{5}$). When the envelope has a left tangent line, the
-package stops the chain as soon as a breakpoint falls below it, the
-test used in the R code of their Appendix B; without one, which
-happens only for $\gamma$ below about 6.3, $\lceil\rho\rceil$ is at
-most eight. So only a handful of breakpoints is ever built, and just
-one once $\gamma$ exceeds about 32. Their Eq. (15) prints the
+Their Eq. (15), the envelope of region (d), prints the
 left-tangent interval as $(y^{*}, p_l)$, leaving $(\dot t_l, y^{*}]$
 uncovered, where $\dot t_l < y^{*}$ is the point at which $\log g$ has
 the slope of the tangent at $t_l$; the package follows their
 Theorem 4.3, $(\dot t_l, p_l]$, and like their Appendix B code starts
 the tangent at the last breakpoint kept.
-
-### Why "relaxed"
-
-The classical TDR construction asks for *optimal* tangent contact
-points, which generally have no closed form and must be found by
-Newton iteration. Gao & Wang (2025, Corollary 2.1 and Eq. (7)) show
-that the rejection constant stays $\leq e \approx 2.718$
-(equivalently, acceptance probability $\geq 1/e \approx 0.368$) as
-long as the contact points lie *anywhere* inside a fixed interval — namely
-
-$$\log\!\frac{f(m)}{f(t)} \in
- \begin{cases}
-   [0.46,\, 2.49] & f \text{ log-concave (region (a))}, \\
-   [0.46,\, 2.49] & g \text{ log-concave (regions (b), (c), } \gamma \leq 0), \\
-   [0.93,\, 1.99] & g \text{ $T_{-1/2}$-concave (regions (b), (c), } \gamma > 0).
- \end{cases}$$
-
-Setup is therefore a handful of cheap iterations that terminate as
-soon as the bracket is hit, with no need for a precise Newton
-solution. This is why Gao & Wang (2025) call the setup fast:
-compared with classical TDR, which must solve for optimal contact
-points, or with generic methods such as adaptive rejection sampling
-and numerical inversion, it suits varying-parameter settings such
-as a Gibbs sampler, where $(\alpha, \beta, \gamma)$ changes every
-iteration and each setup serves a single draw. They make no such
-claim against Sun et al. (2023), whose generator they find
-comparable for $\gamma < 0$ or $\alpha > 1$ (their Section 5).
-Algorithm 1's setup costs less than RTDR's, so `method = "auto"` keeps
-it for single draws with $\gamma > 0$, $\alpha > 1$, and §7 explains how
-it splits both signs of $\gamma$ between the Sun algorithms and RTDR by
-batch size and, for $\gamma > 0$, by tilt. RTDR's own advantages are a
-lighter per-proposal cost, which wins every large $\gamma < 0$ batch and
-the large $\gamma > 0$ batches at mild tilt (§7), and the $1/e$
-bound below; it is also the package's only sampler for $\alpha < 1$,
-$\gamma > 0$.
-
-Composing the bounds of Gao & Wang (2025) — Theorem 3.1 for
-region (a), Corollary 2.1 with Eq. (7) for regions (b) and (c),
-whose concavity their Theorem 3.2 establishes, and Theorem 4.4 for
-region (d) — yields the
-headline guarantee of RTDR: for **every**
-$(\alpha, \beta, \gamma)$ with $\alpha > 0$,
-$\beta > 0$, $\gamma \in \mathbb{R}$, the acceptance
-probability of their construction is at least $1/e \approx 0.368$,
-provided its contact points lie in the band of their Eq. (7). The
-package's search for those points does not always reach that band
-(see `?rmhn`), and the acceptance measured stays above $1/e$ there
-too. Sun et al.'s (2023) bounds are uniform only on parts of the
-parameter space: at least 0.8 for Algorithm 1 when $\alpha \geq 4$
-(Theorem 2e), at least $1/\sqrt{2}$ for Algorithm 3 when $\alpha > 1$
-at the optimal matching point $m_{\mathrm{opt}}$ and at $m_{\star}$
-(Theorem 4c; the package's one-step Newton $m$ is not covered), and
-none for Algorithm 2 (§5).
-
-A quick sanity check that the RTDR sampler converges to the right
-distribution in all four regions — empirical means from RTDR vs
-theoretical means across regions (a), (b), (c), (d), each based on
-5000 draws:
-
-```{r rtdr-regions}
-cases <- data.frame(
-  region = c("(a)", "(b)", "(c)", "(d)"),
-  alpha  = c(2.0,    0.7,    0.3,    0.3),
-  gamma  = c(0.5,    1.0,    0.5,    5.0)
-)
-set.seed(42)
-empirical <- mapply(
-  function(a, g) mean(rmhn(5000, alpha = a, beta = 1, gamma = g, method = "rtdr")),
-  cases$alpha, cases$gamma
-)
-theoretical <- mapply(mhn_mean, cases$alpha, beta = 1, cases$gamma)
-data.frame(cases,
-           empirical_mean   = round(empirical,   4),
-           theoretical_mean = round(theoretical, 4))
-```
-
-The four rows hit the right means to within about two Monte-Carlo
-standard errors — at $n = 5000$ those errors run from $0.005$ to
-$0.011$, so the gaps land in the second decimal place, not the third.
-
-## The `rmhn(method = "auto")` dispatch
-
-`rmhn` exposes three values of `method`: `"sun"` (the Sun
-Algorithm 1 / 3 path), `"rtdr"` (the Gao & Wang RTDR path),
-and `"auto"` (default). The first two select the sampler used for the
-general case; the closed-form special cases below are taken first
-whatever `method` is set to, since they are exact and need next to no
-setup. The `"auto"` route is the package's
-recommendation; it combines the special cases and the three samplers
-into one decision tree, whose ordinary thresholds come from timing the
-samplers against each other:
-
-```
-                  rmhn(n, alpha, beta, gamma, method = "auto")
-                                    │
-                                    ▼
-       ┌─ alpha = 1, gamma = 0  →  half-normal       (Sun et al. 2023, Lemma 6c)
-       │
-       ├─ gamma = 0             →  sqrt-Gamma        (Sun et al. 2023, Lemma 6a)
-       │      (above alpha = 2^60: the Normal proposal of Sun Algorithm 1)
-       │
-       ├─ alpha = 1             →  truncated normal  (Sun et al. 2023, Lemma 6b)
-       │
-       ├─ alpha < 1 and gamma > 0
-       │      →  RTDR  (regions (b) / (c) / (d), Gao & Wang 2025, Theorems 3.2, 4.4)
-       │
-       ├─ alpha > 1 and gamma > 0
-       │      ├─ alpha ≤ 2^59, gamma / sqrt(beta) ≤ 2 sqrt(alpha),
-       │      │  samples_per_setup ≥ N+         →  RTDR    (region (a))
-       │      └─ otherwise                      →  Sun Algorithm 1
-       │                                           (Sun et al. 2023, Theorems 1, 2)
-       │         where N+, for gamma / sqrt(beta) ≤ sqrt(alpha) / above it, is
-       │           5 / 25  (alpha < 10),          25 / 50   (10 ≤ alpha < 1e3),
-       │          50 / 100 (1e3 ≤ alpha < 1e8),  100 / 1000 (alpha ≥ 1e8),
-       │         and 5 / 25 where RTDR's setup starts next to the mode (*)
-       │
-       └─ gamma < 0
-              ├─ alpha > 2^59                   →  RTDR
-              ├─ -gamma / sqrt(beta) > 1e150    →  Sun Algorithm 3
-              ├─ alpha < 2.5e-324 * (-gamma / sqrt(beta))
-              │      →  Sun Algorithm 3  (the log-axis mode rounds to 0)
-              ├─ samples_per_setup ≥ N*, or RTDR's setup
-              │  starts next to the mode (*)    →  RTDR    (regions (a)-(c))
-              └─ otherwise                      →  Sun Algorithm 3
-                 where N* = 25 for alpha < 0.1, 5 for 0.1 ≤ alpha < 1,
-                 1 for 1 < alpha < 1e3, 10 for 1e3 ≤ alpha < 1e5,
-                 25 for 1e5 ≤ alpha < 1e8, 50 for alpha ≥ 1e8
-
-  (*) region (a), alpha > 1: gamma / sqrt(beta) < -1e10 sqrt(alpha), or the
-      centred construction, from a shape of about 2.4e12 to 3.1e12 at
-      moderate tilts, of about 2.3e13 near a tilt of -alpha / e and of
-      about 4.5e13 at any tilt
-```
-
-Write $S$ for the `samples_per_setup` quantity that the branches above
-compare with $N^{+}$ and $N^{*}$,
-
-$$S \;=\; \begin{cases}
-  n, & L_{\alpha} = L_{\beta} = L_{\gamma} = 1, \\
-  \lfloor n / P \rfloor, & 2 \le P \le 256 \text{ and } 4P \le n, \\
-  1, & \text{otherwise},
-\end{cases}$$
-
-where $L_{\alpha}$, $L_{\beta}$, $L_{\gamma}$ are the lengths of the
-three parameter vectors and $P = \operatorname{lcm}(L_{\alpha},
-L_{\beta}, L_{\gamma})$ is the period after which the recycled triples
-repeat. In the middle case `rmhn` keeps a setup for each position within
-the period, and each serves $\lfloor n/P \rfloor$ draws; otherwise
-consecutive draws may need different setups, and a call with parameter
-vectors of length $n$ counts one draw per setup, as the loop of single
-draws in a Gibbs sampler does. The intuition
-follows from decomposing the expected time per draw as
-
-$$E[\text{time}/\text{draw}]
- \;=\; \frac{T_{\text{setup}}}{S}
-       \;+\; C_{\text{reject}} \times T_{\text{per-proposal}},$$
-
-where $T_{\text{setup}}$ is the one-off cost of preparing the
-proposal (the $m_{\text{init}}$ heuristic plus at most one
-Newton step for Sun Algorithm 3; an iterative contact-point search
-for RTDR), $C_{\text{reject}} = 1/\text{acceptance}$ is the
-expected number of proposals per accepted draw, and
-$T_{\text{per-proposal}}$ is the cost of one proposal cycle (sample
-plus acceptance log-ratio evaluation).
-
-For $\gamma < 0$ and $\alpha < 1$ the two samplers sit on opposite
-ends of this trade-off:
-
-- **Sun Algorithm 3** has a *cheap setup* — $m_{\text{init}}$ is
-  explicit for $\alpha \leq 1.1$ and needs one bisection for the
-  inflection point above that, and the single Newton refinement
-  uses two `boost::math::digamma` evaluations and one
-  `boost::math::trigamma` — but a *more expensive
-  per-proposal*: every proposal calls `rgamma` and evaluates the
-  fractional power $X = m \cdot T^{r}$. The acceptance log-ratio
-  reuses $T = (X/m)^{1/r}$ directly. Its three terms are each of the
-  order of the Gamma rate $R$ and cancel to order one, so above
-  $R = 10^{6}$, where their rounding would no longer be negligible, it
-  is evaluated in the form $R\,w\,[(1+v)^{p} - 1 - p v]$, with
-  $w = X/m$, $v = w - 1$ and $p = \beta m/(\beta m + |\gamma|)$.
-- **RTDR (region (a))** has a *more expensive setup*: each
-  contact point $t_{l}$, $t_{r}$ is found by an iterative search
-  that terminates as soon as $\log f(m)/f(t)$ lands in the
-  bracket $[0.46,\, 2.49]$. The search starts from $m/2$ and
-  $m + \max(1, m/2)$ — not from $m \mp \sqrt{-2/(\log f)''(m)}$, which
-  Gao & Wang (2025) recommend after their Eq. (8) and use throughout
-  the R code of their Appendix B — and walks in, in about $\log_2 m$
-  Newton steps,
-  except where the construction is centred at the mode (once the
-  magnitudes of the three terms of $\log f(m)$, which set the scale of its
-  rounding error, sum past $0.01$ divided by the machine epsilon: from a shape of
-  about $2.4 \times 10^{12}$ to $3.1 \times 10^{12}$ at moderate tilts,
-  of about $2.3 \times 10^{13}$ near a tilt of $-\alpha/e$, and of about
-  $4.5 \times 10^{13}$ at any tilt) or
-  $\gamma/\sqrt{\beta}$ is below $-10^{10}\sqrt{\alpha}$; there it
-  starts next to the mode, at the offset that Gao & Wang (2025,
-  Section 2) recommend. But the *per-proposal* is light:
-  sampling from the piecewise envelope is straight arithmetic plus
-  a single `log`, and the acceptance ratio adds only two more
-  `log`s.
-
-When $S$ is large the per-proposal term dominates and RTDR wins; when it
-is small — the Gibbs case where each iteration redraws
-$(\alpha, \beta, \gamma)$ — the setup term does. The crossovers come
-from two paired timing races of the two samplers, whose scripts and
-results are not shipped with the package, and from three runs of
-[inst/benchmarks/auto_dispatch.R](https://github.com/t-momozaki/mhn/blob/main/inst/benchmarks/auto_dispatch.R)
-(installed at `system.file("benchmarks", "auto_dispatch.R", package = "mhn")`),
-whose grid starts at $\alpha = 0.3$; all were timed on an Apple M1 Ultra,
-and the crossings move from machine to machine. The first race covers $\alpha$
-from 0.01 to $10^4$ and $|\gamma|/\sqrt{\beta}$ from 0.5 to $10^4$; the
-second covers shapes from $10^3$ to $10^{14}$ under tilts of both
-signs, positive tilts from 1.25 to 3 times $\sqrt{\alpha\beta}$ at
-shapes from 1.5 to 1000, and single draws within one vectorised
-call, which pays a setup per draw without R's cost per call. For
-$\gamma < 0$ Algorithm 3 wins single draws for $\alpha < 1$ (by 11--23%
-at $\alpha = 0.01$, by at most 2% for $\alpha$ from 0.3 to 0.8), and
-RTDR takes over from $S = 5$, or $S = 25$ at $\alpha = 0.01$, where the
-spike at the origin makes Algorithm 3's setup relatively cheapest. For
-$\alpha > 1$ Algorithm 3 locates its matching point by bisection and
-Newton steps, and RTDR wins at every $S$ from $\alpha = 1.5$ to 100.
-From $\alpha = 10^3$, where RTDR's search walks in, its setup is the
-dearer: Algorithm 3 wins single draws, RTDR taking up to 1.4 times as
-long, and up to 5.2 times in a vectorised call, and RTDR takes over
-from $S = 5$ or 10 at $\alpha = 10^3$, 10 or 25 at $10^4$, 25 or 50 from
-$10^5$ to $10^8$ and 50 beyond. Where its search starts next to the
-mode, RTDR wins at every $S$, single draws included (by 3.5--5%, and
-by 16--33% in a vectorised call). For $\gamma > 0$, $\alpha > 1$
-Algorithm 1 wins or ties single draws at every shape and tilt timed
-(RTDR takes 1.6 to 13 times as long in a vectorised call), and its
-per-proposal cost depends on $\gamma/\sqrt{\alpha\beta}$. Up to about 1
-it proposes from the square root of a Gamma law, one `rgamma` call per
-proposal, and RTDR wins from $S = 5$ ($\alpha \le 5$), 10
-($\alpha = 10$), 25 ($\alpha = 100$), 25 or 50 ($\alpha$ from $10^3$
-to $10^8$) or 50 to 200 ($\alpha = 10^{10}$ and $10^{12}$), by up to
-72%. Above it, up to 2, Algorithm 1 proposes from a Normal law that
-accepts only 0.81--0.92 of its proposals, and RTDR still wins large
-batches, from a larger $S$ and by up to 14% (34% at $\alpha = 10^7$,
-where Algorithm 1's acceptance test is dear). From about 2.5--3 on
-Algorithm 1 wins nearly every $S$: beyond 2, RTDR gains at most 3.4%
-at shapes up to 1000 and 1.4% at larger ones, but 13% at
-$\alpha = 10^7$. The rule cuts at
-$\gamma/\sqrt{\beta} = 2\sqrt{\alpha}$ and splits its thresholds at
-$\sqrt{\alpha}$, near Algorithm 1's own switch of proposal (at the tilt
-$\Delta_{\mathrm{crit}} \geq \sqrt{\alpha}$ where $K_{1} = K_{2}$, with
-$\Delta_{\mathrm{crit}}/\sqrt{\alpha} \to 1$ as $\alpha \to \infty$;
-Sun et al. 2023, Section 4.1.1): 5 and 25 below
-$\alpha = 10$, 25 and 50 up to $10^3$, 50 and 100 up to $10^8$, 100 and
-1000 beyond, and 5 and 25 where RTDR's search starts next to the mode.
-
-The remaining branches come from the limits of double precision, and
-ordinary parameters never reach them. R's `rgamma` rounds
-$\sqrt{a - 1/2}$ and the scale of a Gamma variate of shape $a$, and so
-shifts every variate alike by up to about $3 \times 2^{-53}\sqrt{a}$
-of its standard deviation; Algorithm 3's own setup, which rounds the
-proposal's shape, power and rate, adds a shift of the same order. The
-package keeps such common shifts to a few times $10^{-7}$ of a standard
-deviation. So the sqrt-Gamma closed form is used only up to
-$\alpha = 2^{60}$, a Gamma shape of $2^{59}$, and Algorithm 3 only up to
-$\alpha = 2^{59}$; beyond, the draws are placed from the mode computed
-to about twice double precision, at any batch size: by the Normal
-proposal of Algorithm 1, centred at the mode, for a zero or negligible
-tilt of either sign ($|\gamma|/\sqrt{\beta}$ below
-`sqrt(.Machine$double.eps)`), and by RTDR for any other $\gamma < 0$.
-Sun et al. state Algorithm 1 for $\gamma > 0$ and Theorem 1 for
-$\gamma \geq 0$, but centred at the mode the Normal envelope holds for
-either sign. A positive tilt goes to
-Algorithm 1 above $\alpha = 2^{59}$, also at any batch size: no timing
-reaches that far, and RTDR cannot represent the law from a shape of about
-$10^{31}$ on (from between $2^{103}$ and $2^{106}$, see `?rmhn`), while
-Algorithm 1 draws it. Past a tilt
-$-\gamma/\sqrt{\beta} = 10^{150}$ Algorithm 3 proposes the
-$\mathrm{Gamma}(\alpha, -\gamma)$ limit of the law itself and accepts
-practically every proposal, at a setup cost no envelope construction
-can undercut, so it is used there at any batch size. And where RTDR
-cannot place the law at all — for $\alpha \le 1$ it works with
-$\log(\sqrt{\beta} X)$, whose mode is the logarithm of about
-$\alpha\sqrt{\beta}/|\gamma|$, and below a shape of about
-$2.5 \times 10^{-324}\,|\gamma|/\sqrt{\beta}$ that number rounds to 0 —
-Algorithm 3 is used as well, under `method = "rtdr"` too.
-
-A small concrete demonstration: with `set.seed` aligned,
-`method = "auto"` and the *expected* forced method produce
-bit-identical draws on each branch.
-
-```{r auto-dispatch}
-# Branch: alpha < 1 and gamma > 0  -->  expects RTDR
-set.seed(7); auto1 <- rmhn(20, alpha = 0.7, beta = 1, gamma = 2)
-set.seed(7); rtdr1 <- rmhn(20, alpha = 0.7, beta = 1, gamma = 2, method = "rtdr")
-identical(auto1, rtdr1)
-
-# Branch: alpha > 1, gamma > 2 sqrt(alpha beta)  -->  expects Sun Algorithm 1
-set.seed(7); auto2 <- rmhn(20, alpha = 3,   beta = 1, gamma = 5)
-set.seed(7); sun2  <- rmhn(20, alpha = 3,   beta = 1, gamma = 5, method = "sun")
-identical(auto2, sun2)
-
-# Branch: alpha > 1, gamma <= sqrt(alpha beta), 5 or more draws per setup
-#   -->  expects RTDR
-set.seed(7); auto3 <- rmhn(20, alpha = 3,   beta = 1, gamma = 1.5)
-set.seed(7); rtdr3 <- rmhn(20, alpha = 3,   beta = 1, gamma = 1.5, method = "rtdr")
-identical(auto3, rtdr3)
-
-# Branch: gamma < 0, 0.1 <= alpha < 1, fewer than 5 draws per setup
-#   -->  expects Sun Algorithm 3
-set.seed(7); auto4 <- rmhn(4,  alpha = 0.5, beta = 1, gamma = -1)
-set.seed(7); sun4  <- rmhn(4,  alpha = 0.5, beta = 1, gamma = -1, method = "sun")
-identical(auto4, sun4)
-```
-
-The four `TRUE` outputs are the same invariant that the package's tests
-enforce as a regression test.
-
-## References
-
-Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
-distribution: Properties and an efficient sampling scheme.
-*Communications in Statistics - Theory and Methods*, 52(5),
-1591--1613. <https://doi.org/10.1080/03610926.2021.1934700>
-
-Gao, F., & Wang, H.-B. (2025). Generating modified-half-normal random
-variates by a relaxed transformed density rejection method.
-*Communications in Statistics - Simulation and Computation*, 1--25.
-Advance online publication.
-<https://doi.org/10.1080/03610918.2025.2524551>
-
-Robert, C. P. (1995). Simulation of truncated normal variables.
-*Statistics and Computing*, 5(2), 121--125.
-<https://doi.org/10.1007/BF00143942>

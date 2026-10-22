@@ -273,8 +273,8 @@ void build_sampler(ParamCacheRmhn& c, double a, double b, double g,
   } else {
     // method == "auto".  The thresholds below are benchmarked rather than
     // theoretical: they are crossovers of the costs of the two samplers,
-    // measured on an Apple M1 Ultra by two paired timing races of the two
-    // samplers and by three independent runs of
+    // measured on an Apple M1 Ultra, with the code of this release, by two
+    // paired timing races of the two samplers and by three independent runs of
     // inst/benchmarks/auto_dispatch.R.  The choice changes only the speed:
     // every sampler draws the exact law.  The second race times shapes up to 1e14, tilts up to 3 sqrt(alpha) and
     // vectorised calls with one setup per draw; the thresholds from
@@ -308,16 +308,16 @@ void build_sampler(ParamCacheRmhn& c, double a, double b, double g,
     //   gamma > 0, alpha > 1 -> RTDR if z <= 2 sqrt(alpha) and S reaches
     //       the threshold below; Algorithm 1 otherwise.  Algorithm 1's
     //       closed-form setup is the lighter, so Algorithm 1 wins or ties
-    //       S = 1 at every shape and tilt (RTDR takes 1.6 to 13 times as
+    //       S = 1 at every shape and tilt (RTDR takes 1.6 to 12 times as
     //       long in a vectorised call).  Algorithm 1's cost per draw depends
     //       on z / sqrt(alpha): up to 1 (to within 2% from alpha = 3 on) it
     //       proposes from the square root of a Gamma law, an rgamma draw per
     //       proposal, and RTDR's cheaper draw wins from a lower S; above it
     //       Algorithm 1 proposes from a Normal law that accepts 0.81 to 0.92
     //       of its proposals up to z / sqrt(alpha) = 2, RTDR's draw is at
-    //       most 14% cheaper (34% at alpha = 1e7), and the crossing comes at
-    //       a larger S.  Beyond 2 sqrt(alpha) RTDR gains at most 3.4% at
-    //       S = 1000 (at 2.5 sqrt(alpha)), or 13% at alpha = 1e7, where
+    //       most 12% cheaper (32% at alpha = 1e7), and the crossing comes at
+    //       a larger S.  Beyond 2 sqrt(alpha) RTDR gains at most 2.3% at
+    //       S = 1000 (at 2.5 sqrt(alpha)), or 12% at alpha = 1e7, where
     //       Algorithm 1's acceptance test is dear.  The thresholds, for
     //       z <= sqrt(alpha) / sqrt(alpha) < z <= 2 sqrt(alpha):
     //         alpha < 10           5 / 25
@@ -326,7 +326,7 @@ void build_sampler(ParamCacheRmhn& c, double a, double b, double g,
     //         alpha >= 1e8       100 / 1000
     //       and 5 / 25 wherever RTDR's setup starts next to the mode.  Each
     //       is a round S near the crossings timed in its band; above it RTDR
-    //       is up to 72% faster.
+    //       is up to 69% faster.
     //   gamma < 0, alpha < 1 -> RTDR if S reaches 25 (alpha < 0.1) or 5;
     //       Algorithm 3 otherwise.  Algorithm 3 draws a Gamma variate and a
     //       fractional power per proposal, so RTDR's draw is the cheaper at
@@ -338,10 +338,10 @@ void build_sampler(ParamCacheRmhn& c, double a, double b, double g,
     //       or if alpha < 1e3, or if S reaches 10 (alpha < 1e5), 25
     //       (alpha < 1e8) or 50; Algorithm 3 otherwise.  Algorithm 3 locates
     //       its matching point by bisection and Newton steps, and RTDR wins
-    //       at every S for alpha from 1.5 to 100 (by up to about 6% at
+    //       at every S for alpha from 1.5 to 100 (by up to about 5.5% at
     //       S = 1; at alpha = 1.1 the two are within 2%), and wherever its
-    //       setup starts next to the mode (by 3.5-5% at S = 1, and 16-33% in
-    //       a vectorised call).  Where it walks in, from alpha = 1e3,
+    //       setup starts next to the mode (by 3.6-5.0% at S = 1, and 17-34%
+    //       in a vectorised call).  Where it walks in, from alpha = 1e3,
     //       Algorithm 3 wins S = 1: RTDR takes up to 1.4 times as long as
     //       Algorithm 3 there, and up to 5.2 times in a vectorised call.
     //       RTDR is faster from S = 5 or 10 at alpha = 1e3, 10 or 25 at

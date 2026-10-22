@@ -30,18 +30,10 @@ Uses the formula (Sun et al. 2023, Lemma 2c)
 \deqn{\mathrm{Var}(X) = \frac{\alpha}{2\beta} +
   E(X)\left(\frac{\gamma}{2\beta} - E(X)\right)}{Var(X) =
   alpha/(2 beta) + E(X) (gamma/(2 beta) - E(X))}
-where it is accurate. Its terms cancel under a strong tilt
-\eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} of either sign, where
-it also magnifies any error in \eqn{E(X)} by about \eqn{z^2/2}, and it
-magnifies that error by about \eqn{4\alpha}{4 alpha} at a large
-\eqn{\alpha}. Wherever the combined
-error would exceed about \eqn{10^{-8}}{1e-8} of the result, the second
-central moment is instead obtained by numerical integration of the
-unnormalised density about its peak (or, where the density decreases from
-the origin, on a logarithmic scale); so it is for \eqn{z > 12}, where the
-mean itself is obtained by numerical integration (see
-\code{\link{mhn_mean}}), for \eqn{z < -30}, and for
-\eqn{\alpha \ge 1000}{alpha >= 1000} unless \eqn{\gamma = 0}.
+where it is accurate. Where it would lose accuracy, under a strong tilt
+\eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} of either sign and at
+a large \eqn{\alpha}{alpha} unless \eqn{\gamma = 0}, the variance is
+instead obtained by numerical integration of the unnormalised density.
 
 For \eqn{\alpha \ge 1}{alpha >= 1}, the variance satisfies
 \eqn{\mathrm{Var}(X) \le 1/(2\beta)}{Var(X) <= 1/(2 beta)} (Sun et al.,
@@ -50,6 +42,9 @@ For \eqn{\alpha \ge 1}{alpha >= 1}, the variance satisfies
 The function is not vectorised in its parameters: \code{alpha},
 \code{beta} and \code{gamma} must each be a single number. To evaluate
 several parameter triples, use \code{\link{mapply}}, as in the examples.
+
+The numerical methods are described in Appendix A of
+\code{vignette("theory", package = "mhn")}.
 }
 \examples{
 mhn_var(alpha = 2, beta = 1, gamma = 0)

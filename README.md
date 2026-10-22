@@ -203,10 +203,11 @@ vignettes, is published at <https://t-momozaki.github.io/mhn/>.
 ## Citation
 
 If you use this package in academic work, please cite both the package
-and the methodology papers (`citation("mhn")` prints all four):
+and the methodology papers (`citation("mhn")` prints all four, the fourth
+being Robert (1995) under Other references below):
 
 * Momozaki, T. (2026). *mhn: The Modified Half-Normal Distribution.*
-  R package version 0.1.2.
+  R package version 0.1.2. <https://doi.org/10.32614/CRAN.package.mhn>
 * Sun, J., Kong, M., & Pal, S. (2023). The Modified-Half-Normal
   distribution: Properties and an efficient sampling scheme.
   *Communications in Statistics - Theory and Methods*, 52(5),
@@ -217,7 +218,9 @@ and the methodology papers (`citation("mhn")` prints all four):
   Advance online publication.
   <https://doi.org/10.1080/03610918.2025.2524551>
 
-## References
+## Other references
+
+The two methodology papers are listed under Citation above.
 
 * Robert, C. P. (1995). Simulation of truncated normal variables.
   *Statistics and Computing*, 5(2), 121–125.

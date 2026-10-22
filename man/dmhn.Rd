@@ -77,91 +77,26 @@ reduces to; a shape or a tilt merely close to those values is a different
 law, and is computed as in the general case:
 \itemize{
 \item \eqn{\gamma = 0}: sqrt-Gamma distribution, for
-\eqn{\alpha \le 10^6}{alpha <= 1e6}.  Above it the Gamma law of
-\eqn{\beta X^2}{beta X^2} is so narrow that rounding
-\eqn{\beta x^2}{beta x^2} moves it by a visible part of its width
-(up to about \eqn{10^{-5}}{1e-5} of the log density at
-\eqn{\alpha = 10^{20}}{alpha = 1e20}), and \eqn{\gamma = 0}{gamma = 0}
-is measured from the peak as below.
+\eqn{\alpha \le 10^6}{alpha <= 1e6}; a larger shape is computed as in
+the general case.
 \item \eqn{\alpha = 1}: truncated normal distribution (Sun et al.,
 2023, Lemma 6b), the normal law of mean
 \eqn{\mu = \gamma/(2\beta)}{mu = gamma/(2 beta)} and standard deviation
 \eqn{\sigma = 1/\sqrt{2\beta}}{sigma = 1/sqrt(2 beta)} restricted to
-\eqn{(0, \infty)}{(0, Inf)}: \code{dnorm} divided by its upper tail
-at 0 where 0 lies within 1000 standard deviations of the mean
-(\eqn{|\gamma|/\sqrt{2\beta} \le 1000}{|gamma| / sqrt(2 beta) <= 1000}).
-Farther out the same ratio is written with the normal hazard where 0
-lies above the mean, so that two logarithms of about
-\eqn{-\gamma^2/(4\beta)}{-gamma^2 / (4 beta)} are not subtracted, and
-from the standardised point \eqn{(x - \mu)/\sigma}{(x - mu) / sigma},
-formed directly, where it lies below.  Where
+\eqn{(0, \infty)}{(0, Inf)}.  However far 0 lies from the mean, the
+density holds to the Exponential and normal limits it tends to; where
 \eqn{\gamma/(2\beta)}{gamma/(2 beta)} passes the largest double under
-a negative tilt, the density is the exponential one,
+a negative tilt, it is the Exponential density
 \eqn{-\gamma e^{\gamma x}}{-gamma exp(gamma x)}.
 }
 
-A subnormal shape, below the smallest normal double
-\eqn{2.2 \times 10^{-308}}{2.2e-308}, is computed apart, at
-\eqn{\gamma = 0}{gamma = 0} too.  There half of \eqn{\alpha}{alpha} is
-not always a double and \eqn{1/\alpha}{1/alpha} can overflow, while
-\eqn{t^\alpha = 1}{t^alpha = 1} to double precision at every positive
-double \eqn{t}; the density is then
-\eqn{\alpha e^{-\beta x^2 + \gamma x} / (x (1 + w))}{alpha
-exp(-beta x^2 + gamma x) / (x (1 + w))}, with \eqn{w = \alpha K_0(z)}{w =
-alpha K0(z)} and \eqn{K_0(z) = \int_0^1 (e^{-t^2 + z t} - 1) / t \, dt +
-\int_1^\infty e^{-t^2 + z t} / t \, dt}{K0(z) = int_0^1 (exp(-t^2 + z t) -
-1) / t dt + int_1^Inf exp(-t^2 + z t) / t dt}.  \eqn{1 / (1 + w)} is the
-probability that \eqn{X} lies below the smallest positive double.  Below
-a tilt of about 52 (53 at the smallest shapes) it is 1 in double
-precision: \code{\link{pmhn}} is 1 at every positive \eqn{x},
-\code{\link{qmhn}} is 0 for every lower-tail probability below 1 given
-on the probability scale (the upper tail, or \code{log.p = TRUE}, still
-gives the quantiles of the far upper tail), and \code{\link{rmhn}}
-returns 0.  For a large tilt \eqn{w} is the mass at
-the peak of the kernel against the mass by the origin; it is below
-\eqn{10^{-200}}{1e-200} in size for \eqn{z \le 30}{z <= 30}, and
-negative below \eqn{z} of about 0.3.
-\code{\link{pmhn}}, \code{\link{qmhn}}, \code{\link{rmhn}} and the
-moment functions take the same form.  It serves the whole law up to a
-tilt between about 55 and 56.3, as \eqn{\alpha}{alpha} falls.  Above it
-the mass by the origin is at most \eqn{2^{-64}}{2^-64}, about
-\eqn{5.4 \times 10^{-20}}{5.4e-20}, of the whole, and the density, the
-upper tail, the moments and the law of the draws no longer depend on
-\eqn{\alpha}{alpha}; the lower tail far below the peak, of which that
-mass is more than \eqn{2^{-64}}{2^-64}, is still taken from the same form
-up to where it reaches one half.
+Otherwise the log density is computed from the formula above; for a large
+shape or tilt, where the terms of that formula grow too large, the law is
+measured instead from the peak of the density of \eqn{\log X}{log X}.
 
-Computation is performed in log-space to avoid numerical
-underflow/overflow.  For a shape \eqn{\alpha}{alpha} or a scale-free tilt
-\eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} above \eqn{10^6}{1e6},
-and wherever the terms of the ordinary form grow too large (see
-\strong{Range}), the log density is measured instead from the peak
-\eqn{v^*}{v*} of the density of \eqn{\log X}{log X}, the positive root of
-\eqn{2\beta x^2 - \gamma x - \alpha = 0}{2 beta x^2 - gamma x - alpha = 0},
-as \eqn{(\alpha - 1)(\log(1+\rho) - \rho) - \rho - \beta d^2}{(alpha - 1)
-(log(1 + rho) - rho) - rho - beta d^2} less the logarithm of
-\eqn{v^*}{v*} times the peak-normalised integral of the law, with
-\eqn{d = x - v^*}{d = x - v*} and \eqn{\rho = d/v^*}{rho = d / v*}.  The
-ordinary form adds terms of size \eqn{\alpha \log x}{alpha log x} and
-\eqn{(\alpha/2) \log\beta}{(alpha/2) log(beta)}, and for
-\eqn{z > 10^3}{z > 1e3} measures \code{x} from the centre
-\eqn{\gamma/(2\beta)}{gamma/(2 beta)} rounded to a double; their rounding
-passes \eqn{10^{-7}}{1e-7} at \eqn{\alpha = 10^8}{alpha = 1e8}, and
-\eqn{10^{-6}}{1e-6} at \eqn{z = 10^{10}}{z = 1e10} unless \eqn{\beta}{beta}
-is a power of 2.  Here neither is formed, and \eqn{d} is exact:
-\eqn{v^*}{v*} is held as a double next to it plus its offset from that
-double.
-
-\strong{Range.}  The ordinary form is used only while the larger
-\eqn{m} of \eqn{\alpha}{alpha} and \eqn{z} is at most \eqn{10^6}{1e6}
-and \eqn{m (1 + |\log v^*|)}{m (1 + |log v*|)}, the size of its largest
-terms, is at most \eqn{10^7}{1e7}: at \eqn{\beta = 1}{beta = 1} up to a
-shape of \eqn{10^6}{1e6} or a tilt of about \eqn{7.3 \times 10^5}{7.3e5},
-and at \eqn{\beta = 10^{\pm 300}}{beta = 1e-300 or 1e300} up to about
-\eqn{3 \times 10^4}{3e4} for either.  That keeps its rounding to about
-\eqn{2 \times 10^{-9}}{2e-9}; measured from the peak the error is
-about \eqn{10^{-12}}{1e-12}, relative to the size of the log density
-where that is large.  So for \eqn{\alpha \le 10^{15}}{alpha <= 1e15},
+\strong{Accuracy and range.}  With
+\eqn{z = \gamma/\sqrt{\beta}}{z = gamma/sqrt(beta)} the scale-free tilt,
+for \eqn{\alpha \le 10^{15}}{alpha <= 1e15},
 \eqn{|z| \le 10^{15}}{|z| <= 1e15} and \eqn{\beta}{beta} in
 \eqn{[10^{-300}, 10^{300}]}{[1e-300, 1e300]} the log density is accurate
 to the working tolerance \code{sqrt(.Machine$double.eps)}.  Outside that
@@ -173,34 +108,48 @@ still that of the exact law at the double \code{x} given, almost always
 \eqn{\gamma/(2\beta)}{gamma / (2 beta)} lies beyond the largest double,
 which needs a subnormal \eqn{\beta}{beta}, \code{log = TRUE} returns
 \code{-Inf} where the log density is finite.  Two cases give \code{NA}
-with a warning instead: within 45
-standard deviations of the peak of a law narrower than the spacing by a
-factor of order \eqn{10^{19}}{1e19} (\eqn{z}{z} beyond about
-\eqn{10^{35}}{1e35}, \eqn{\alpha}{alpha} beyond about
-\eqn{10^{70}}{1e70}), where the position of the peak cannot be resolved
-finely enough; and where the whole law lies beyond the largest double
+with a warning instead: within 45 standard deviations of the peak of a
+law whose peak cannot be placed to within \eqn{10^{-11}}{1e-11} of its
+standard deviation, which needs a law narrower than the spacing by a
+factor of order \eqn{10^{19}}{1e19} or more and then happens for some
+parameters only (as at
+\eqn{\alpha = \beta = \gamma = 10^{200}}{alpha = beta = gamma = 1e200});
+and where the whole law lies beyond the largest double
 without a positive tilt to place it (a shape near the largest double
 against a subnormal \eqn{\beta}{beta}).  Where \eqn{z}{z} itself
 overflows, the law is its limit: Gamma(\eqn{\alpha}{alpha}, rate
 \eqn{|\gamma|}{|gamma|}) under a negative tilt and normal about its mode
-with variance \eqn{1/(2\beta)}{1/(2 beta)} under a positive one.  For
-\eqn{\alpha = 1}{alpha = 1} and a truncation point
-\eqn{z_0 = -\gamma/\sqrt{2\beta}}{z0 = -gamma/sqrt(2 beta)} beyond
-\eqn{10^3}{1e3} the truncated-normal density is written with the normal
-hazard \eqn{\phi(z_0)/\bar\Phi(z_0)}{phi(z0)/(1 - Phi(z0))}, and below
-\eqn{-10^3}{-1e3} with the offset \eqn{2\beta x - \gamma}{2 beta x - gamma}
-formed in one rounding (as \eqn{\beta x - \gamma/2}{beta x - gamma / 2},
-so also where \eqn{2\beta}{2 beta} overflows), so that it holds to the
-Exponential and normal limits it tends to.
+with variance \eqn{1/(2\beta)}{1/(2 beta)} under a positive one.
+
+A subnormal shape, below the smallest normal double
+\eqn{2.2 \times 10^{-308}}{2.2e-308}, is computed apart, at
+\eqn{\gamma = 0}{gamma = 0} too, from a form of the law in which
+\eqn{\alpha}{alpha} only multiplies and \eqn{X} lies below the smallest
+positive double with probability \eqn{1 / (1 + w)}, where \eqn{w},
+defined in Appendix A.4 of the vignette cited below, grows with the tilt.  Below a tilt \eqn{z} of about 52 (53 at
+the smallest shapes) that probability is 1 in double precision:
+\code{\link{pmhn}} is 1 at every positive \eqn{x}, \code{\link{qmhn}} is
+0 for every lower-tail probability below 1 given on the probability
+scale (the upper tail, or \code{log.p = TRUE}, still gives the quantiles
+of the far upper tail), and \code{\link{rmhn}} returns 0.  Above a tilt
+between about 55 and 56.3, as \eqn{\alpha}{alpha} falls, the mass by the
+origin is at most \eqn{2^{-64}}{2^-64}, about
+\eqn{5.4 \times 10^{-20}}{5.4e-20}, of the whole, and the density, the
+upper tail, the moments and the law of the draws no longer depend on
+\eqn{\alpha}{alpha}.
 
 When any of \code{alpha}, \code{beta}, \code{gamma} is a vector, the
-density is evaluated element-wise. The Fox-Wright \eqn{\Psi}
-normalizing constant is computed once for each position of the recycling cycle while that cycle
-is at most 256 long, and otherwise once for each run of consecutive
-elements that share the \eqn{(\alpha, \beta, \gamma)} triple.  So
-recycled parameters, and parameter vectors in which equal triples are
-adjacent, are much faster than triples that alternate along a long
-vector, and than calling \code{dmhn} inside an R loop.
+density is evaluated element-wise.  The Fox-Wright \eqn{\Psi}
+normalizing constant is computed once for each position of the recycling
+cycle while that cycle is at most 256 long, and otherwise once for each
+run of consecutive elements that share the
+\eqn{(\alpha, \beta, \gamma)} triple.  So recycled parameters, and
+parameter vectors in which equal triples are adjacent, are much faster
+than triples that alternate along a long vector, and than calling
+\code{dmhn} inside an R loop.
+
+The numerical methods, and the reasons for the ranges above, are
+described in Appendix A of \code{vignette("theory", package = "mhn")}.
 }
 \examples{
 x <- seq(0, 5, length.out = 100)

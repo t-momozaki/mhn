@@ -116,7 +116,7 @@ and `inst/CITATION`).
 
 * macOS Tahoe 26.5.2, aarch64-apple-darwin23, R 4.6.1 (2026-06-24), Apple
   clang 17.0.0: `R CMD build`, then `R CMD check --as-cran` of
-  `mhn_0.1.2.tar.gz`, with the remote incoming checks (2026-10-21). Also the
+  `mhn_0.1.2.tar.gz`, with the remote incoming checks (2026-10-22). Also the
   whole test suite on a build with `-ffp-contract=fast`, which lets the
   compiler fuse a multiplication and an addition across statements, as GCC
   does by default on targets with a fused multiply-add (earlier candidate).
@@ -125,19 +125,20 @@ and `inst/CITATION`).
 * Linux aarch64 (Docker `rocker/r-ver:4.6.1`, g++ 13.3.0, Rcpp 1.1.2, BH
   1.90.0-1): install without compiler warnings, the whole test suite with no
   failure, and `R CMD check --no-manual --ignore-vignettes`: `Status: OK`
-  (2026-10-21). Linux x86_64, the same image under emulation: `Status: OK`
-  (earlier candidate).
+  (earlier candidate). Linux x86_64, the same image under emulation:
+  `Status: OK` (earlier candidate).
 * Linux x86_64, R 4.0.5 (the declared minimum; Docker `rocker/r-ver:4.0.5`,
   g++ 9.4.0, testthat 3.2.1.1): install without compiler warnings and the
   whole test suite, with no failure (earlier candidate).
-* win-builder, R-devel (2026-10-18 r90707 ucrt) and R 4.6.1 ucrt, g++ 14.3.0:
-  `Status: OK` for both (earlier candidate); the submitted tarball was sent
-  on 2026-10-21 and its results are pending.
+* win-builder, R-devel (2026-10-21 r90733 ucrt) and R 4.6.1 ucrt, g++ 14.3.0:
+  `Status: OK` for both (2026-10-22 and 2026-10-23), with no compiler warning
+  and the tests inside the check at
+  `[ FAIL 0 | WARN 0 | SKIP 30 | PASS 12420 ]`.
 
 ## R CMD check results
 
-Local `R CMD check --as-cran` of the submitted `mhn_0.1.2.tar.gz` (686,626
-bytes; installed size 1.42 MB) on 2026-10-21:
+Local `R CMD check --as-cran` of the submitted `mhn_0.1.2.tar.gz` (702,133
+bytes; installed size 1.46 MB) on 2026-10-22:
 
     Status: 1 NOTE
 
