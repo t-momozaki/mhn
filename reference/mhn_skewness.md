@@ -32,14 +32,12 @@ A numeric scalar.
 
 ## Details
 
-The central moments are obtained by numerical integration against the
-unnormalised density, in a variable centred on its peak (or, where the
-density decreases from the origin, on a logarithmic scale), so no
-normalising constant is needed. Building them from raw moments by the
-Lemma 2b recurrence from the mean of Lemma 2a is exact algebra but
-cancels once the standard deviation is small next to the mean, which is
-what a large tilt produces; that expansion is used only where the
-integration cannot be set up.
+The skewness is formed from the second and third central moments. In
+exact arithmetic these follow from the mean of Sun et al. (2023, Lemma
+2a) and the recurrence for the raw moments of their Lemma 2b; the
+function obtains them instead, wherever it can, by numerical integration
+of the unnormalised density, which needs no normalising constant and
+stays accurate under a large tilt.
 
 Against independent quadratures, for shapes from 1 to 60 and tilts
 \\\gamma / \sqrt{\beta}\\ from -20 to 12, the absolute error stayed
@@ -47,22 +45,22 @@ below 1e-9; the largest found, 3e-10, is for a shape between 2 and 3
 under a positive tilt.
 
 For a subnormal shape, below the smallest normal double 2.2e-308, the
-moments are taken from forms in which the shape only multiplies (see the
-Details of
-[`dmhn`](https://t-momozaki.github.io/mhn/reference/dmhn.md)). While the
-mass at the peak is small against the mass by the origin (\\w\\ well
-below 1, up to a tilt \\z = \gamma / \sqrt{\beta}\\ of about 53 at the
-largest subnormal shape and 54.5 at the smallest), the skewness then
-grows like \\1 / \sqrt{\alpha}\\ as the shape falls, by a factor that
-depends on the tilt: 1.25 at \\z = 0\\ and \\2.8 \times 10^{-8}\\ at \\z
-= 12\\. It turns negative where \\w\\ is about 1 (\\z\\ from about 53.3
-to 54.7), and past the tilt where the forms hand over (55 to 56.3) it no
-longer depends on \\\alpha\\.
+skewness depends on the tilt \\z = \gamma / \sqrt{\beta}\\ as follows.
+While the mass at the peak of the density is small against the mass by
+the origin (up to \\z\\ of about 53 at the largest subnormal shape and
+54.5 at the smallest), it grows like \\1 / \sqrt{\alpha}\\ as the shape
+falls, by a factor that depends on the tilt: 1.25 at \\z = 0\\ and \\2.8
+\times 10^{-8}\\ at \\z = 12\\. It turns negative where the two masses
+are about equal (\\z\\ from about 53.3 to 54.7), and above a tilt of 55
+to 56.3 it no longer depends on \\\alpha\\.
 
 The function is not vectorised in its parameters: `alpha`, `beta` and
 `gamma` must each be a single number. To evaluate several parameter
 triples, use [`mapply`](https://rdrr.io/r/base/mapply.html), as in the
 examples.
+
+The numerical methods are described in Appendix A of
+[`vignette("theory", package = "mhn")`](https://t-momozaki.github.io/mhn/articles/theory.md).
 
 ## References
 

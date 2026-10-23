@@ -9,6 +9,14 @@ random generation
 ([`rmhn`](https://t-momozaki.github.io/mhn/reference/rmhn.md)), and
 moments / mode of the Modified Half-Normal (MHN) distribution.
 
+## Details
+
+[`vignette("introduction", package = "mhn")`](https://t-momozaki.github.io/mhn/articles/introduction.md)
+shows the functions in use, and
+[`vignette("theory", package = "mhn")`](https://t-momozaki.github.io/mhn/articles/theory.md)
+sets out the theory they implement; its Appendix A describes the
+numerical methods.
+
 ## MHN Distribution
 
 The MHN distribution has probability density function \$\$f(x \mid
